@@ -92,5 +92,5 @@ repos y el archivo, y se anota acá la fecha del último simulacro que salió bi
 | repo padre + catálogo `juegos.json` + guardia | ✅ 19-nov |
 | repo GunBound público | ✅ 19-nov |
 | mudar el código de las cuentas y la casa a este repo | 🟡 19-nov copiado y con pruebas verdes; falta lo de `PENDIENTES.md` 1 y 2 |
-| «Generar backup» | 🟡 19-nov comando + prueba (16 verdes); falta el botón y los secretos de la PC |
+| «Generar backup» | 🟡 1.er respaldo real 20-nov 01:54 UTC, abierto y comprobado por Benja (24 cosas sanas); falta el botón y los secretos de la PC |
 | guía completa + simulacro | ⏳ |
