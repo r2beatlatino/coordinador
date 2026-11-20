@@ -73,8 +73,7 @@ with tempfile.TemporaryDirectory() as tmp:
     e.commit()
     e.close()
     (origen / "vol/eda/cuentas/en_1.json").write_text('{"nivel": 3}')
-    (origen / "vol/eda/relay.log").write_text("ruido
-")
+    (origen / "vol/eda/relay.log").write_text("ruido\n")
     lista = tmp / "lista.json"
     lista.write_text(json.dumps({"cosas": [
         {"nombre": "base", "tipo": "sqlite", "ruta": "vol/cuentas/cuentas.db"},
