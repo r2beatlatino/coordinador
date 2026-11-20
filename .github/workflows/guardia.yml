@@ -11,3 +11,5 @@ jobs:
       - run: python herramientas/guardia.py
       - run: python herramientas/catalogo.py --comprobar
       - run: python pruebas/probar_repo.py
+      - run: sudo apt-get update && sudo apt-get install -y age
+      - run: python pruebas/probar_respaldo.py
