@@ -121,7 +121,7 @@ try:
     with pt._escribir:
         cp_init = pt._propia()
         cp_init.execute("INSERT INTO aprobados VALUES (101, 'eda', '2026-11-01', 'viejo', 'ok')")
-        cp_init.execute("INSERT INTO baneos VALUES (102, 'eda', '2026-11-02', 'viejo', 'prueba')")
+        cp_init.execute("INSERT INTO baneos (uid, juego, desde, quien, motivo) VALUES (102, 'eda', '2026-11-02', 'viejo', 'prueba')")
         cp_init.execute("INSERT INTO sesiones VALUES ('huella_vieja_101', 101, 1000, 9999999999, '1.2.3.4')")
         cp_init.execute("INSERT INTO pases VALUES ('jti_viejo_101', 101, 'eda', 1000, '1.2.3.4')")
         cp_init.execute("INSERT INTO auditoria (cuando, quien, accion, uid, juego, detalle) "

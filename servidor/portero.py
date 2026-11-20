@@ -53,8 +53,8 @@ LA LISTA DE APROBADOS — se maneja desde la consola del VPS (el panel, más ade
 -----------------------------------------------------------------------------------
     python -m servidor.portero aprobar <usuario> [juego]      (juego por omisión: eda)
     python -m servidor.portero quitar <usuario> [juego]
-    python -m servidor.portero banear <usuario> [juego] [motivo…]
-    python -m servidor.portero desbanear <usuario> [juego]
+    python -m servidor.portero banear <usuario> [juego] [--horas N | --dias N | --meses N] [motivo…]   (sin tiempo: permanente)
+    python -m servidor.portero desbanear <usuario> [juego]    (antes de tiempo; el baneo vencido ya no cuenta solo)
     python -m servidor.portero lista [juego]
     python -m servidor.portero clave                          imprime la clave PÚBLICA (JWKS)
     python -m servidor.portero pase <usuario> [juego] [seg]   ★ SÓLO PRUEBAS: un pase real (≤ 1 h) de una cuenta aprobada
@@ -83,6 +83,8 @@ VARIABLES
                          IPs o redes separadas por coma. Por omisión `127.0.0.1,::1`
     R2_PORTERO_MANIFIESTOS  la carpeta con `<juego>.json` (el manifest de cada cliente). Sin ella: 503 «todavía no
                          hay cliente publicado». Se lee del disco en cada pedido (cambiarlo no pide reiniciar).
+    R2_BANEO_TOPE_MODERADOR_DIAS  ★ 20-nov: lo más largo que banea un MODERADOR, en días (de fábrica 365 = 12 meses;
+                         1..3650). Permanente y toda la red: sólo un ADMIN.
     R2_CUENTAS_DUENA     ★ 15-nov: `1` = Cuenta Eñeños es la DUEÑA de las cuentas (`cuentas.db`, nunca abre `datos.db`).
                          Sin esta variable (o != `1`), se comporta exactamente como antes.
     R2_CUENTAS_BASE      ruta a `cuentas.db` (por omisión: en la misma carpeta donde vive `portero.db`)
@@ -260,7 +262,7 @@ ESQUEMA = """
 CREATE TABLE IF NOT EXISTS aprobados (uid INTEGER NOT NULL, juego TEXT NOT NULL, desde TEXT, quien TEXT, nota TEXT,
                                       PRIMARY KEY (uid, juego));
 CREATE TABLE IF NOT EXISTS baneos    (uid INTEGER NOT NULL, juego TEXT NOT NULL, desde TEXT, quien TEXT, motivo TEXT,
-                                      PRIMARY KEY (uid, juego));
+                                      hasta INTEGER, PRIMARY KEY (uid, juego));
 CREATE TABLE IF NOT EXISTS sesiones  (huella TEXT PRIMARY KEY, uid INTEGER NOT NULL, creada INTEGER, vence INTEGER,
                                       ip TEXT);
 CREATE TABLE IF NOT EXISTS pases     (jti TEXT PRIMARY KEY, uid INTEGER, juego TEXT, emitido INTEGER, ip TEXT);
@@ -300,10 +302,24 @@ def _propia():
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA journal_mode = WAL")
         c.executescript(ESQUEMA)
+        _migrar_baneos(c)
         c.executescript(LZ.ESQUEMA)
         c.executescript(CO.ESQUEMA)
         _hilo.propia, _hilo.propia_ruta = c, ruta
     return c
+
+
+def _migrar_baneos(c):
+    """★ 20-nov: la columna `hasta` (epoch; NULL = permanente) en una `portero.db` de antes. Los baneos viejos quedan
+    con `hasta` NULL, o sea PERMANENTES, como eran. Idempotente (dos hilos a la vez: el 2.º ve «duplicate column»)."""
+    if "hasta" in {r[1] for r in c.execute("PRAGMA table_info(baneos)")}:
+        return
+    try:
+        c.execute("ALTER TABLE baneos ADD COLUMN hasta INTEGER")
+        c.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
 
 
 def _cuentas():
@@ -504,18 +520,85 @@ def estado_r2beat(uid):
     return "baneada" if h.startswith("BANNED:") else "fusionada" if h.startswith("FUSIONADA:") else "ok"
 
 
-def permitido(uid, juego):
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+#  ★ 20-nov — LOS BANEOS CON TIEMPO (Benja: «baneos en X juegos, por X horas, por X días, X motivo; el launcher
+#  baneado, al presionar Jugar, debe recibir un popup con el motivo de su ban + el tiempo»).
+#    · `baneos.hasta` = epoch en que vence; NULL = permanente (los de antes de esta columna quedan permanentes).
+#    · Un baneo VENCIDO deja de contar solo, al chequear (`baneo_vigente`): la fila queda (historial) y la
+#      auditoría tiene cada movimiento. Desbanear antes de tiempo = `hasta` pasa a «ahora» (tampoco se borra).
+#    · El pase rechazado por un ban trae `error: "baneado"` + juego, motivo, hasta y restante_seg (ver `respuesta_baneo`).
+#    · Sólo un ADMIN banea PERMANENTE y en TODA LA RED. Un moderador: sólo en sus juegos y hasta BANEO_TOPE_MODERADOR_SEG.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+BANEO_MOTIVO_MAX = 200
+# ★ 20-nov (Benja: «que los mod puedan banear horas, días, meses, tiempo ajustable»): el tope de un MODERADOR se
+#   AJUSTA con R2_BANEO_TOPE_MODERADOR_DIAS (de fábrica 365 = 12 meses). Permanente o toda la red: sólo un ADMIN.
+BANEO_MES_SEG = 30 * 86400             # un «mes» de baneo = 30 días justos (así «vence en …» no depende del calendario)
+
+
+def _tope_moderador_dias():
+    v = (os.environ.get("R2_BANEO_TOPE_MODERADOR_DIAS") or "").strip()
+    return max(1, min(3650, int(v))) if v.isdigit() else 365
+
+
+BANEO_TOPE_MODERADOR_SEG = _tope_moderador_dias() * 86400
+BANEO_TOPE_SEG = 3650 * 86400          # (el más largo con fecha: 10 años; más que eso, que sea permanente)
+
+
+def baneo_vigente(uid, juego, ahora=None):
+    """La fila del baneo que HOY cuenta (permanente, o con `hasta` en el futuro), o None."""
+    ahora = int(time.time() if ahora is None else ahora)
+    return _propia().execute("SELECT uid, juego, desde, quien, motivo, hasta FROM baneos WHERE uid = ? AND juego = ? "
+                             "AND (hasta IS NULL OR hasta > ?)", (int(uid), juego, ahora)).fetchone()
+
+
+def datos_baneo(fila, ahora=None):
+    """{motivo, hasta, restante_seg} de una fila de `baneos` (hasta y restante: None si es permanente)."""
+    ahora = int(time.time() if ahora is None else ahora)
+    hasta = fila["hasta"]
+    return {"motivo": fila["motivo"] or "", "hasta": int(hasta) if hasta is not None else None,
+            "restante_seg": max(0, int(hasta) - ahora) if hasta is not None else None}
+
+
+def texto_restante(seg):
+    """«2 días y 3 horas», «5 horas y 12 minutos», «45 minutos» (redondea para arriba al minuto). None -> None."""
+    if seg is None:
+        return None
+    m = max(1, -(-int(seg) // 60))
+    d, h, mi = m // 1440, (m % 1440) // 60, m % 60
+    uno = lambda n, s, p: f"{n} {s if n == 1 else p}"
+    if d >= 60 or (d >= 30 and d % 30 == 0):
+        me, d = d // 30, d % 30
+        return uno(me, "mes", "meses") + (" y " + uno(d, "día", "días") if d else "")
+    if d:
+        return uno(d, "día", "días") + (" y " + uno(h, "hora", "horas") if h else "")
+    if h:
+        return uno(h, "hora", "horas") + (" y " + uno(mi, "minuto", "minutos") if mi else "")
+    return uno(mi, "minuto", "minutos")
+
+
+def respuesta_baneo(fila, juego, ahora=None):
+    """El cuerpo del 403 de un pase (o un manifiesto) rechazado por un ban. ⛔ `error` es el código («baneado»): el
+    launcher nuevo arma el popup con lo demás; `texto` es la frase lista para el que no lo sepa leer."""
+    d = datos_baneo(fila, ahora)
+    nombre = _juegos().get(juego, {}).get("nombre", juego)
+    resto = texto_restante(d["restante_seg"])
+    texto = (f"No puedes entrar a {nombre}: " + (d["motivo"] or "bloqueo del equipo") + ". "
+             + (f"Vence en {resto}." if resto else "Este bloqueo es permanente."))
+    return dict({"error": "baneado", "juego": juego, "nombre": nombre}, **d, texto=texto)
+
+
+def permitido(uid, juego, ahora=None):
     juegos = _juegos()
     if juego not in juegos:
         return False
     if es_duena() and estado_r2beat(uid) != "ok":
         return False
     c = _propia()
-    if c.execute("SELECT 1 FROM baneos WHERE uid = ? AND juego = ?", (int(uid), juego)).fetchone():
+    if baneo_vigente(uid, juego, ahora):
         return False
     # ★ 18-nov (Benja): los juegos con FECHA de lanzamiento: antes, sólo admins / moderadores y aprobados (invitación);
     #   después, toda cuenta activa — EDA incluido («se abre a todas las cuentas»). Ver lanzamientos.py
-    lz = LZ.cerrado_para(sys.modules[__name__], uid, juego)
+    lz = LZ.cerrado_para(sys.modules[__name__], uid, juego, ahora)
     if lz is not None:
         return lz
     if juegos[juego]["abierto"]:
@@ -531,6 +614,10 @@ def manifiesto(token, juego):
     juegos = _juegos()
     if juego not in juegos:
         return 404, {"error": "Ese juego no existe."}
+    ban = baneo_vigente(uid, juego) if estado_r2beat(uid) == "ok" else None
+    if ban:                                  # ★ 20-nov: el porqué, para el launcher (`error` = la frase: el viejo la muestra)
+        r = respuesta_baneo(ban, juego)
+        return 403, dict(r, error=r["texto"], baneado=True)
     if estado_r2beat(uid) != "ok" or not permitido(uid, juego):
         return 403, {"error": f"Tu cuenta todavía no tiene acceso a {juegos[juego]['nombre']}."}
     carpeta = os.environ.get("R2_PORTERO_MANIFIESTOS") or ""
@@ -542,7 +629,15 @@ def manifiesto(token, juego):
 
 
 def juegos_de(uid):
-    return [{"id": j, "nombre": d["nombre"], "permitido": permitido(uid, j)} for j, d in _juegos().items()]
+    """★ 20-nov: un juego en el que la cuenta está baneada trae además `baneo` {motivo, hasta, restante_seg}."""
+    out = []
+    for j, d in _juegos().items():
+        g = {"id": j, "nombre": d["nombre"], "permitido": permitido(uid, j)}
+        ban = baneo_vigente(uid, j)
+        if ban:
+            g["baneo"] = datos_baneo(ban)
+        out.append(g)
+    return out
 
 
 _fallos = {}
@@ -916,7 +1011,11 @@ def pedir_pase(token, juego, ip="", ahora=None):
     if est != "ok":
         salir(token)
         return 403, {"error": "Esta cuenta ya no puede entrar." if est != "baneada" else "Esta cuenta está suspendida."}
-    if not permitido(uid, juego):
+    ban = baneo_vigente(uid, juego, ahora)
+    if ban:                                  # ★ 20-nov: mismo 403 que «no permitido», con el porqué y el tiempo
+        _log(f"pase {juego} NEGADO a uid={uid}: baneado")
+        return 403, respuesta_baneo(ban, juego, ahora)
+    if not permitido(uid, juego, ahora):
         return 403, {"error": f"Tu cuenta todavía no tiene acceso a {juegos[juego]['nombre']}."}
     pase, carga = emitir_pase(uid, juego, ahora)
     with _escribir:
@@ -1230,7 +1329,7 @@ def _ficha(uid, juego):
     return {"uid": int(uid), "usuario": _login_de(uid) or "¿?", "apodo": _apodo_de(uid),
             "r2beat": estado_r2beat(uid),
             "aprobada": bool(c.execute("SELECT 1 FROM aprobados WHERE uid = ? AND juego = ?", (uid, juego)).fetchone()),
-            "baneada": bool(c.execute("SELECT 1 FROM baneos WHERE uid = ? AND juego = ?", (uid, juego)).fetchone())}
+            "baneada": bool(baneo_vigente(uid, juego))}
 
 
 def admin_buscar(q, juego="eda", rol="admin"):
@@ -1262,8 +1361,9 @@ def admin_lista(juego="eda", rol="admin"):
     c = _propia()
     apr = [dict(_ficha(r["uid"], juego), desde=r["desde"], quien=r["quien"], nota=r["nota"] or "")
            for r in c.execute("SELECT uid, desde, quien, nota FROM aprobados WHERE juego = ? ORDER BY desde DESC", (juego,))]
-    ban = [dict(_ficha(r["uid"], juego), desde=r["desde"], quien=r["quien"], motivo=r["motivo"] or "")
-           for r in c.execute("SELECT uid, desde, quien, motivo FROM baneos WHERE juego = ? ORDER BY desde DESC", (juego,))]
+    ban = [dict(_ficha(r["uid"], juego), desde=r["desde"], quien=r["quien"], **datos_baneo(r))
+           for r in c.execute("SELECT uid, desde, quien, motivo, hasta FROM baneos WHERE juego = ? "
+                              "AND (hasta IS NULL OR hasta > ?) ORDER BY desde DESC", (juego, int(time.time())))]
     aud = [dict(r) for r in c.execute("SELECT cuando, quien, accion, uid, juego, detalle FROM auditoria "
                                       "ORDER BY id DESC LIMIT 30")]
     for a in aud:
@@ -1285,9 +1385,140 @@ def admin_lista(juego="eda", rol="admin"):
                  "rol": rol}
 
 
-def admin_accion(uid_admin, accion, uid, juego="eda", detalle=""):
+def leer_duracion(d):
+    """★ 20-nov: la duración de un baneo pedida como {horas: n} · {dias: n} · {meses: n} (30 días) · {permanente: true}.
+    -> (dicha, seg, error): seg None = permanente · dicha False = no vino ninguna (el ADMIN: permanente, como antes)."""
+    d = d if isinstance(d, dict) else {}
+    vinieron = [k for k in ("horas", "dias", "meses") if d.get(k) not in (None, "")]
+    perm = d.get("permanente") in (True, 1, "1", "si", "sí", "true")
+    if len(vinieron) + perm > 1:
+        return True, None, "Elija una sola duración: horas, días, meses o permanente."
+    if perm:
+        return True, None, None
+    if not vinieron:
+        return False, None, None
+    v = d[vinieron[0]]
+    if isinstance(v, bool) or not (isinstance(v, int) or (isinstance(v, str) and v.strip().isdigit())):
+        return True, None, "La duración tiene que ser un número entero de horas, días o meses."
+    seg = int(v) * {"horas": 3600, "dias": 86400, "meses": BANEO_MES_SEG}[vinieron[0]]
+    if seg <= 0:
+        return True, None, "La duración tiene que ser de al menos 1 hora."
+    if seg > BANEO_TOPE_SEG:
+        return True, None, "Esa duración es demasiado larga: use «permanente»."
+    return True, seg, None
+
+
+def duracion_txt(seg):
+    return "permanente" if seg is None else "por " + texto_restante(seg)
+
+
+def pases_de_la_red():
+    """Los pases de TODOS los juegos del catálogo (live, test y los «<live>-…»): lo que cubre «toda la red»."""
+    yo = sys.modules[__name__]
+    return [p for j in CO.catalogo(yo) for p, _e in CO.pases_de(yo, j["id"])]
+
+
+def _puede_sancionar(uid_admin, uid, pases):
+    """Las reglas comunes de banear / desbanear. -> (código, datos) del error, o None si se puede."""
+    rol = rol_de(uid_admin)
+    if rol is None:
+        return 401, {"error": "Tiene que entrar con una cuenta ADMIN o MODERADOR."}
+    if not pases:
+        return 400, {"error": "Elija al menos un juego."}
+    if any(p not in _juegos() for p in pases):
+        return 404, {"error": "Ese juego no existe."}
+    if rol != "admin":
+        if juegos_de_moderador(uid_admin) is None:
+            return 403, {"error": "Los moderadores sólo pueden aprobar o quitar."}
+        if not all(puede_en(uid_admin, p) for p in pases):
+            return 403, {"error": "Ese juego no está asignado a su cuenta."}
+    if isinstance(uid, bool) or not str(uid).strip().isdigit():
+        return 400, {"error": "Cuenta inválida."}
+    if not _login_de(int(uid)):
+        return 404, {"error": "Esa cuenta no existe."}
+    if rol != "admin" and rol_de(int(uid)) is not None:
+        return 403, {"error": "Esa cuenta la maneja un ADMIN."}
+    return None
+
+
+def admin_banear(uid_admin, uid, pases, motivo, duracion=None, red=False, ahora=None):
+    """★ 20-nov: banea a `uid` en VARIOS pases de una vez (o en toda la red), por un tiempo o permanente.
+    `duracion` = {horas | dias | meses | permanente} (ver `leer_duracion`). Todo o nada: si un pase no se puede, no se toca
+    ninguno. Cada pase queda en la auditoría. -> (código, datos)."""
+    ahora = int(time.time() if ahora is None else ahora)
+    rol = rol_de(uid_admin)
+    if red:
+        if rol is None:
+            return 401, {"error": "Tiene que entrar con una cuenta ADMIN o MODERADOR."}
+        if rol != "admin":
+            return 403, {"error": "Sólo un ADMIN banea en toda la red."}
+        pases = pases_de_la_red()
+    pases = list(dict.fromkeys(str(p) for p in (pases or [])))
+    err = _puede_sancionar(uid_admin, uid, pases)
+    if err:
+        return err
+    dicha, seg, err_dur = leer_duracion(duracion)
+    if err_dur:
+        return 400, {"error": err_dur}
+    if rol != "admin":
+        if not dicha:
+            return 400, {"error": "Ponga cuánto dura el baneo (en horas, días o meses)."}
+        if seg is None:
+            return 403, {"error": "Sólo un ADMIN banea de forma permanente."}
+        if seg > BANEO_TOPE_MODERADOR_SEG:
+            return 403, {"error": f"Un moderador banea hasta {texto_restante(BANEO_TOPE_MODERADOR_SEG)}; "
+                                  "para más, un ADMIN."}
+    motivo = str(motivo or "").strip()
+    if not motivo:
+        return 400, {"error": "Escriba el motivo del baneo (lo ve la persona)."}
+    if len(motivo) > BANEO_MOTIVO_MAX:
+        return 400, {"error": f"El motivo tiene que tener {BANEO_MOTIVO_MAX} caracteres o menos."}
+    uid = int(uid)
+    hasta = None if seg is None else ahora + seg
+    quien = _login_de(uid_admin) or f"uid {uid_admin}"
+    with _escribir:
+        c = _propia()
+        for p in pases:
+            c.execute("INSERT OR REPLACE INTO baneos (uid, juego, desde, quien, motivo, hasta) VALUES (?, ?, ?, ?, ?, ?)",
+                      (uid, p, _ahora_txt(), quien, motivo, hasta))
+        c.commit()
+    detalle = ("toda la red · " if red else "") + f"{duracion_txt(seg)} · {motivo}"
+    for p in pases:
+        _auditar(uid_admin, "banear", uid, p, detalle)
+    _log(f"panel: {quien} -> banear uid={uid} en {','.join(pases)} ({duracion_txt(seg)})")
+    return 200, {"ok": True, "pases": pases, "hasta": hasta}
+
+
+def admin_desbanear(uid_admin, uid, pases, ahora=None):
+    """Levanta el baneo ANTES de tiempo en esos pases: `hasta` = ahora (la fila queda, como historial)."""
+    ahora = int(time.time() if ahora is None else ahora)
+    pases = list(dict.fromkeys(str(p) for p in (pases or [])))
+    err = _puede_sancionar(uid_admin, uid, pases)
+    if err:
+        return err
+    uid = int(uid)
+    quien = _login_de(uid_admin) or f"uid {uid_admin}"
+    with _escribir:
+        c = _propia()
+        tocados = [p for p in pases if c.execute(
+            "UPDATE baneos SET hasta = ? WHERE uid = ? AND juego = ? AND (hasta IS NULL OR hasta > ?)",
+            (ahora, uid, p, ahora)).rowcount]
+        c.commit()
+    for p in pases:
+        _auditar(uid_admin, "desbanear", uid, p, "" if p in tocados else "no estaba baneada")
+    _log(f"panel: {quien} -> desbanear uid={uid} en {','.join(pases)}")
+    return 200, {"ok": True, "pases": pases, "levantados": tocados}
+
+
+def admin_accion(uid_admin, accion, uid, juego="eda", detalle="", duracion=None):
     if juego not in _juegos():
         return 404, {"error": "Ese juego no existe."}
+    if accion in ("banear", "desbanear"):                        # ★ 20-nov: con duración y motivo obligatorio
+        codigo, datos = (admin_banear(uid_admin, uid, [juego], detalle, duracion) if accion == "banear"
+                         else admin_desbanear(uid_admin, uid, [juego]))
+        if codigo != 200:
+            return codigo, datos
+        return 200, {"ok": True, "cuenta": _ficha(int(uid), juego)}
     rol = rol_de(uid_admin)
     if rol is None:
         return 401, {"error": "Tenés que entrar con una cuenta ADMIN o MODERADOR."}
@@ -1315,10 +1546,6 @@ def admin_accion(uid_admin, accion, uid, juego="eda", detalle=""):
             c.execute("INSERT OR REPLACE INTO aprobados VALUES (?, ?, ?, ?, ?)", (uid, juego, _ahora_txt(), quien, detalle))
         elif accion == "quitar":
             c.execute("DELETE FROM aprobados WHERE uid = ? AND juego = ?", (uid, juego))
-        elif accion == "banear":
-            c.execute("INSERT OR REPLACE INTO baneos VALUES (?, ?, ?, ?, ?)", (uid, juego, _ahora_txt(), quien, detalle))
-        elif accion == "desbanear":
-            c.execute("DELETE FROM baneos WHERE uid = ? AND juego = ?", (uid, juego))
         else:
             return 400, {"error": "Acción desconocida."}
         c.commit()
@@ -1454,7 +1681,7 @@ class _Manejador(BaseHTTPRequestHandler):
         if p == ["admin", "invitacion"]:                              # ★ 18-nov: aprobar / rechazar (por POST, con X-R2)
             return self._mandar(*LZ.decidir(sys.modules[__name__], uid, d.get("id"), str(d.get("accion") or "")))
         if len(p) == 2 and p[1] in ("aprobar", "quitar", "banear", "desbanear"):
-            return self._mandar(*admin_accion(uid, p[1], d.get("uid"), str(d.get("juego") or "eda"), d.get("detalle")))
+            return self._mandar(*admin_accion(uid, p[1], d.get("uid"), str(d.get("juego") or "eda"), d.get("detalle"), d))
         return self._mandar(404, {"error": "no existe"})
 
     def do_GET(self):
@@ -1640,7 +1867,8 @@ def _traducir_portero(p, mapa_importadas, uids_cuentas):
                 if uv in pend:
                     un = pend[uv]
                     p.execute(f"DELETE FROM {tabla} WHERE uid = ? AND juego = ?", (uv, fila["juego"]))
-                    p.execute(f"INSERT OR IGNORE INTO {tabla} VALUES (?, ?, ?, ?, ?)", (un, *tuple(fila)[1:]))
+                    p.execute(f"INSERT OR IGNORE INTO {tabla} VALUES ({', '.join('?' * len(fila))})",
+                              (un, *tuple(fila)[1:]))
                     traducidos += 1
         for uv, un in pend.items():
             p.execute("INSERT OR IGNORE INTO traducciones_uid (uid_viejo, uid_nuevo) VALUES (?, ?)", (uv, un))
@@ -1867,6 +2095,19 @@ def consola(args):
     uid = _uid_de(args[1])
     juego = _juego_valido(args[2] if len(args) > 2 else "eda")
     resto = " ".join(args[3:])
+    if orden == "banear":                    # ★ 20-nov: [--horas N | --dias N | --meses N] antes del motivo; sin eso, permanente
+        dur, palabras = {}, list(args[3:])
+        while palabras and palabras[0] in ("--horas", "--dias", "--meses", "--permanente"):
+            k = palabras.pop(0)[2:]
+            dur[k] = True if k == "permanente" else (palabras.pop(0) if palabras else "")
+        dicha, seg, err = leer_duracion(dur)
+        if err:
+            raise SystemExit("⛔ " + err)
+        resto = " ".join(palabras).strip() or "(sin motivo, por consola)"
+        if len(resto) > BANEO_MOTIVO_MAX:
+            raise SystemExit(f"⛔ el motivo tiene que tener {BANEO_MOTIVO_MAX} caracteres o menos")
+        hasta = None if seg is None else int(time.time()) + seg
+        resto_aud = f"{duracion_txt(seg)} · {resto}"
     with _escribir:
         c = _propia()
         if orden == "aprobar":
@@ -1874,11 +2115,15 @@ def consola(args):
         elif orden == "quitar":
             c.execute("DELETE FROM aprobados WHERE uid = ? AND juego = ?", (uid, juego))
         elif orden == "banear":
-            c.execute("INSERT OR REPLACE INTO baneos VALUES (?, ?, ?, ?, ?)", (uid, juego, _ahora_txt(), quien, resto))
-        else:
-            c.execute("DELETE FROM baneos WHERE uid = ? AND juego = ?", (uid, juego))
+            c.execute("INSERT OR REPLACE INTO baneos (uid, juego, desde, quien, motivo, hasta) VALUES (?, ?, ?, ?, ?, ?)",
+                      (uid, juego, _ahora_txt(), quien, resto, hasta))
+            resto = resto_aud
+        else:                                # (desbanear: vence ahora; la fila queda como historial)
+            ya = int(time.time())
+            c.execute("UPDATE baneos SET hasta = ? WHERE uid = ? AND juego = ? AND (hasta IS NULL OR hasta > ?)",
+                      (ya, uid, juego, ya))
         c.execute("INSERT INTO auditoria (cuando, quien, accion, uid, juego, detalle) VALUES (?, ?, ?, ?, ?, ?)",
-                  (_ahora_txt(), f"consola ({quien})", orden, uid, juego, resto))
+                  (_ahora_txt(), f"consola ({quien})", orden, uid, juego, resto[:200]))
         c.commit()
     print(f"✔ {orden}: uid {uid} en {juego}. Ahora: {'PUEDE' if permitido(uid, juego) else 'NO puede'} entrar.")
 

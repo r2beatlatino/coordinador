@@ -107,7 +107,7 @@ try:
     P.estado_r2beat = lambda uid: "ok"
     ana, beto, jefa, mode, malo = (eid[k] for k in ("ana_login", "beto", "jefa", "mode", "malo"))
     pc = P._propia()
-    pc.execute("INSERT INTO baneos VALUES (?, 'eda', 'x', 'x', 'x')", (malo,)); pc.commit()
+    pc.execute("INSERT INTO baneos (uid, juego, desde, quien, motivo) VALUES (?, 'eda', 'x', 'x', 'x')", (malo,)); pc.commit()
 
     print("1 · las fechas (hora de Perú)")
     t = LZ.tabla(P)

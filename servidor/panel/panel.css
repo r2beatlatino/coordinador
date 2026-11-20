@@ -1001,3 +1001,8 @@ table.t tr.click:focus-visible { outline: 2px solid var(--cyan); outline-offset:
 .lista .t span span, .lista .t span b, .lista .t b span { display: inline; white-space: normal; overflow: visible; font-size: inherit; }
 .lista .t .chip { display: inline-flex; width: auto; vertical-align: middle; }
 .lista .t .etq-juego { display: inline-block; font-size: 10.5px; }
+/* ★ 20-nov: los baneos con tiempo — el contador de «Baneos vigentes» y el formulario (la cantidad se esconde en «Permanente») */
+.caja-cab h3 .n { margin-left: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-block; vertical-align: middle;
+                  font: 700 10.5px/18px var(--sans); text-align: center; background: rgba(243,38,134,.18); color: #ff8ec6; }
+.campo[hidden] { display: none; }
+#bnJuegos .radio input:disabled { cursor: not-allowed; }
