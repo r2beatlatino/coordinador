@@ -1,0 +1,11 @@
+{
+  "_que_es": "Los secretos que viven en la PC de Benja (no en el VPS). Rutas relativas a la carpeta del usuario (C:/Users/benja). Se arma con respaldo_pc.bat y sale cifrado a la misma llave pública. Sin esto, si la PC se pierde, hay que rehacer llaves que el launcher y las listas ya conocen.",
+  "cosas": [
+    { "nombre": "LLAVES que firman las listas de descarga (GunBound/EDA) + la de reserva", "tipo": "carpeta", "ruta": ".enenos" },
+    { "nombre": "Cloudflare: tokens del dominio y llaves de R2", "tipo": "carpeta", "ruta": ".cloudflare" },
+    { "nombre": "SSH: llaves de los VPS (Miami y otros)", "tipo": "carpeta", "ruta": ".ssh", "ignorar": ["known_hosts*"] },
+    { "nombre": "SSH: llave del VPS de Chile y del ensayo", "tipo": "archivo", "ruta": "Documents/ssh-key-2026-07-21.key" },
+    { "nombre": "SSH: llave de la laptop de pruebas", "tipo": "archivo", "ruta": "Documents/laptop-pruebas.key", "opcional": true },
+    { "nombre": "R2Beat: llave privada del grabador", "tipo": "archivo", "ruta": "Documents/R2Beat_clave_privada_grabador.pem", "opcional": true }
+  ]
+}

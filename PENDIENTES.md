@@ -23,7 +23,8 @@
   - [x] Benja creó SU llave (privada cifrada con su contraseña, fuera del repo; la pública en el repo) — 19-nov
   - [x] el primer respaldo de verdad: 24 cosas, 18,3 MB cifrado, bajado a la PC de Benja (sha256 igual) y borrado del VPS — 20-nov 01:54 UTC
   - [x] Benja lo abrió en su PC con `ver_respaldo.bat` y su contraseña: «✔ respaldo sano · 24 cosas» (el control de punta a punta) — 19-nov
-  - [ ] los secretos de la PC de Benja (llave de las listas de GunBound, Cloudflare, SSH)
+  - [x] los secretos de la PC de Benja (`respaldo_pc.bat`: llaves de las listas, Cloudflare, SSH, grabador) — 1.º armado 20-nov 02:03 UTC
+  - [ ] que Benja lo compruebe con `ver_respaldo.bat` (ahora mira los dos)
   - [ ] el botón en el panel (sólo admin)
 - [ ] **6 · La ficha `enenos.json`** de cada juego (qué sabe hacer su server, para que el panel muestre sólo lo que funciona)
   - [x] GunBound — 19-nov

@@ -90,7 +90,7 @@ def copiar_sqlite(origen, destino):
     return filas
 
 
-def armar(lista, origen, salida, para, ahora=None):
+def armar(lista, origen, salida, para, ahora=None, nombre="enenos_respaldo"):
     """Arma el respaldo y devuelve la ruta del archivo cifrado."""
     cosas = leer_lista(lista)
     origen, salida = Path(origen), Path(salida)
@@ -143,7 +143,7 @@ def armar(lista, origen, salida, para, ahora=None):
         with tarfile.open(tar, "w:gz") as t:
             t.add(caja, arcname="respaldo")
         salida.mkdir(parents=True, exist_ok=True)
-        final = salida / f"enenos_respaldo_{sello}.tar.gz.age"
+        final = salida / f"{nombre}_{sello}.tar.gz.age"
         parcial = final.with_suffix(".age.parcial")
         cmd = ["age", "--encrypt"] + sum((["-r", k] for k in llaves), []) + ["-o", str(parcial), str(tar)]
         subprocess.run(cmd, check=True)
@@ -209,6 +209,7 @@ def main(argv=None):
     a.add_argument("--origen", default="/origen")
     a.add_argument("--salida", required=True)
     a.add_argument("--para", required=True, help="archivo con la/s llave/s pública/s age1…")
+    a.add_argument("--nombre", default="enenos_respaldo", help="comienzo del nombre del archivo (el de la PC: enenos_respaldo_pc)")
     for nombre in ("abrir", "ver"):
         b = sub.add_parser(nombre)
         b.add_argument("--archivo", required=True)
@@ -218,7 +219,7 @@ def main(argv=None):
     x = ap.parse_args(argv)
     try:
         if x.que == "armar":
-            armar(x.lista, x.origen, x.salida, x.para)
+            armar(x.lista, x.origen, x.salida, x.para, nombre=x.nombre)
         elif x.que == "abrir":
             man = descifrar(x.archivo, x.llave, x.destino)
             print(f"✔ respaldo sano · {len(man['cosas'])} cosas · del {man['fecha_utc']} · en {Path(x.destino) / 'respaldo'}")

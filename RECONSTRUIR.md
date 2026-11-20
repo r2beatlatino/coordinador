@@ -47,8 +47,14 @@ python herramientas/respaldo/respaldo.py abrir --archivo <respaldo>.age --llave 
 `abrir` deja `<carpeta>/respaldo/datos/<la misma ruta que tenía en el VPS>` y comprueba cada cosa contra su
 `MANIFIESTO.json` (sha256, integridad y filas por tabla).
 
-⏳ Falta: el botón en el panel y los secretos que viven en la PC de Benja (la llave que firma las listas de GunBound,
-los tokens de Cloudflare, las llaves SSH de los VPS).
+**Los secretos de la PC de Benja** (no viven en el VPS): `herramientas/respaldo/respaldo_pc.bat` arma
+`enenos_respaldo_pc_<fecha>.tar.gz.age` con lo de `respaldo_pc.json`: las llaves que firman las listas de descarga
+(`~/.enenos`), Cloudflare (`~/.cloudflare`), las llaves SSH de los VPS y la del grabador. Misma llave pública.
+Al reconstruir, cada cosa vuelve a su lugar en la carpeta del usuario.
+
+`ver_respaldo.bat` comprueba el más nuevo de cada uno (VPS y PC).
+
+⏳ Falta: el botón en el panel.
 
 ## 2 · Levantar todo
 
