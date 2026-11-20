@@ -190,7 +190,7 @@ dave, s_dave = cuenta("dave_login")
 c, d = pedir("/social/enviar", {"para": dave, "texto": "hola"}, s_ana)
 ok(c == 403, f"⟲ a alguien que no es amigo: 403 (dio {c})")
 
-print("· los 2 días")
+print("· ★ 20-nov: ya NO se borra a los 2 días (manda el tope de 1 GB: probar_chat_guardias.py)")
 c = P._cuentas()
 ahora = int(time.time())
 with P._escribir:
@@ -199,8 +199,7 @@ with P._escribir:
     c.commit()
 pedir("/social/enviar", {"para": beto, "texto": "nuevo"}, s_ana)
 textos = [r[0] for r in c.execute("SELECT texto FROM mensajes")]
-ok("viejo" not in textos, "el mensaje de hace 3 días se BORRÓ")
-ok("de ayer" in textos, "⟲ el de ayer queda")
+ok("viejo" in textos and "de ayer" in textos, "el mensaje de hace 3 días QUEDA (Benja: quitar «se borrará en 2 días»)")
 
 print("· quitar")
 c, d = pedir("/social/quitar", {"uid": beto}, s_ana)
