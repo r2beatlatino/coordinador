@@ -112,11 +112,11 @@ function abrirPop(ancla, html, ancho = 280) {
   const b = pop.querySelector('button, a'); if (b) b.focus();
 }
 function cerrarPop() { if (!pop) return; if (pop._ancla) pop._ancla.setAttribute('aria-expanded', 'false'); pop.remove(); pop = null; }
-function confirmar({ titulo, txt, ok = 'Confirmar', icono = 'alert', peligro = true, extra = '', alAceptar }) {
+function confirmar({ titulo, txt, ok = 'Confirmar', icono = 'alert', peligro = true, extra = '', alAceptar, soloOk = false }) {
   const p = abrirCapa(`<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="mdTit">
     <div class="modal-cab"><span class="ic" ${peligro ? '' : 'style="background:rgba(81,216,229,.12);color:var(--cyan)"'}>${ic(icono, 's20')}</span><div><h2 id="mdTit">${titulo}</h2><p>${txt}</p></div></div>
     ${extra ? `<div class="modal-cuerpo">${extra}</div>` : ''}
-    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn ${peligro ? 'peligro lleno' : 'prim'}" id="mdOk">${ok}</button></div></div>`);
+    <div class="modal-pie">${soloOk ? '' : '<button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button>'}<button type="button" class="btn ${peligro ? 'peligro lleno' : 'prim'}" id="mdOk">${ok}</button></div></div>`);
   $('#mdOk', p).addEventListener('click', () => { const v = $('#mdExtra', p); cerrarCapa(); alAceptar(v ? v.value : ''); });
 }
 function ilus() {
@@ -548,6 +548,7 @@ function pintarPersona(p) {
         <div class="ids"><span>Eñeños-ID <b>${esc(p.uid)}</b></span>${p.usuario ? `<span>usuario <b>${esc(p.usuario)}</b></span>` : ''}${p.creada ? `<span>alta <b>${fechaTxt(p.creada)}</b></span>` : ''}${p.visto ? `<span>visto ${haceSeg(p.visto)}</span>` : ''}</div>
         <div class="persona-vinc" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${p.vinculos.length ? p.vinculos.map(v => `<span class="chip" style="height:26px;padding:0 10px">${logoProv(v.proveedor)}${PROV[v.proveedor] || esc(v.proveedor)} vinculado${v.nombre ? ` · ${esc(v.nombre)}` : ''}</span>`).join('') : '<span class="tenue" style="font-size:13px">Sin Discord ni Google vinculado.</span>'}</div>
       </div>
+      ${esAdmin() && p.usuario ? `<div style="align-self:flex-start"><button type="button" class="btn chico fantasma" data-accion="persona-clave">${ic('lock', 's14')}Restablecer contraseña</button></div>` : ''}
     </div></section>
     <div class="titulo-sec"><h2>Permisos por juego</h2><span class="tenue">${p.acciones.length === 4 ? 'Aprobar, quitar, banear y desbanear, por servidor.' : 'Aprobar y quitar, por servidor.'}</span>${p.acciones.includes('banear') && p.juegos.some(j => j.pases.length) ? `<button type="button" class="btn chico" data-accion="banear-varios" style="margin-left:auto">${ic('ban', 's14')}Banear en varios juegos…</button>` : ''}</div>
     ${p.juegos.length ? p.juegos.map(j => `<section class="caja" style="margin-bottom:14px"><div class="caja-cab"><h3>${etqJuego(j.id)} ${esc(j.nombre)}</h3>${j.invitacion ? `<span class="sub">invitación anticipada: ${esc(j.invitacion)}</span>` : ''}</div>
@@ -557,6 +558,29 @@ function pintarPersona(p) {
   </main>`;
   S.persona = p;
   personajesDePersona(p);
+}
+/* ★ 20-nov (Benja: «cambiar la contraseña de un jugador»): ADMIN. El server genera una provisoria al azar y cierra sus
+   sesiones; se muestra UNA vez para pasársela al jugador, que la cambia después en el launcher. Nadie la escribe. */
+function restablecerClave() {
+  const p = S.persona; if (!p) return;
+  confirmar({
+    titulo: `¿Restablecer la contraseña de ${esc(p.nombre)}?`, ok: 'Restablecer', icono: 'lock',
+    txt: `Se genera una contraseña provisoria al azar para el usuario <b>${esc(p.usuario)}</b> y se cierra su sesión en el launcher. La contraseña de ahora deja de funcionar.`,
+    alAceptar: async () => {
+      const r = await api('restablecer-clave', { uid: p.uid });
+      if (!r.ok) { toast({ t: 'No se pudo', sub: errTxt(r), tipo: 'err' }); return; }
+      confirmar({
+        titulo: 'Contraseña provisoria', ok: 'Listo', icono: 'lock', peligro: false, soloOk: true,
+        txt: `Pásele estos datos al jugador. <b>Se muestran una sola vez</b>: al cerrar esta ventana ya no se pueden volver a ver.`,
+        extra: `<div class="clave-prov" style="display:grid;gap:8px;margin-top:12px">
+          <div>Usuario: <code style="font-size:15px">${esc(r.d.usuario)}</code></div>
+          <div style="display:flex;gap:8px;align-items:center">Contraseña: <code style="font-size:18px;letter-spacing:1px">${esc(r.d.clave)}</code>
+            <button type="button" class="btn chico" data-accion="lg-copiar" data-txt="${esc(r.d.clave)}">${ic('copy', 's14')}Copiar</button></div>
+          <div class="tenue" style="font-size:12.5px">Que entre con ella y la cambie en el launcher. Quedó en la auditoría (sin la contraseña).</div></div>`,
+        alAceptar: () => {},
+      });
+    },
+  });
 }
 function accionPersona(acc, pase) {
   const p = S.persona; if (!p) return;
@@ -3391,6 +3415,7 @@ document.addEventListener('click', async e => {
         if (!r.ok) { toast({ t: 'No se pudo agregar', sub: errTxt(r), tipo: 'err' }); return; }
         pintarMods(r.d); pintarAuditoria(); toast({ t: 'Se sumó al equipo', sub: r.d.aviso ? esc(r.d.aviso) : 'Asígnele juegos tocando sus etiquetas.', tipo: r.d.aviso ? 'info' : 'ok', ms: 8000 }); } }); break;
     case 'persona-accion': accionPersona(a.dataset.acc, a.dataset.pase); break;
+    case 'persona-clave': restablecerClave(); break;
     case 'banear-varios': formBaneo(''); break;
     case 'ban-levantar': levantarBaneo(Number(a.dataset.i)); break;
     case 'jc-item-elegir': elegirItem(a.dataset.item); break;

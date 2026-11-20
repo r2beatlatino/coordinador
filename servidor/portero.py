@@ -2007,6 +2007,39 @@ def admin_poner_clave(usuario, clave_nueva, quien="consola"):
     print(f"✔ cambiar-clave: uid {uid} ({r['usuario']}).")
 
 
+# ★ 20-nov (Benja: «quiero cambiar una contraseña de un jugador en el Coordinador»): sin consola ni contraseñas escritas
+#   a mano. La genera el server al azar, se la muestra UNA vez al admin (que se la pasa al jugador) y el jugador la
+#   cambia después en el launcher. ⛔ No va a ningún log ni a la auditoría: la auditoría dice quién y a quién.
+_LETRAS_PROVISORIA = "abcdefghjkmnpqrstuvwxyz23456789"     # (sin l/1/i/o/0: se dicta por chat sin confundirse)
+
+
+def admin_restablecer_clave(uid_admin, uid):
+    """ADMIN: una contraseña PROVISORIA al azar para la cuenta `uid`, y se cierran sus sesiones abiertas.
+    -> (200, {ok, uid, usuario, clave}) · 403 si no es admin · 404 si la cuenta no existe."""
+    if rol_de(uid_admin) != "admin":
+        return 403, {"error": "Sólo un Admin puede restablecer contraseñas."}
+    if not es_duena():
+        return 409, {"error": "Las contraseñas no las guarda este servidor."}
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return 400, {"error": "Falta la cuenta."}
+    r = _cuentas().execute("SELECT uid, usuario FROM cuentas WHERE uid = ?", (uid,)).fetchone()
+    if not r:
+        return 404, {"error": "Esa cuenta no existe."}
+    clave_txt = "".join(secrets.choice(_LETRAS_PROVISORIA) for _ in range(10))
+    envuelta = envolver_hash(_hash_de_entrada(clave_txt, None))
+    with _escribir:
+        cc = _cuentas()
+        cc.execute("UPDATE cuentas SET clave = ? WHERE uid = ?", (envuelta, uid))
+        cc.commit()
+        cp = _propia()
+        cp.execute("DELETE FROM sesiones WHERE uid = ?", (uid,))
+        cp.commit()
+    _auditar(uid_admin, "restablecer-clave", uid, None, "contraseña provisoria; sesiones cerradas")
+    return 200, {"ok": True, "uid": uid, "usuario": r["usuario"], "clave": clave_txt}
+
+
 def admin_estado_cuenta(usuario, nuevo_estado, motivo="", quien="consola"):
     """Banea ('baneada') o desbanea ('activa') una cuenta en `cuentas.db` (ADMIN por consola)."""
     if nuevo_estado not in ("activa", "baneada"):

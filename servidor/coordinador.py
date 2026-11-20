@@ -51,6 +51,7 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     GET  /coordinador/api/equipo                       admins y moderadores con sus juegos (sólo ADMIN)
     POST /coordinador/api/oauth {proveedor, destino?}  · canjear {ticket} · salir
     POST /coordinador/api/accion {accion, uid, pase, detalle}   aprobar | quitar | banear | desbanear (por pase)
+    POST /coordinador/api/restablecer-clave {uid}            ★ 20-nov ADMIN: contraseña provisoria al azar (se ve una vez)
          ★ 20-nov banear / desbanear: además `pases: [...]`, `juegos: [...]` (con todos sus servidores), `red: true`
          (sólo ADMIN), y para banear `horas: n` | `dias: n` | `meses: n` (30 d) | `permanente: true` (sólo ADMIN) + `motivo` (obligatorio,
          ≤ 200). Un moderador: sólo en sus juegos y hasta portero.BANEO_TOPE_MODERADOR_SEG.
@@ -911,6 +912,8 @@ def atender(P, H, metodo, p, d):
         return H._mandar(404, {"error": "no existe"})
     if api == ["accion"]:
         return H._mandar(*accion(P, viewer, d))
+    if api == ["restablecer-clave"]:                                 # ★ 20-nov: ADMIN, contraseña provisoria al azar
+        return H._mandar(*P.admin_restablecer_clave(viewer, d.get("uid")))
     if api == ["invitacion"]:
         return H._mandar(*decidir(P, viewer, d))
     if api == ["equipo"]:
