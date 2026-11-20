@@ -7,7 +7,8 @@
      #/red             personas, invitaciones, lanzamientos, moderadores y permisos, auditoría
      #/persona/<uid>   vínculos, estado y permisos por juego (★ 20-nov: banear en varios juegos, con tiempo y motivo)
      #/j/<juego>/<live|test>/<parte>   ★ fase B (20-nov): el contenido dinámico del launcher de ese juego
-                       (asistencia · ruleta · avisos del lobby · lanzamiento). El tablero (fase C) todavía no.
+                       (asistencia · ruleta · avisos del lobby · lanzamiento). ★ fase C: la GESTIÓN, antes del contenido:
+                       resumen (el tablero) · personas (y personas/<uid>: la ficha de un personaje)
      #/novedades       ★ fase B: el acordeón de noticias de todos los launchers
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 const $ = (s, r = document) => r.querySelector(s);
@@ -345,11 +346,17 @@ const ACC_TXT = { aprobar: ['aprobó a', 'check', 'verde'], quitar: ['le quitó 
   desbanear: ['desbaneó a', 'check', 'verde'], 'rechazar invitación': ['rechazó la invitación de', 'x', ''],
   'entrar al Coordinador': ['entró al Coordinador', 'logout', 'verde'], 'entrar al panel': ['entró al panel chico', 'logout', 'verde'],
   'equipo: agregar moderador': ['sumó al equipo a', 'shieldok', 'rosa'], 'equipo: juegos del moderador': ['cambió los juegos de', 'shieldok', 'rosa'],
-  'equipo: quitar moderador': ['sacó del equipo a', 'shieldok', 'rosa'] };
+  'equipo: quitar moderador': ['sacó del equipo a', 'shieldok', 'rosa'], 'equipo: permisos del moderador': ['cambió los permisos de', 'shieldok', 'rosa'],
+  'gestión · aviso': ['mandó un aviso', 'mega', 'cian'], 'gestión · echar': ['echó a un jugador', 'logout', ''], 'gestión · mute': ['cambió el chat de un jugador', 'micoff', 'oro'],
+  'gestión · rcoin': ['cambió el Rcoin de un jugador', 'coins', 'oro'], 'gestión · exp': ['cambió la EXP de un jugador', 'sparkle', 'oro'],
+  'gestión · item/dar': ['le dio un ítem a un jugador', 'gift', 'rosa'], 'gestión · item/quitar': ['le quitó un ítem a un jugador', 'gift', ''],
+  'gestión · apodo': ['cambió el apodo de un jugador', 'user', 'cian'], 'gestión · gorila': ['cambió las monedas gorila de un jugador', 'coins', 'oro'] };
+/* ★ fase C: «usuario/101/rcoin» -> «personaje #101 · rcoin» */
+const detGestion = d => esc(String(d || '').replace(/^usuario\/(\d+)\/?/, 'personaje #$1 · ').replace(/ · $/, ''));
 function tlItem(a) {
   const [txt, icono, c] = ACC_TXT[a.accion] || [esc(a.accion), 'history', 'cian'];
   const quien = a.persona ? ` <b>${a.uid ? `<a href="#/persona/${esc(a.uid)}">${esc(a.persona)}</a>` : esc(a.persona)}</b>${a.usuario ? ` <span class="tenue">(${esc(a.usuario)})</span>` : ''}` : '';
-  const det = a.detalle ? ` · <span class="tenue">«${esc(a.detalle)}»</span>` : '';
+  const det = a.detalle ? (/^gestión/.test(a.accion) ? ` · <span class="tenue">${detGestion(a.detalle)}</span>` : ` · <span class="tenue">«${esc(a.detalle)}»</span>`) : '';
   const env = a.pase && a.juego ? (/-prueba$/.test(a.pase) ? '<span class="etq-env test">TEST</span>' : '') : '';
   return `<li><span class="ic ${c}">${ic(icono, 's14')}</span><div class="txt"><b>${esc(a.quien)}</b> ${txt}${quien}${det}<div class="meta">${a.juego ? etqJuego(a.juego) : '<span class="etq-juego" style="--g:81,216,229">Red</span>'}${env}</div></div><span class="cuando">${fechaTxt(a.cuando)}</span></li>`;
 }
@@ -391,14 +398,14 @@ function vistaRed() {
           <div class="caja-cab"><h3 id="tMods">${ic('shieldok', 's16')}Moderadores y permisos</h3><span class="sub" id="subMods"></span>
             <div class="der"><button type="button" class="btn chico" data-accion="agregar-mod">${ic('plus', 's14')}Agregar</button></div></div>
           <ul class="lista" id="listaMods"></ul>
-          <div class="tenue" style="padding:10px 16px 14px;border-top:1px solid var(--line);font-size:12px">Toque un juego para asignarlo o quitarlo. Cada moderador ve sólo sus juegos, y ahí puede aprobar, quitar y banear por juego.</div>
+          <div class="tenue" style="padding:10px 16px 14px;border-top:1px solid var(--line);font-size:12px">Toque un juego para asignarlo o quitarlo. Cada moderador ve sólo sus juegos, y ahí puede aprobar, quitar y banear por juego. En «Permisos», lo que además puede hacer dentro de cada juego (dar Rcoin, EXP, ítems…) y cuánto.</div>
         </section>` : `<section class="caja"><div class="caja-cab"><h3>${ic('shieldok', 's16')}Sus permisos</h3></div>
           <div class="caja-cuerpo" style="font-size:13px;color:var(--tx-2);display:flex;flex-direction:column;gap:8px">${tusPermisos()}</div></section>`}
       </div>
     </section>
   </main>`;
   pintarInvitaciones(); pintarLanzamientos(); pintarAuditoria(); pintarBaneos();
-  if (esAdmin()) pintarMods();
+  if (esAdmin()) { pintarMods(); cargarPermisos(); } else pintarMisPermisos();
 }
 function tusPermisos() {
   const ns = (S.sesion.juegos || []).map(id => (S.catalogo.find(j => j.id === id) || { nombre: id }).nombre).join(', ');
@@ -407,6 +414,7 @@ function tusPermisos() {
   return `<span>${ic('check', 's14')} Ver y buscar personas en ${esc(ns) || '—'}</span>
     <span>${ic('check', 's14')} Aprobar, quitar, banear y desbanear por juego en ${esc(ns) || '—'}</span>
     <span>${ic('check', 's14')} Decidir las invitaciones anticipadas de sus juegos</span>
+    <span id="misPermisosG" style="display:contents"></span>
     <span class="tenue">${ic('lock', 's14')} Las cuentas del equipo y la red entera: sólo Admin</span>`;
 }
 let reqBuscar = 0;
@@ -474,8 +482,9 @@ async function pintarMods(datos) {
     const admin = m.rol === 'admin', vieja = !admin && m.juegos === null;
     const tiene = jid => admin || vieja || (m.juegos || []).includes(jid);
     return `<li>${ava(m.nombre, 'redondo')}
-      <div class="t"><b><a href="#/persona/${esc(m.uid)}">${esc(m.nombre)}</a>${m.yo ? ' <span class="tenue" style="font-weight:500">(usted)</span>' : ''}</b><span>${admin ? 'Admin' : 'Moderador'} · Eñeños-ID ${esc(m.uid)}${m.usuario ? ` · ${esc(m.usuario)}` : ''}${m.vias.length ? '' : ' · <span style="color:var(--gold)">sin Discord ni Google: no puede entrar</span>'}${vieja ? ' · <span class="tenue">formato viejo: todos los juegos, sin banear</span>' : ''}</span></div>
+      <div class="t"><b><a href="#/persona/${esc(m.uid)}">${esc(m.nombre)}</a>${m.yo ? ' <span class="tenue" style="font-weight:500">(usted)</span>' : ''}</b>${resumenPermisos(m)}<span>${admin ? 'Admin' : 'Moderador'} · Eñeños-ID ${esc(m.uid)}${m.usuario ? ` · ${esc(m.usuario)}` : ''}${m.vias.length ? '' : ' · <span style="color:var(--gold)">sin Discord ni Google: no puede entrar</span>'}${vieja ? ' · <span class="tenue">formato viejo: todos los juegos, sin banear</span>' : ''}</span></div>
       <span class="mini-juegos" role="group" aria-label="Juegos de ${esc(m.nombre)}">${d.juegos.map(j => `<button type="button" class="mj ${tiene(j.id) ? 'on' : ''}" style="--g:${okColor(j.color)}" data-accion="mod-juego" data-i="${i}" data-j="${esc(j.id)}" aria-pressed="${tiene(j.id)}" ${admin ? 'disabled title="Un Admin ve todos los juegos"' : ''}><span class="p"></span>${esc(j.nombre)}</button>`).join('')}
+      ${admin || vieja || !S.permisos ? '' : `<button type="button" class="btn chico" data-accion="mod-permisos" data-i="${i}" ${(m.juegos || []).some(j => S.permisos.gestionables.includes(j)) ? '' : 'disabled title="Ninguno de sus juegos tiene gestión todavía"'}>${ic('shieldok', 's14')}Permisos</button>`}
       ${admin ? '' : `<button type="button" class="btn icono chico fantasma" data-accion="quitar-mod" data-i="${i}" aria-label="Sacar a ${esc(m.nombre)} del equipo" title="Sacar del equipo">${ic('x', 's14')}</button>`}</span></li>`;
   };
   const todos = [...d.admins, ...d.moderadores];
@@ -539,9 +548,10 @@ function pintarPersona(p) {
     ${p.juegos.length ? p.juegos.map(j => `<section class="caja" style="margin-bottom:14px"><div class="caja-cab"><h3>${etqJuego(j.id)} ${esc(j.nombre)}</h3>${j.invitacion ? `<span class="sub">invitación anticipada: ${esc(j.invitacion)}</span>` : ''}</div>
       ${j.pases.length ? `<ul class="lista">${j.pases.map(x => fila(j, x)).join('')}</ul>` : '<div class="caja-cuerpo tenue" style="font-size:13px">Todavía no tiene servidor con pase.</div>'}</section>`).join('')
       : `<section class="caja">${vacio('Sin juegos para mostrar', 'No tiene juegos asignados en el Coordinador.')}</section>`}
-    <div class="tenue" style="font-size:12px;margin-top:6px">${ic('info', 's14')} Personajes, sanciones dentro del juego y actividad: en la próxima fase.</div>
+    <section id="perPjs" class="g-per-pjs" aria-live="polite"></section>
   </main>`;
   S.persona = p;
+  personajesDePersona(p);
 }
 function accionPersona(acc, pase) {
   const p = S.persona; if (!p) return;
@@ -747,34 +757,48 @@ function nombresDe(J, mes) {
   if (!mes) return;
   mes.dias.forEach(x => [...(x.premios || []), ...(x.si_no || [])].forEach(p => { if (p.item != null && p.nombre) J.nombres[p.item] = p.nombre; }));
 }
-const tabsJc = J => [...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
-const puedeJc = (J, k) => (k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
+const tabsC = J => [...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
+const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero
+const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
 const suciasJc = J => Object.keys(J.borr).filter(k => puedeJc(J, k) && ser(J.borr[k]) !== J.orig[k]);
 const juegoCat = jid => S.catalogo.find(x => x.id === jid) || S.juegos.find(x => x.id === jid) || { id: jid, nombre: jid, color: '' };
 const envTxt = env => ENV_TXT[env] || 'PROD';
 
 /* ══════════════ la página ══════════════ */
-async function vistaJuego(jid, env, tab) {
+async function vistaJuego(jid, env, tab, sel) {
   document.body.classList.remove('menu-abierto');
   document.body.classList.toggle('test', env === 'test');
   const j = juegoCat(jid);
   document.title = `${j.nombre} · ${envTxt(env)} · Coordinador Eñeños`;
   const ruta0 = S.ruta;
   raiz.innerHTML = barraHub('juegos') + `<main class="hub jc" id="contenido">${cabJuego(j, env)}
-    <div class="caja jc-carga" aria-live="polite"><span class="esq" style="height:14px;width:40%"></span><span class="esq" style="height:180px"></span><span class="tenue">Cargando el contenido del launcher…</span></div></main>`;
+    <div class="caja jc-carga" aria-live="polite"><span class="esq" style="height:14px;width:40%"></span><span class="esq" style="height:180px"></span><span class="tenue">Cargando el juego…</span></div></main>`;
   if (ARTE.asis === null) { ARTE.asis = false; probarArte(['arte/asistencia-ticket_gris.png', 'arte/asistencia-digitos.png'], ok => { ARTE.asis = ok; if (ok && S.jc && S.jc.tab === 'asistencia') pintarPreviaJ(); }); }
-  const [r, jr] = await Promise.all([api(`contenido?juego=${encodeURIComponent(jid)}&entorno=${env}`), S.juegos.length ? null : api('juegos')]);
+  const [r, jr, mr] = await Promise.all([api(`contenido?juego=${encodeURIComponent(jid)}&entorno=${env}`), S.juegos.length ? null : api('juegos'),
+    api(`gestion/mios?juego=${encodeURIComponent(jid)}`)]);
   if (S.ruta !== ruta0) return;
   if (jr && jr.ok) S.juegos = jr.d.juegos || [];
-  if (!r.ok) {
-    if (r.status === 401) return;
+  /* ★ fase C: ¿este servidor se gestiona desde el Coordinador? (`gestionable` es por juego: el TEST se prueba con /salud) */
+  let g = null;
+  if (mr && mr.ok && mr.d.gestionable && (mr.d.acciones || []).includes('ver')) {
+    g = nuevoG(mr.d);
+    const s = await api(`gestion/${encodeURIComponent(jid)}/${env}/salud`);
+    if (S.ruta !== ruta0) return;
+    g.ok = s.status !== 404 && s.status !== 403;
+    if (g.ok) { g.salud = s.ok ? s.d : null; g.saludErr = s.ok ? null : errTxt(s); }
+  } else if (mr && mr.ok) g = Object.assign(nuevoG(mr.d), { ok: false });
+  if (r.status === 401 || (mr && mr.status === 401)) return;
+  if (!r.ok && !(g && g.ok)) {
     $('#contenido').innerHTML = `<a class="volver" href="#/juegos" style="margin-bottom:12px;display:inline-flex">${ic('left', 's14')}Juegos</a>
       <section class="caja" style="max-width:560px;margin:24px auto">${vacio('No se puede abrir este juego', errTxt(r), '<a class="btn chico" href="#/juegos">Volver a los juegos</a>')}</section>`;
     return;
   }
-  S.jc = nuevoJc(r.d, jid, env);
+  S.jc = nuevoJc(r.ok ? r.d : {}, jid, env);
+  S.jc.g = g;
+  if (!r.ok) S.jc.cErr = (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
   const ts = tabsJc(S.jc);
   S.jc.tab = ts.includes(tab) ? tab : ts[0] || null;
+  S.jc.sel = S.jc.tab === 'personas' && /^\d+$/.test(sel || '') ? sel : null;
   pintarJ();
 }
 function cabJuego(j, env, J) {
@@ -782,30 +806,31 @@ function cabJuego(j, env, J) {
   const envBtn = (e, icono) => {
     if (e === env) return `<span class="jc-envb on ${e}" aria-current="page">${ic(icono, 's14')}${envTxt(e)}</span>`;
     if (!pases[e]) return `<span class="jc-envb off" title="${e === 'test' ? 'Todavía no tiene servidor de prueba' : 'Sin servidor'}">${ic(icono, 's14')}${envTxt(e)}</span>`;
-    return `<a class="jc-envb ${e}" href="#/j/${esc(j.id)}/${e}/${esc((J && J.tab) || 'asistencia')}">${ic(icono, 's14')}${envTxt(e)}</a>`;
+    return `<a class="jc-envb ${e}" href="#/j/${esc(j.id)}/${e}/${esc((J && J.tab) || 'resumen')}">${ic(icono, 's14')}${envTxt(e)}</a>`;
   };
   const mini = okArte(j.arte) ? `<img src="${esc(j.arte)}" style="object-position:${okPos(j.pos)}" alt="">` : j.id === 'r2beat-moderno' ? arte2027() : arteColor(j);
   return `<a class="volver" href="#/juegos">${ic('left', 's14')}Juegos</a>
     <section class="jc-cab" style="--g:${okColor(j.color)}">
       <span class="jc-min" aria-hidden="true">${mini}</span>
-      <div class="jc-t"><span class="jc-sup">Contenido del launcher</span>
+      <div class="jc-t"><span class="jc-sup">${J && esG(J.tab) ? 'Gestión del juego' : 'Contenido del launcher'}</span>
         <h1>${esc(j.nombre)} <span class="pill-env"><span class="punto"></span>${envTxt(env)}</span></h1>
-        <p>${env === 'test' ? 'Servidor de PRUEBA: lo que publique aquí no les llega a los jugadores de PROD.' : 'Lo que ve el jugador en el launcher. Al publicar llega en vivo: no hace falta un launcher nuevo.'}</p></div>
+        <p>${env === 'test' ? 'Servidor de PRUEBA: lo que haga aquí no les llega a los jugadores de PROD.' : J && esG(J.tab) ? 'Lo que pasa ahora en el servidor, y cada jugador con todos sus personajes.' : 'Lo que ve el jugador en el launcher. Al publicar llega en vivo: no hace falta un launcher nuevo.'}</p></div>
       <nav class="jc-envs" aria-label="Servidor">${envBtn('live', 'radio')}${envBtn('test', 'flask')}</nav>
     </section>`;
 }
 function pintarJ(foco) {
   const J = S.jc, main = $('#contenido'); if (!J || !main) return;
   const j = juegoCat(J.jid), ts = tabsJc(J);
-  const avisos = [];
-  if (!J.d.puede_editar && J.d.servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('lock', 's20')}<div>Su cuenta puede mirar este juego, pero no cambiar su contenido.</div></div>`);
-  if (!J.d.servidor && J.d.sin_servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('info', 's20')}<div>${esc(J.d.sin_servidor)}${ts.length ? '<small>Por ahora, de este servidor sólo se puede ver el lanzamiento.</small>' : ''}</div></div>`);
+  const avisos = [], enG = esG(J.tab);
+  if (!enG && J.cErr) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('info', 's20')}<div>No se pudo leer el contenido del launcher.<small>${esc(J.cErr)}</small></div></div>`);
+  if (!enG && !J.d.puede_editar && J.d.servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('lock', 's20')}<div>Su cuenta puede mirar este juego, pero no cambiar su contenido.</div></div>`);
+  if (!enG && !J.d.servidor && J.d.sin_servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('info', 's20')}<div>${esc(J.d.sin_servidor)}${ts.length ? '<small>Por ahora, de este servidor sólo se puede ver el lanzamiento.</small>' : ''}</div></div>`);
   main.innerHTML = cabJuego(j, J.env, J) + avisos.join('') +
-    (ts.length ? `<div class="jc-barra"><div class="pest jc-pest" role="tablist" aria-label="Contenido del launcher" id="jcTabs"></div><div class="jc-acc" id="jcAcc"></div></div>
-      <div id="jcCuerpo"></div>` : `<section class="caja" style="max-width:560px;margin:8px auto 0">${vacio('Sin contenido dinámico', esc(J.d.sin_servidor || 'Este servidor todavía no tiene contenido dinámico.'), '<a class="btn chico" href="#/juegos">Volver a los juegos</a>')}</section>`) +
-    `<p class="jc-fase">${ic('info', 's14')}<span>El tablero del juego (resumen, conectados y gráficos) llega en la próxima fase del Coordinador.</span></p>`;
+    (ts.length ? `<div class="jc-barra"><div class="pest jc-pest" role="tablist" aria-label="Partes del juego" id="jcTabs"></div><div class="jc-acc" id="jcAcc"></div></div>
+      <div id="jcCuerpo"></div>` : `<section class="caja" style="max-width:560px;margin:8px auto 0">${vacio('Todavía no hay nada para manejar aquí', J.g && J.g.mios && J.g.mios.gestionable ? `El servidor ${envTxt(J.env)} todavía no está conectado al Coordinador: ni su gestión (tablero y personas) ni el contenido del launcher.` : esc(J.d.sin_servidor || 'Este servidor todavía no tiene gestión ni contenido dinámico en el Coordinador.'), '<a class="btn chico" href="#/juegos">Volver a los juegos</a>')}</section>`) +
+    (ts.length && !(J.g && J.g.ok) ? `<p class="jc-fase">${ic('info', 's14')}<span>${J.g && J.g.mios && J.g.mios.gestionable ? `El servidor ${envTxt(J.env)} de este juego todavía no se puede gestionar desde el Coordinador: por ahora, sólo el contenido del launcher.` : 'La gestión de este juego (tablero y personas) todavía no está conectada al Coordinador: por ahora, sólo el contenido del launcher.'}</span></p>` : '');
   if (!ts.length) return;
-  const h = `#/j/${J.jid}/${J.env}/${J.tab}`;
+  const h = `#/j/${J.jid}/${J.env}/${J.tab}${J.tab === 'personas' && J.sel ? '/' + J.sel : ''}`;
   if (S.ruta !== h) { S.ruta = h; try { history.replaceState(null, '', h); } catch (err) { /* nada */ } }
   pintarAccJ();
   pintarCuerpoJ(foco);
@@ -813,8 +838,12 @@ function pintarJ(foco) {
 function pintarAccJ() {
   const J = S.jc, tabs = $('#jcTabs'), acc = $('#jcAcc'); if (!J || !tabs) return;
   const sucias = suciasJc(J);
-  tabs.innerHTML = tabsJc(J).map(k => `<button type="button" role="tab" id="jcTab-${k}" aria-controls="jcCuerpo" aria-selected="${J.tab === k}" tabindex="${J.tab === k ? 0 : -1}" data-accion="jc-tab" data-k="${k}">${ic(JC_TABS[k][1], 's14')}${JC_TABS[k][0]}${sucias.includes(k) ? '<span class="lc-pt" title="Sin publicar"></span><span class="sr"> (sin publicar)</span>' : ''}</button>`).join('');
-  const alguno = tabsJc(J).some(k => puedeJc(J, k));
+  const boton = k => `<button type="button" role="tab" id="jcTab-${k}" aria-controls="jcCuerpo" aria-selected="${J.tab === k}" tabindex="${J.tab === k ? 0 : -1}" data-accion="jc-tab" data-k="${k}">${ic(JC_TABS[k][1], 's14')}${JC_TABS[k][0]}${sucias.includes(k) ? '<span class="lc-pt" title="Sin publicar"></span><span class="sr"> (sin publicar)</span>' : ''}</button>`;
+  const tg = tabsJc(J).filter(esG), tc = tabsC(J);
+  /* ★ fase C: dos grupos — Gestión | Launcher (el contenido dinámico) */
+  tabs.innerHTML = (tg.length ? `<span class="jc-grupo" aria-hidden="true">Gestión</span>${tg.map(boton).join('')}${tc.length ? '<span class="jc-sep" aria-hidden="true"></span><span class="jc-grupo" aria-hidden="true">Launcher</span>' : ''}` : '') + tc.map(boton).join('');
+  if (esG(J.tab)) { acc.innerHTML = accG(J); return; }
+  const alguno = tc.some(k => puedeJc(J, k));
   if (!alguno) { acc.innerHTML = `<span class="chip">${ic('eye', 's14')}Sólo lectura</span>`; return; }
   const n = sucias.length, env = envTxt(J.env);
   acc.innerHTML = `<span class="chip ${n ? 'oro' : 'verde'}" role="status">${ic(n ? 'clock' : 'check', 's14')}${n ? `${n} ${n === 1 ? 'parte' : 'partes'} sin publicar` : 'Todo publicado'}</span>
@@ -823,6 +852,14 @@ function pintarAccJ() {
 }
 function pintarCuerpoJ(foco) {
   const J = S.jc, c = $('#jcCuerpo'); if (!J || !c) return;
+  if (esG(J.tab)) {                                        // ★ fase C
+    c.innerHTML = J.tab === 'resumen' ? edTablero(J) : edPersonas(J);
+    if (J.tab === 'resumen') { pintarTableroCab(J); if (Date.now() - J.g.t > 10000) cargarTablero(J); }
+    if (J.tab === 'personas' && J.sel) { const F = J.g.fichas[String(J.sel)]; if (!F || !F.f || F.dias !== J.g.dias) cargarFicha(J, J.sel); }
+    if (J.tab === 'personas' && !J.sel && J.g.q && !J.g.res) buscarPersonas(J, J.g.q);
+    if (foco) { const f = $(foco); if (f) f.focus(); } else if (J.tab === 'personas' && !J.sel) { const f = $('#gBusq'); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
+    return;
+  }
   const ed = { asistencia: edAsistencia, ruleta: edRuleta, tira: edTira, lanzamiento: edLanz }[J.tab](J);
   c.innerHTML = `<div class="lc-grid" role="tabpanel" aria-labelledby="jcTab-${J.tab}"><div class="lc-ed">${ed}</div>
     <aside class="lc-previa" aria-label="Vista previa"><div class="lc-previa-cab">${ic('eye', 's14')}Así lo ve el jugador <span class="etq-env ${J.env === 'test' ? 'test' : 'live'}">${envTxt(J.env)}</span></div><div id="jcPrevia">${previaJ(J)}</div></aside></div>`;
@@ -830,7 +867,7 @@ function pintarCuerpoJ(foco) {
   tic();
 }
 const previaJ = J => ({ asistencia: previaAsis, ruleta: previaRuleta, tira: previaTira, lanzamiento: previaLanz }[J.tab](J));
-function pintarPreviaJ() { const J = S.jc, p = $('#jcPrevia'); if (J && p) { p.innerHTML = previaJ(J); tic(); } }
+function pintarPreviaJ() { const J = S.jc, p = $('#jcPrevia'); if (J && p && !esG(J.tab)) { p.innerHTML = previaJ(J); tic(); } }
 function cambioJ() { pintarAccJ(); pintarPreviaJ(); }
 
 /* ══════════════ ASISTENCIA ══════════════ */
@@ -1326,7 +1363,7 @@ function descartarJ() {
 function accionJc(a) {
   const J = S.jc; if (!J) return;
   const i = Number(a.dataset.i), k = a.dataset.accion;
-  if (k === 'jc-tab') { if (J.tab !== a.dataset.k) { J.tab = a.dataset.k; pintarJ(`#jcTab-${J.tab}`); } return; }
+  if (k === 'jc-tab') { if (J.tab !== a.dataset.k || (J.tab === 'personas' && J.sel)) { J.tab = a.dataset.k; J.sel = null; const tecla = document.activeElement && document.activeElement.matches('[role="tab"]:focus-visible'); pintarJ(tecla || !esG(J.tab) ? `#jcTab-${J.tab}` : null); } return; }
   if (k === 'jc-publicar') return publicarJ();
   if (k === 'jc-descartar') return descartarJ();
   if (k === 'jc-dia') { J.dia = a.dataset.f; J.alcance = null; $$('.lc-dia').forEach(b => { const on = b.dataset.f === J.dia; b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on); }); repintarDia(J); pintarPreviaJ(); return; }
@@ -1438,6 +1475,874 @@ function elegirItem(id) {
   const b = $(`[data-accion="jc-p-buscar"][data-i="${i}"]`); if (b) b.focus();
   programarPreviaAsis(0);
   cambioJ();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   ★ 20-nov · FASE C — la GESTIÓN de cada juego, en la MISMA página del juego (#/j/<juego>/<live|test>/<parte>):
+     resumen    el TABLERO: ¿anda el servidor?, quién está, las salas, los que están sin chat y lo que hay para mirar
+     personas   buscar (apodo, Eñeños-ID, usuario) → las personas con TODOS sus personajes juntos → la ficha de uno
+                (#/j/<juego>/<env>/personas/<uid>): datos, actividad en preguntas con su respuesta, y las acciones
+   Los datos son los del panel viejo del juego, a través de servidor/gestion.py (lista cerrada). Lo que su cuenta puede
+   hacer lo dice `gestion/mios` (acciones y cupos): un botón que no puede usar se ve apagado, con «Lo asigna un ADMIN».
+   ⛔ A un moderador el Coordinador le saca IP, login y «misma IP»: nada de esto se rompe si faltan.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+const G_TABS = ['resumen', 'personas'];
+JC_TABS.resumen = ['Tablero', 'dash'];
+JC_TABS.personas = ['Personas', 'users'];
+const esG = k => G_TABS.includes(k);
+const ASIG_TIP = 'Lo asigna un ADMIN';
+const puedeG = (J, a) => !!(J && J.g && J.g.mios && (J.g.mios.acciones || []).includes(a));
+const gRuta = (J, r) => `gestion/${encodeURIComponent(J.jid)}/${J.env}/${r}`;
+const urlPj = (J, uid) => `#/j/${esc(J.jid)}/${J.env}/personas/${Number(uid)}`;
+const signo = n => (n > 0 ? '+' : n < 0 ? '−' : '') + miles(Math.abs(n));
+const compacto = n => { n = Math.abs(Number(n) || 0); if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.', ',').replace(/,0$/, '') + ' M'; if (n >= 1e4) return Math.round(n / 1e3) + ' k'; return miles(n); };
+const diaCorto = f => { const d = new Date(f + 'T12:00:00'); return `${DIAS_C[d.getDay()].toLowerCase()} ${d.getDate()} ${MESES[d.getMonth()]}`; };
+const horasTxt = min => (min < 1 ? '0 min' : fmtDur(min));
+async function gPost(J, ruta, cuerpo) {
+  const r = await api('gestion', { juego: J.jid, entorno: J.env, ruta, cuerpo: cuerpo || {} });
+  if (r.ok && r.d && r.d.cupos && J.g) J.g.mios.cupos = r.d.cupos;
+  return r;
+}
+/* un botón de acción que respeta los permisos: apagado (con candado y el porqué) si su cuenta no lo tiene */
+function gBtn(J, accion, { acc, icono, txt, datos = '', cls = 'btn chico', off = '' }) {
+  if (!puedeG(J, accion)) return `<button type="button" class="${cls} g-sin" disabled title="${ASIG_TIP}">${ic('lock', 's14')}${txt}<span class="sr"> (${ASIG_TIP.toLowerCase()})</span></button>`;
+  if (off) return `<button type="button" class="${cls}" disabled title="${esc(off)}">${ic(icono, 's14')}${txt}</button>`;
+  return `<button type="button" class="${cls}" data-accion="${acc}" ${datos}>${ic(icono, 's14')}${txt}</button>`;
+}
+function nuevoG(mios) {
+  return { mios, ok: false, dias: 14, q: '', res: null, fichas: {}, filtro: '', estado: 'todos', t: 0, verTabla: false };
+}
+
+/* ══════════════ el TABLERO ══════════════ */
+let tabReloj = null;
+async function cargarTablero(J, auto) {
+  const G = J.g; if (!G || G.cargando) return;
+  G.cargando = true;
+  const conAlertas = !auto || !G.alertas;
+  const [s, c, sa, mu, al] = await Promise.all([api(gRuta(J, 'salud')), api(gRuta(J, 'conectados')), api(gRuta(J, 'salas')),
+    puedeG(J, 'mute') ? api(gRuta(J, 'muteos')) : null, conAlertas ? api(gRuta(J, 'alertas?dias=7')) : null]);
+  G.cargando = false;
+  if (S.jc !== J) return;
+  G.salud = s.ok ? s.d : null; G.saludErr = s.ok ? null : errTxt(s);
+  G.con = c.ok ? c.d : null; G.salas = sa.ok ? sa.d : null;
+  if (mu) G.muteos = mu.ok ? mu.d.muteos || [] : null;
+  if (al) G.alertas = al.ok ? al.d : { error: errTxt(al) };
+  G.t = Date.now();
+  if (J.tab === 'resumen' && !capas.innerHTML) pintarTablero(J);
+  else if (J.tab === 'resumen') pintarTableroCab(J);
+}
+const ESTADO_CON = { jugando: ['En carrera', 'verde'], sala: ['En una sala', 'cian'], lobby: ['En el lobby', ''] };
+function dondeTxt(x) {
+  const d = x.donde;
+  if (d && d.tipo === 'sala') return `${x.estado === 'jugando' ? 'corriendo en' : 'en la sala'} «${esc(d.nombre)}»`;
+  if (d) return `en ${esc(d.nombre)}`;
+  return x.canal ? `en el lobby · canal ${esc(x.canal)}` : 'en el lobby';
+}
+function pintarTableroCab(J) {
+  const t = $('#gAct'); if (!t || !J.g.t) return;
+  const s = Math.round((Date.now() - J.g.t) / 1000);
+  t.textContent = s < 5 ? 'Actualizado recién' : `Actualizado hace ${s < 60 ? s + ' s' : fmtDur(s / 60)}`;
+}
+function veredictoServidor(J) {
+  const G = J.g, s = G.salud;
+  if (!G.t) return `<div class="conclusion mirar">${ic('clock', 's20')}<div>Preguntándole al servidor…</div></div>`;
+  if (!s) return `<div class="conclusion raro" role="alert">${ic('alert', 's20')}<div><b>El servidor no contesta.</b><small>${G.saludErr || 'Pruebe en un rato.'} Los jugadores probablemente no pueden entrar.</small></div></div>`;
+  const p = s.pantallas || {}, n = Number(s.conectados) || 0;
+  const partes = [p.jugando ? `${p.jugando} en carrera` : '', p.sala ? `${p.sala} en una sala` : '', p.lobby ? `${p.lobby} en el lobby` : ''].filter(Boolean);
+  return `<div class="conclusion ok">${ic('check', 's20')}<div><b>En línea.</b> ${n ? `<b>${n} ${n === 1 ? 'persona jugando' : 'personas jugando'} ahora</b>${partes.length ? ': ' + partes.join(', ') : ''}.` : 'No hay nadie conectado en este momento.'}
+    <small>Encendido hace ${fmtDur((s.prendido_s || 0) / 60)} · ${s.salas || 0} ${s.salas === 1 ? 'sala abierta' : 'salas abiertas'}.</small></div></div>`;
+}
+function edTablero(J) {
+  return `<div id="gTab" role="tabpanel" aria-labelledby="jcTab-resumen">${cuerpoTablero(J)}</div>`;
+}
+function cuerpoTablero(J) {
+  const G = J.g, s = G.salud || {}, con = (G.con && G.con.filas) || [], salas = (G.salas && G.salas.salas) || [];
+  const p = s.pantallas || {};
+  const enCarrera = salas.filter(x => x.jugando).length;
+  const kpi = (icono, k, v, d) => `<div class="kpi"><div class="k">${ic(icono, 's14')}${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+  const mut = G.muteos;
+  return `${veredictoServidor(J)}
+    <div class="kpis g-kpis">
+      ${kpi('users', 'Conectados', G.con ? con.length : '—', G.con ? `${p.jugando || 0} en carrera · ${p.sala || 0} en sala · ${p.lobby || 0} en el lobby` : 'sin datos')}
+      ${kpi('door', 'Salas abiertas', G.salas ? salas.length : '—', G.salas ? `${enCarrera} en carrera ahora` : 'sin datos')}
+      ${kpi('micoff', 'Sin chat', mut ? mut.length : '—', mut ? (mut.length ? `el primero vence en ${esc(mut[0].falta)}` : 'nadie sancionado') : 'su cuenta no ve esta lista')}
+      ${kpi('alert', 'Para mirar', G.alertas && G.alertas.filas ? G.alertas.filas.length : '—', 'carreras imposibles, 7 días')}
+    </div>
+    <div class="g-tab-grid">
+      <section class="caja" aria-labelledby="gTCon">
+        <div class="caja-cab"><h3 id="gTCon">${ic('activity', 's16')}Quién está ahora</h3><span class="sub">${G.con ? `${con.length} ${con.length === 1 ? 'conectado' : 'conectados'}` : ''}</span></div>
+        <div class="caja-cuerpo g-filtros">
+          <label class="campo">${ic('search', 's16')}<span class="sr">Filtrar por apodo</span><input id="gFiltro" value="${esc(G.filtro)}" placeholder="Filtrar por apodo…" autocomplete="off" spellcheck="false"></label>
+          <div class="seg" role="group" aria-label="Mostrar">${[['todos', 'Todos'], ['jugando', 'En carrera'], ['sala', 'En sala'], ['lobby', 'Lobby']].map(([k, t]) => `<button type="button" data-accion="g-estado" data-k="${k}" aria-pressed="${G.estado === k}">${t}</button>`).join('')}</div>
+        </div>
+        <ul class="lista g-con" id="gCon">${filasConectados(J)}</ul>
+      </section>
+      <div class="g-col-der">
+        <section class="caja" aria-labelledby="gTSal">
+          <div class="caja-cab"><h3 id="gTSal">${ic('door', 's16')}Salas</h3><span class="sub">${salas.length ? `${enCarrera} en carrera` : ''}</span></div>
+          <div class="caja-cuerpo">${G.salas ? (salas.length ? `<div class="g-salas">${salas.map(x => salaHtml(J, x)).join('')}</div>` : '<p class="tenue g-nada">No hay salas abiertas.</p>') : `<p class="tenue g-nada">${G.t ? 'No se pudieron leer las salas.' : 'Cargando…'}</p>`}</div>
+        </section>
+        ${mut ? `<section class="caja" aria-labelledby="gTMut"><div class="caja-cab"><h3 id="gTMut">${ic('micoff', 's16')}Sin chat ahora</h3><span class="sub">${mut.length || ''}</span></div>
+          ${mut.length ? `<ul class="lista">${mut.map(m => `<li>${ava(m.nick, 'redondo')}<div class="t"><b><a href="${urlPj(J, m.uid)}">${esc(m.nick)}</a></b><span>faltan ${esc(m.falta)} · «${esc(m.motivo)}» · ${esc(m.por)}</span></div></li>`).join('')}</ul>`
+            : '<p class="caja-cuerpo tenue g-nada">Nadie está sin chat.</p>'}</section>` : ''}
+        ${alertasHtml(J)}
+      </div>
+    </div>`;
+}
+function filasConectados(J) {
+  const G = J.g;
+  if (!G.con) return `<li class="g-nada tenue">${G.t ? 'No se pudo leer la lista de conectados.' : 'Cargando…'}</li>`;
+  const q = G.filtro.trim().toLowerCase();
+  const l = G.con.filas.filter(x => (G.estado === 'todos' || x.estado === G.estado) && (!q || String(x.nick).toLowerCase().includes(q)));
+  if (!l.length) return `<li class="g-nada tenue">${G.con.filas.length ? 'Nadie coincide con el filtro.' : 'No hay nadie conectado.'}</li>`;
+  return l.map(x => {
+    const [et, ec] = ESTADO_CON[x.estado] || ['Conectado', ''];
+    const ip = x.ip ? `<span class="g-ip" title="Conexión">${x.pais ? `<b>${esc(x.pais)}</b> ` : ''}${esc(x.ip)}${x.misma_ip > 1 ? ` <span class="chip oro" title="${x.misma_ip} conectados desde la misma IP">${ic('users', 's14')}${x.misma_ip}</span>` : ''}</span>` : '';
+    return `<li><span class="g-pt ${x.estado === 'jugando' ? 'vivo' : ''}" aria-hidden="true"></span>${ava(x.nick, 'redondo')}
+      <div class="t"><b><a href="${urlPj(J, x.uid)}">${esc(x.nick)}</a>${x.rol ? ` <span class="chip mayus">${esc(x.rol)}</span>` : ''}</b><span>nivel ${Number(x.nivel) || 1} · ${dondeTxt(x)}</span></div>
+      <span class="chip ${ec} g-est">${et}</span>${ip}
+      <span class="g-desde" title="Conectado desde hace ${fmtDur((x.conectado_s || 0) / 60)}">${ic('clock', 's14')}${fmtDur((x.conectado_s || 0) / 60)}</span></li>`;
+  }).join('');
+}
+function salaHtml(J, x) {
+  const n = (x.jugadores || []).length, cap = x.relevo ? 12 : 6;
+  return `<article class="sala g-sala">
+    <div class="cab"><b>${x.privada ? ic('lock', 's14') : ''}${esc(x.nombre || `Sala ${x.id}`)}</b><span class="chip ${x.jugando ? 'verde' : ''}">${x.jugando ? 'En carrera' : 'Esperando'}</span></div>
+    <div class="plazas" aria-label="${n} de ${cap} lugares">${Array.from({ length: cap }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="g-sala-gente">${(x.jugadores || []).map(g => `<a href="${urlPj(J, g.uid)}">${g.anfitrion ? ic('crown', 's14') : ''}${esc(g.nick)}</a>`).join('')}${(x.espectadores || []).length ? `<span class="tenue">+${x.espectadores.length} mirando</span>` : ''}</div>
+    <div class="pie"><span>${esc(cap === 12 ? 'relevo' : x.modo || '')}${x.equipo ? ' · por equipos' : ''} · ${esc(x.canal || '')}</span>
+      ${puedeG(J, 'aviso') ? `<button type="button" class="btn chico fantasma" data-accion="g-aviso" data-a="sala" data-id="${Number(x.id)}" data-nom="${esc(x.nombre || '')}">${ic('mega', 's14')}Avisar</button>` : ''}</div>
+  </article>`;
+}
+function alertasHtml(J) {
+  const A = J.g.alertas;
+  if (!A) return '';
+  if (A.error) return `<section class="caja"><div class="caja-cab"><h3>${ic('alert', 's16')}Para mirar</h3></div><p class="caja-cuerpo tenue g-nada">${A.error}</p></section>`;
+  const M = A.marcas || {}, fs = A.filas || [];
+  const CONF = { casi_seguro: ['Casi seguro', 'rojo'], sospechoso: ['Sospechoso', 'oro'], aislado: ['Caso suelto', ''] };
+  return `<section class="caja" aria-labelledby="gTAl"><div class="caja-cab"><h3 id="gTAl">${ic('alert', 's16')}Para mirar</h3><span class="sub">carreras imposibles en 7 días</span></div>
+    ${fs.length ? `<ul class="lista">${fs.slice(0, 8).map(f => { const [ct, cc] = CONF[f.confianza] || ['', ''];
+      return `<li>${ava(f.nick, 'redondo')}<div class="t"><b><a href="${urlPj(J, f.uid)}">${esc(f.nick)}</a></b><span>${f.carreras} ${f.carreras === 1 ? 'carrera' : 'carreras'}: ${esc(Object.keys(f.marcas || {}).map(m => M[m] || m).join(', '))}</span></div>${ct ? `<span class="chip ${cc}">${ct}</span>` : ''}</li>`; }).join('')}</ul>`
+      : `<p class="caja-cuerpo tenue g-nada">${ic('check', 's14')} Nadie hizo carreras imposibles esta semana.</p>`}</section>`;
+}
+function pintarTablero(J) {
+  const c = $('#gTab'); if (!c) return;
+  const a = document.activeElement, foco = a && a.id === 'gFiltro' ? [a.selectionStart, a.selectionEnd] : null;
+  c.innerHTML = cuerpoTablero(J);
+  if (foco) { const f = $('#gFiltro'); f.focus(); try { f.setSelectionRange(foco[0], foco[1]); } catch (e) { /* nada */ } }
+  pintarAccJ(); pintarTableroCab(J);
+}
+/* el tablero se refresca solo cada 15 s mientras se ve (no con la pestaña escondida ni con un diálogo abierto) */
+setInterval(() => {
+  const J = S.jc;
+  if (J && J.tab === 'resumen' && J.g && document.visibilityState === 'visible' && !capas.innerHTML && Date.now() - J.g.t >= 14000) cargarTablero(J, true);
+  if (J && J.tab === 'resumen') pintarTableroCab(J);
+}, 5000);
+document.addEventListener('visibilitychange', () => { const J = S.jc; if (document.visibilityState === 'visible' && J && J.tab === 'resumen' && J.g && Date.now() - J.g.t > 15000) cargarTablero(J, true); });
+
+/* ══════════════ AVISOS (a todos, a una sala, a una persona) ══════════════ */
+function formAviso(J, a, id, nombre) {
+  if (!puedeG(J, 'aviso')) return;
+  const MAX = 120;
+  const dest = a === 'todos' ? 'A todos los conectados' : a === 'sala' ? `A la sala «${esc(nombre)}»` : `A ${esc(nombre)}`;
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="avTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(81,216,229,.12);color:var(--cyan)">${ic('mega', 's20')}</span><div><h2 id="avTit">Mandar un aviso</h2><p>${dest}. Aparece en el chat del juego, firmado por SERVER.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:12px">
+      <label class="g-area"><span class="lab">Texto</span><textarea class="area" id="avTxt" maxlength="${MAX}" rows="3" placeholder="Por ejemplo: en 10 minutos reiniciamos el servidor" autofocus></textarea></label>
+      <div class="cuenta-txt"><span id="avErr" style="color:var(--red)"></span><span id="avN">0/${MAX}</span></div>
+      <div class="previa"><div class="juego-msg"><small>Así se ve en el juego</small><span class="quien">SERVER:</span> <span id="avPrev" class="tenue">…</span></div></div>
+      <p class="tenue g-nota">${ic('info', 's14')} El juego no dibuja tildes ni eñes: se cambian por la letra sin acento.</p>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="avOk">${ic('send', 's16')}Mandar</button></div></div>`);
+  const t = $('#avTxt', pn);
+  const sinTilde = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[¡¿]/g, '');
+  t.addEventListener('input', () => { $('#avN', pn).textContent = `${t.value.length}/${MAX}`; $('#avPrev', pn).textContent = sinTilde(t.value.trim()) || '…'; $('#avErr', pn).textContent = ''; });
+  $('#avOk', pn).addEventListener('click', async () => {
+    const texto = t.value.trim();
+    if (!texto) { $('#avErr', pn).textContent = 'Escriba el aviso.'; t.focus(); return; }
+    const b = $('#avOk', pn); b.disabled = true;
+    const r = await gPost(J, 'aviso', a === 'todos' ? { texto, a } : { texto, a, id: Number(id) });
+    b.disabled = false;
+    if (!r.ok) { $('#avErr', pn).textContent = (r.d && r.d.error) || `Error ${r.status}`; return; }
+    cerrarCapa();
+    const n = Number(r.d.llego_a) || 0;
+    toast({ t: n ? `Aviso enviado: le llegó a ${n} ${n === 1 ? 'persona' : 'personas'}` : 'Aviso enviado, pero no le llegó a nadie', sub: n ? 'Quedó en la auditoría.' : 'Nadie estaba conectado ahí.', tipo: n ? 'ok' : 'info' });
+  });
+}
+
+/* ══════════════ PERSONAS: buscar y agrupar por persona ══════════════ */
+function edPersonas(J) {
+  if (J.sel) return `<div id="gPers" role="tabpanel" aria-labelledby="jcTab-personas">${fichaHtml(J)}</div>`;
+  const G = J.g;
+  return `<div id="gPers" role="tabpanel" aria-labelledby="jcTab-personas">
+    <section class="caja g-buscar">
+      <div class="caja-cuerpo" style="padding-top:16px">
+        <label class="campo g-busq">${ic('search', 's16')}<span class="sr">Buscar</span><input id="gBusq" value="${esc(G.q)}" placeholder="${G.mios.rol === 'admin' ? 'Apodo, Eñeños-ID o usuario…' : 'Apodo o Eñeños-ID…'}" autocomplete="off" spellcheck="false" autofocus></label>
+        <p class="tenue g-nota">${ic('info', 's14')} Con el Eñeños-ID (el número) aparecen todos los personajes de esa persona juntos.</p>
+      </div>
+    </section>
+    <div id="gRes" aria-live="polite">${resultadosHtml(J)}</div></div>`;
+}
+function gruposPersona(filas) {
+  const m = new Map();
+  (filas || []).forEach(f => { const k = f.enenos_id != null ? 'e' + f.enenos_id : 'u' + f.uid; if (!m.has(k)) m.set(k, { eid: f.enenos_id, pjs: [] }); if (f.uid != null) m.get(k).pjs.push(f); });
+  return [...m.values()];
+}
+function pjChip(J, f, on) {
+  return `<a class="g-pj ${on ? 'on' : ''}" href="${urlPj(J, f.uid)}" ${on ? 'aria-current="page"' : ''}>${ava(f.nick || '?', 'redondo')}
+    <span class="t"><b>${esc(f.nick || `#${f.uid}`)}${f.conectado ? '<span class="punto vivo" title="Conectado ahora"></span>' : ''}</b>
+    <span>nivel ${Number(f.nivel) || 1} · ${miles(f.rcoin)} Rcoin</span></span>
+    ${f.baneado ? `<span class="chip rojo">${ic('ban', 's14')}Baneado</span>` : ''}</a>`;
+}
+function resultadosHtml(J) {
+  const G = J.g;
+  if (G.buscando && !G.res) return `<div class="caja g-cargando"><span class="esq" style="height:56px"></span><span class="esq" style="height:56px"></span></div>`;
+  if (!G.q.trim() || !G.res) return `<section class="caja">${vacio('Busque a un jugador', 'Escriba un apodo, o el Eñeños-ID para ver a la persona con todos sus personajes.')}</section>`;
+  if (G.res.error) return `<section class="caja">${vacio('No se pudo buscar', G.res.error)}</section>`;
+  const gs = gruposPersona(G.res.filas);
+  if (!gs.length) return `<section class="caja">${vacio('Nadie coincide', `Ningún personaje coincide con «${esc(G.q.trim())}».`)}</section>`;
+  const npj = gs.reduce((a, g) => a + g.pjs.length, 0);
+  nombresPersonas(gs.map(g => g.eid).filter(e => e != null));
+  return `<p class="tenue g-cuenta">${gs.length} ${gs.length === 1 ? 'persona' : 'personas'} · ${npj} ${npj === 1 ? 'personaje' : 'personajes'}</p>
+    <div class="g-personas">${gs.map(g => `<article class="g-persona">
+      <header>${g.eid != null ? `<span class="ava redondo g-ava-per" aria-hidden="true">${ic('user', 's16')}</span><div class="t"><small>Persona · Eñeños-ID ${esc(g.eid)}</small><b data-eid-nom="${esc(g.eid)}">${esc(S.nomPersona[g.eid] || `Eñeños #${g.eid}`)}</b></div>
+        <span class="chip">${g.pjs.length} ${g.pjs.length === 1 ? 'personaje' : 'personajes'}</span><a class="btn chico fantasma g-ver" href="#/persona/${esc(g.eid)}">Ver la persona${ic('arrow', 's14')}</a>`
+        : `<span class="ava redondo g-sin-eid" aria-hidden="true">${ic('user', 's14')}</span><div class="t"><small>Sin Eñeños-ID</small><b>Cuenta vieja, sin vincular</b></div>`}</header>
+      <div class="g-pjs">${g.pjs.length ? g.pjs.map(f => pjChip(J, f)).join('') : '<p class="tenue g-nada">Todavía no tiene personaje en este juego.</p>'}</div></article>`).join('')}</div>`;
+}
+let gBusqReloj = null, gBusqN = 0;
+/* el nombre de la persona (su Ñ2-ID) lo sabe el Coordinador, no el juego: se pide aparte y se completa al llegar */
+S.nomPersona = {};
+function nombresPersonas(eids) {
+  eids.filter(e => !(e in S.nomPersona)).slice(0, 12).forEach(async e => {
+    S.nomPersona[e] = null;
+    const r = await api('persona/' + encodeURIComponent(e));
+    if (!r.ok) return;
+    S.nomPersona[e] = r.d.persona.nombre;
+    $$(`[data-eid-nom="${Number(e)}"]`).forEach(b => { b.textContent = r.d.persona.nombre; });
+  });
+}
+async function buscarPersonas(J, q) {
+  const G = J.g; G.q = q;
+  q = q.trim();
+  if (!q || (q.length < 2 && !/^\d+$/.test(q))) { G.res = null; const r = $('#gRes'); if (r) r.innerHTML = resultadosHtml(J); return; }
+  const n = ++gBusqN; G.buscando = true;
+  const r = await api(gRuta(J, 'usuarios?q=' + encodeURIComponent(q)));
+  if (n !== gBusqN || S.jc !== J) return;
+  G.buscando = false;
+  G.res = r.ok ? { filas: r.d.filas || [] } : { error: errTxt(r) };
+  const c = $('#gRes'); if (c) c.innerHTML = resultadosHtml(J);
+}
+
+/* ══════════════ la FICHA de un personaje ══════════════ */
+async function cargarFicha(J, uid, solo) {
+  const G = J.g, k = String(uid);
+  const pide = [solo === 'historia' ? null : api(gRuta(J, `usuario/${uid}`)), api(gRuta(J, `usuario/${uid}/historia?dias=${G.dias}`))];
+  const [f, h] = await Promise.all(pide);
+  if (S.jc !== J) return;
+  const F = G.fichas[k] = G.fichas[k] || {};
+  if (f) { F.f = f.ok ? f.d : null; F.err = f.ok ? null : errTxt(f); }
+  F.h = h.ok ? h.d : null; F.herr = h.ok ? null : errTxt(h); F.dias = G.dias;
+  if (F.f && F.f.enenos_id != null && !F.pjs) {
+    const r = await api(gRuta(J, 'usuarios?q=' + F.f.enenos_id));
+    if (S.jc !== J) return;
+    F.pjs = r.ok ? (r.d.filas || []).filter(x => x.enenos_id === F.f.enenos_id && x.uid != null) : [];
+  }
+  if (J.tab === 'personas' && String(J.sel) === k) { repintarFicha(J); pintarAccJ(); }
+}
+function fichaHtml(J) {
+  const G = J.g, F = G.fichas[String(J.sel)];
+  const volver = `<a class="volver" href="#/j/${esc(J.jid)}/${J.env}/personas">${ic('left', 's14')}${G.q.trim() ? 'Volver a la búsqueda' : 'Personas'}</a>`;
+  if (!F || (!F.f && !F.err)) return `${volver}<div class="caja g-cargando"><span class="esq" style="height:120px"></span><span class="esq" style="height:240px"></span><span class="tenue">Cargando la ficha…</span></div>`;
+  if (!F.f) return `${volver}<section class="caja">${vacio('No se puede abrir esta ficha', F.err)}</section>`;
+  const f = F.f, admin = G.mios.rol === 'admin', vivo = !!f.conectado;
+  const pjs = F.pjs || [];
+  if (f.enenos_id != null) nombresPersonas([f.enenos_id]);
+  const conm = f.enenos_id != null ? `<nav class="conm g-conm" aria-label="Los personajes de esta persona">
+      <a class="conm-persona" href="#/persona/${esc(f.enenos_id)}"><span class="ava redondo g-ava-per" aria-hidden="true">${ic('user', 's16')}</span><span><small>Persona · Eñeños-ID ${esc(f.enenos_id)}</small><b data-eid-nom="${esc(f.enenos_id)}">${esc(S.nomPersona[f.enenos_id] || `Eñeños #${f.enenos_id}`)}</b></span></a>
+      <span class="conm-sep" aria-hidden="true"></span><span class="conm-lab">${pjs.length > 1 ? `Sus ${pjs.length} personajes:` : 'Su personaje:'}</span>
+      ${(pjs.length ? pjs : [f]).map(x => `<a class="conm-pj ${Number(x.uid) === Number(f.uid) ? 'on' : ''}" href="${urlPj(J, x.uid)}" ${Number(x.uid) === Number(f.uid) ? 'aria-current="page"' : ''}><span class="p"></span>${esc(x.nick)}<small>nv ${Number(x.nivel) || 1}</small></a>`).join('')}</nav>`
+    : `<p class="tenue g-nota g-sin-persona">${ic('info', 's14')} Este personaje no está vinculado a un Eñeños-ID: no se pueden mostrar otros personajes de la misma persona.</p>`;
+  const chips = [vivo ? `<span class="chip verde"><span class="punto vivo"></span>Conectado</span>` : '<span class="chip">Desconectado</span>',
+    f.baneado ? `<span class="chip rojo">${ic('ban', 's14')}Baneado</span>` : '', f.mute ? `<span class="chip oro">${ic('micoff', 's14')}Sin chat</span>` : '',
+    f.rol ? `<span class="chip mayus">${esc(f.rol)}</span>` : ''].join('');
+  const ids = [`personaje <b>#${Number(f.uid)}</b>`, f.enenos_id != null ? `Eñeños-ID <a href="#/persona/${esc(f.enenos_id)}">${esc(f.enenos_id)}</a>` : '',
+    f.login ? `usuario <b>${esc(f.login)}</b>` : '', f.creado ? `creado <b>${fechaTxt(f.creado)}</b>` : '',
+    vivo ? `ahora ${dondeTxt(Object.assign({ estado: '' }, f.conectado))}` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('');
+  const base = [
+    gBtn(J, 'aviso', { acc: 'g-aviso-uno', icono: 'mega', txt: 'Aviso', off: vivo ? '' : 'No está conectado' }),
+    gBtn(J, 'echar', { acc: 'g-echar', icono: 'logout', txt: 'Echar', off: vivo ? '' : 'No está conectado' }),
+    f.mute ? gBtn(J, 'mute', { acc: 'g-desmute', icono: 'check', txt: 'Devolverle el chat' }) : gBtn(J, 'mute', { acc: 'g-mute', icono: 'micoff', txt: 'Sacarle el chat' }),
+  ].join('');
+  const banners = [
+    f.ban ? `<div class="aviso-sancion" role="status">${ic('ban', 's20')}<span><b>Baneado</b> · ${f.ban.hasta ? `faltan <b>${fmtDur((f.ban.hasta - Date.now() / 1000) / 60)}</b>` : '<b>sin fecha de fin</b>'} · por ${esc(f.ban.por)}${f.ban.motivo ? ` · «${esc(f.ban.motivo)}»` : ''}</span></div>`
+      : f.baneado ? `<div class="aviso-sancion" role="status">${ic('ban', 's20')}<span><b>Baneado</b> en este juego.</span></div>` : '',
+    f.mute ? `<div class="aviso-sancion g-mute" role="status">${ic('micoff', 's20')}<span><b>Sin chat</b> · faltan <b>${esc(f.mute.falta)}</b> · por ${esc(f.mute.por)} · «${esc(f.mute.motivo)}»</span></div>` : ''].join('');
+  return `${volver}${conm}
+    <section class="ficha-cab"><div class="dentro">${ava(f.nick, 'g redondo')}
+      <div style="min-width:0;flex:1"><div class="g-sup">PERSONAJE · ${esc(juegoCat(J.jid).nombre)}</div>
+        <h1>${esc(f.nick || `#${f.uid}`)} ${chips}</h1><div class="ids">${ids}</div></div>
+      <div class="accs">${base}</div></div></section>
+    ${banners}
+    <div class="ficha-grid">
+      <div class="g-col-izq">
+        <section class="caja">${progresoHtml(f, F)}${statsHtml(f)}</section>
+        <section class="caja" aria-labelledby="gTAct">${actividadHtml(J, F)}</section>
+      </div>
+      <div class="g-col-der">
+        ${herramientasHtml(J, f)}
+        ${inventarioHtml(J, f)}
+        ${admin && (f.ips || f.misma_ip) ? conexionesHtml(J, f) : ''}
+        ${equipoHtml(f)}
+      </div>
+    </div>`;
+}
+function ritmoExp(F) {
+  const ds = ((F.h && F.h.dias) || []).filter(x => x.exp_ganada != null && !x.senal);
+  if (!ds.length) return null;
+  return ds.reduce((a, x) => a + Math.max(0, x.exp_ganada), 0) / ds.length;
+}
+function progresoHtml(f, F) {
+  const tramo = Math.max(1, (f.exp_proximo || 0) - (f.exp_nivel || 0)), hecho = Math.max(0, (f.exp || 0) - (f.exp_nivel || 0));
+  const pctN = Math.max(0, Math.min(100, (100 * hecho) / tramo)), falta = Math.max(0, (f.exp_proximo || 0) - (f.exp || 0));
+  const ritmo = ritmoExp(F);
+  const cuando = !f.exp_proximo || f.exp_proximo <= f.exp ? 'Está en el nivel más alto.' : ritmo > 0 ? `A su ritmo de las últimas semanas, sube en ${Math.ceil(falta / ritmo) <= 1 ? 'un día' : `unos ${Math.ceil(falta / ritmo)} días`}.` : 'Estos días no ganó EXP.';
+  return `<div class="progreso g-prog"><div class="pg-n"><small>Nivel</small>${Number(f.nivel) || 1}</div>
+    <div class="tx">Le faltan <b>${miles(falta)}</b> de EXP para el nivel ${(Number(f.nivel) || 1) + 1}. <span class="tenue">${cuando}</span></div>
+    <div class="pg-barra" role="img" aria-label="${Math.round(pctN)} % del nivel"><i style="width:${pctN.toFixed(1)}%"></i></div></div>`;
+}
+function statsHtml(f) {
+  const r = f.record, tot = r ? (r.ganadas || 0) + (r.perdidas || 0) + (r.empates || 0) : 0;
+  const de10 = tot ? Math.round((10 * (r.ganadas || 0)) / tot) : 0;
+  return `<div class="stats g-stats">
+    <div><span>${ic('sparkle', 's14')}EXP</span><b>${miles(f.exp)}</b><small>en total</small></div>
+    <div><span>${ic('coins', 's14')}Rcoin</span><b>${miles(f.rcoin)}</b><small>para gastar</small></div>
+    <div><span>${ic('coins', 's14')}Monedas gorila</span><b>${miles(f.monedas_gorila)}</b><small>del cooperativo</small></div>
+    <div><span>${ic('trophy', 's14')}Carreras</span><b>${tot ? miles(tot) : '—'}</b><small>${tot ? `gana ${de10} de cada 10` : 'sin récord'}</small></div>
+    <div><span>${ic('box', 's14')}Inventario</span><b>${(f.inventario || []).length}</b><small>${(f.inventario || []).filter(x => x.puesto).length} puestos</small></div>
+    <div><span>${ic('circles', 's14')}Círculo</span><b class="g-txt">${f.circulo ? esc(f.circulo.nombre) : '—'}</b><small>${f.circulo ? (f.circulo.lider ? 'es el líder' : 'miembro') : 'no está en uno'}</small></div>
+  </div>`;
+}
+function herramientasHtml(J, f) {
+  const M = J.g.mios, cup = M.cupos;
+  const quedaTxt = k => (cup && cup[k] ? `<small class="g-cupo">${cup[k].cupo ? `le quedan ${miles(cup[k].queda)} de ${miles(cup[k].cupo)}` : 'sin cupo asignado'}</small>` : '');
+  const fila = (accion, acc, icono, txt, sub, datos = '') => `<li>${puedeG(J, accion)
+    ? `<button type="button" class="g-herr" data-accion="${acc}" ${datos}>${ic(icono, 's16')}<span><b>${txt}</b>${sub || ''}</span>${ic('right', 's14 tenue')}</button>`
+    : `<span class="g-herr off" title="${ASIG_TIP}">${ic('lock', 's16')}<span><b>${txt}</b><small>${ASIG_TIP}</small></span></span>`}</li>`;
+  return `<section class="caja" aria-labelledby="gTHer"><div class="caja-cab"><h3 id="gTHer">${ic('gift', 's16')}Dar y cambiar</h3>${M.rol === 'admin' ? '<span class="sub">sin cupo (ADMIN)</span>' : ''}</div>
+    <ul class="g-herrs">
+      ${fila('rcoin', 'g-moneda', 'coins', 'Rcoin', quedaTxt('rcoin'), 'data-k="rcoin"')}
+      ${fila('exp', 'g-moneda', 'sparkle', 'EXP', quedaTxt('exp'), 'data-k="exp"')}
+      ${fila('item/dar', 'g-item-dar', 'gift', 'Dar un ítem')}
+      ${fila('gorila', 'g-moneda', 'coins', 'Monedas gorila', '', 'data-k="gorila"')}
+      ${fila('apodo', 'g-apodo', 'user', 'Cambiar el apodo')}
+    </ul></section>`;
+}
+function venceItem(x) {
+  if (!x.vence) return 'permanente';
+  if (x.vencido) return '<span style="color:var(--red)">vencido</span>';
+  return `vence en ${fmtDur((x.vence - Date.now() / 1000) / 60)}`;
+}
+function inventarioHtml(J, f) {
+  const inv = f.inventario || [], G = J.g, todo = G.invTodo === f.uid;
+  const ver = todo ? inv : inv.slice(0, 8);
+  const quitar = puedeG(J, 'item/quitar');
+  const pronto = inv.filter(x => x.vence && !x.vencido && x.vence - Date.now() / 1000 < 7 * 86400).length;
+  return `<section class="caja" aria-labelledby="gTInv"><div class="caja-cab"><h3 id="gTInv">${ic('box', 's16')}Inventario</h3><span class="sub">${inv.length} ${inv.length === 1 ? 'ítem' : 'ítems'}${pronto ? ` · ${pronto} ${pronto === 1 ? 'vence' : 'vencen'} esta semana` : ''}</span></div>
+    ${inv.length ? `<ul class="lista g-inv">${ver.map(x => `<li><span class="ip svg chico" style="--c:${hashStr(String(x.id)) % 2 ? '243,38,134' : '179,139,255'}">${ic(/wardrobe/.test(x.familia) ? 'shirt' : 'gift')}</span>
+        <div class="t"><b>${esc(x.nombre)}${x.puesto ? ' <span class="chip cian">Puesto</span>' : ''}</b><span>#${Number(x.id)} · ${venceItem(x)}${x.cant ? ` · ${x.cant} ${x.cargas ? 'cargas' : 'unidades'}` : ''}</span></div>
+        ${quitar ? `<button type="button" class="btn icono chico fantasma" data-accion="g-item-quitar" data-item="${Number(x.id)}" aria-label="Quitar ${esc(x.nombre)}" title="Quitar">${ic('x', 's14')}</button>` : ''}</li>`).join('')}</ul>
+      ${inv.length > 8 ? `<div class="pie-tabla"><button type="button" class="btn chico fantasma" data-accion="g-inv-todo">${todo ? 'Ver menos' : `Ver los ${inv.length}`}</button><span></span></div>` : ''}`
+      : '<p class="caja-cuerpo tenue g-nada">No tiene ítems.</p>'}</section>`;
+}
+function conexionesHtml(J, f) {
+  const ips = f.ips || [], otros = f.misma_ip || [];
+  return `<section class="caja" aria-labelledby="gTIp"><div class="caja-cab"><h3 id="gTIp">${ic('wifi', 's16')}Conexiones</h3><span class="sub">sólo lo ve un ADMIN</span></div>
+    <div class="caja-cuerpo g-ips">${ips.length ? ips.slice(0, 5).map(x => `<div><b>${esc(x.pais || '—')}</b> ${esc(x.ip)} <span class="tenue">· ${x.veces} ${x.veces === 1 ? 'vez' : 'veces'} · última ${haceSeg(x.ultima)}</span></div>`).join('') : '<span class="tenue">Sin conexiones guardadas.</span>'}
+      ${otros.length ? `<div class="g-misma"><span class="lab">Comparten su IP</span><div class="chips">${otros.map(o => `<a class="chip oro" href="${urlPj(J, o.uid)}">${ic('users', 's14')}${esc(o.nick)}</a>`).join('')}</div></div>` : ''}</div></section>`;
+}
+const AUD_TXT = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'le dio un ítem', 'item/quitar': 'le quitó un ítem', apodo: 'cambió el apodo', gorila: 'monedas gorila', 'gorila/canje': 'canjeó monedas gorila',
+  echar: 'lo echó', mute: 'le sacó el chat', desmute: 'le devolvió el chat', ban: 'lo baneó', desban: 'lo desbaneó', licencia: 'cambió la licencia', clave: 'cambió la contraseña', aviso: 'le mandó un aviso' };
+function audDet(a) {
+  const d = a.detalle || {};
+  if (d.antes != null && d.despues != null) return `${miles(d.antes)} → ${miles(d.despues)}`;
+  if (d.horas) return `${d.horas} h${d.motivo ? ` · «${esc(d.motivo)}»` : ''}`;
+  if (d.nombre) return esc(d.nombre);
+  if (d.motivo) return `«${esc(d.motivo)}»`;
+  return '';
+}
+function equipoHtml(f) {
+  const as = (f.auditoria || []).slice(0, 8);
+  return `<section class="caja" aria-labelledby="gTEq"><div class="caja-cab"><h3 id="gTEq">${ic('history', 's16')}Lo que hizo el equipo</h3></div>
+    ${as.length ? `<ul class="tl">${as.map(a => `<li><span class="ic cian">${ic('shieldok', 's14')}</span><div class="txt"><b>${esc(a.actor)}</b> ${esc(AUD_TXT[a.accion] || a.accion)}${audDet(a) ? ` · <span class="tenue">${audDet(a)}</span>` : ''}</div><span class="cuando">${fechaEpoch(a.ts)}</span></li>`).join('')}</ul>`
+      : '<p class="caja-cuerpo tenue g-nada">Nadie del equipo lo tocó.</p>'}</section>`;
+}
+
+/* ══════════════ la ACTIVIDAD: cada gráfico contesta UNA pregunta, con su respuesta arriba ══════════════
+   Una serie por gráfico. «Lo normal» es una franja de fondo, no otra línea. Nada de jerga. Tocar una barra abre el día. */
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+}
+function ejeX(D) {
+  const n = D.length, k = Math.ceil(n / 7);
+  return `<div class="g-ejex" aria-hidden="true">${D.map((x, i) => `<span>${i === n - 1 ? 'hoy' : (n - 1 - i) % k === 0 ? new Date(x.f + 'T12:00:00').getDate() : ''}</span>`).join('')}</div>`;
+}
+/* columnas de UNA serie, desde la base. items: {f, v, cls, lo, hi, marca, tip}; max: el tope de la escala */
+function columnas(D, items, max, fmt, etiqueta) {
+  const pct = v => Math.max(0, Math.min(100, (100 * v) / max));
+  return `<div class="g-graf" role="group" aria-label="${esc(etiqueta)}">
+    <div class="g-ejey" aria-hidden="true"><span>${fmt(max)}</span><span>${fmt(max / 2)}</span><span>0</span></div>
+    <div class="g-plot"><i class="g-grid" style="bottom:100%"></i><i class="g-grid" style="bottom:50%"></i>
+      <div class="g-cols">${items.map(it => `<button type="button" class="g-col" data-accion="g-dia" data-f="${esc(it.f)}" data-tip="${esc(it.tip)}" aria-label="${esc(it.tip.replace(/\|/g, ', '))}">
+        ${it.hi != null ? `<span class="g-franja" style="bottom:${pct(it.lo)}%;height:${Math.max(1.5, pct(it.hi) - pct(it.lo))}%"></span>` : ''}
+        <span class="g-bar ${it.cls || ''} ${it.v ? '' : 'cero'}" style="height:${it.v ? Math.max(2, pct(it.v)) : 0}%">${it.etq ? `<em>${esc(it.etq)}</em>` : ''}</span>
+        ${it.marca ? `<span class="g-marca ${it.marca}" style="bottom:calc(${Math.max(2, pct(it.v))}% + 6px)"></span>` : ''}</button>`).join('')}</div>
+      <div class="g-tip" hidden></div></div>
+    ${ejeX(D)}</div>`;
+}
+/* columnas con signo (Rcoin: lo que ganó arriba, lo que gastó abajo), un cero en el medio */
+function columnasSigno(D, items, fmt, etiqueta) {
+  const pos = Math.max(0, ...items.map(i => i.v)), neg = Math.max(0, ...items.map(i => -i.v));
+  const top = niceMax(Math.max(pos, 1)), bot = neg ? niceMax(neg) : 0, tot = top + bot, cero = (100 * bot) / tot;
+  return `<div class="g-graf" role="group" aria-label="${esc(etiqueta)}">
+    <div class="g-ejey signo" aria-hidden="true" style="--cero:${cero}%"><span style="bottom:100%">${fmt(top)}</span><span style="bottom:${cero}%">0</span>${bot ? `<span style="bottom:0">−${fmt(bot)}</span>` : ''}</div>
+    <div class="g-plot"><i class="g-grid" style="bottom:100%"></i><i class="g-grid g-cero" style="bottom:${cero}%"></i>
+      <div class="g-cols">${items.map(it => { const h = (100 * Math.abs(it.v)) / tot;
+        return `<button type="button" class="g-col" data-accion="g-dia" data-f="${esc(it.f)}" data-tip="${esc(it.tip)}" aria-label="${esc(it.tip.replace(/\|/g, ', '))}">
+        ${it.v ? `<span class="g-bar ${it.v > 0 ? 'gana' : 'gasta'}" style="${it.v > 0 ? `bottom:${cero}%` : `top:${100 - cero}%`};height:${Math.max(2, h)}%"></span>` : ''}
+        ${it.marca ? `<span class="g-marca equipo" style="bottom:calc(${it.v > 0 ? cero + Math.max(2, h) : cero}% + 6px)"></span>` : ''}</button>`; }).join('')}</div>
+      <div class="g-tip" hidden></div></div>
+    ${ejeX(D)}</div>`;
+}
+const CHIP_VER = { ok: ['verde', 'check', 'Normal'], mirar: ['oro', 'eye', 'Para mirar'], raro: ['rojo', 'alert', 'Raro'] };
+function pregunta(titulo, ver, frase, graf, ley) {
+  const [c, i, t] = CHIP_VER[ver.v] || ['', 'info', ver.t || ''];
+  return `<article class="pregunta ver-${ver.v || 'info'}"><header><h4>${titulo}</h4><span class="chip ${ver.v ? c : 'cian'}">${ic(ver.v ? i : 'info', 's14')}${ver.v ? t : esc(ver.t)}</span></header>
+    <p class="frase">${frase}</p><div class="graf">${graf}</div>${ley ? `<div class="leyenda-graf">${ley}</div>` : ''}</article>`;
+}
+function diasDe(F) {
+  return ((F.h && F.h.dias) || []).map(x => ({ f: x.fecha, con: (x.seg_conectado || 0) / 60, jug: (x.seg_jugando || 0) / 60, car: x.carreras || 0,
+    exp: x.exp_ganada, rc: x.rcoin_ganado, sen: x.senal, ed: x.ediciones || [], ref: x.ref || {} }));
+}
+function actividadHtml(J, F) {
+  const G = J.g;
+  const cab = `<div class="caja-cab"><h3 id="gTAct">${ic('activity', 's16')}Actividad</h3><span class="sub">cada gráfico contesta una pregunta</span>
+    <div class="der"><div class="seg" role="group" aria-label="Período">${[[14, '2 semanas'], [28, '4 semanas']].map(([n, t]) => `<button type="button" data-accion="g-dias" data-n="${n}" aria-pressed="${G.dias === n}">${t}</button>`).join('')}</div></div></div>`;
+  if (F.herr) return cab + `<div class="caja-cuerpo">${vacio('No se pudo leer la actividad', F.herr)}</div>`;
+  if (!F.h || F.dias !== G.dias) return cab + `<div class="caja-cuerpo g-cargando"><span class="esq" style="height:200px"></span></div>`;
+  const D = diasDe(F), n = D.length;
+  if (!n) return cab + `<div class="caja-cuerpo">${vacio('Sin actividad guardada', 'El servidor todavía no guardó la actividad de este personaje.')}</div>`;
+  /* 1 · ¿Cuánto juega? */
+  const activos = D.filter(x => x.con > 0), totCon = D.reduce((a, x) => a + x.con, 0);
+  const promedio = activos.length ? totCon / activos.length : 0;
+  const v1 = { t: !activos.length ? 'No juega' : activos.length / n >= 0.7 ? 'Casi todos los días' : activos.length / n >= 0.3 ? 'Algunos días' : 'Pocos días' };
+  const f1 = activos.length ? `Entró <b>${activos.length} de ${n} días</b>, unas <b>${horasTxt(promedio)}</b> cada día que jugó.` : `No entró al juego en estos ${n} días.`;
+  const max1 = Math.max(60, ...D.map(x => x.con)) > 60 ? niceMax(Math.max(...D.map(x => x.con)) / 60) * 60 : 60;   // en horas redondas
+  const g1 = columnas(D, D.map(x => ({ f: x.f, v: x.con, tip: `${diaCorto(x.f)}|${x.con ? horasTxt(x.con) + ' conectado' : 'no entró'}${x.car ? `|${x.car} carreras` : ''}` })), max1, m => (m >= 60 ? `${String(Math.round(m / 6) / 10).replace('.', ',')} h` : m ? `${Math.round(m)} min` : '0'), 'Minutos conectado por día');
+  /* 2 · ¿Juega más o menos que antes? */
+  const mitad = Math.floor(n / 2), ahora = D.slice(n - mitad).reduce((a, x) => a + x.con, 0), antes = D.slice(0, n - mitad).reduce((a, x) => a + x.con, 0);
+  const sem = mitad === 7 ? ['estos 7 días', 'los 7 anteriores'] : [`estas ${Math.round(mitad / 7)} semanas`, `las ${Math.round(mitad / 7)} anteriores`];
+  let v2, f2;
+  if (!ahora && !antes) { v2 = { t: 'No juega' }; f2 = 'No jugó en ninguno de los dos períodos.'; }
+  else if (!antes) { v2 = { t: 'Volvió' }; f2 = `<b>Volvió a jugar:</b> ${horasTxt(ahora)} en ${sem[0]}; en ${sem[1]}, nada.`; }
+  else if (!ahora) { v2 = { t: 'Dejó de jugar' }; f2 = `<b>Dejó de jugar:</b> nada en ${sem[0]}; ${horasTxt(antes)} en ${sem[1]}.`; }
+  else {
+    const r = ahora / antes;
+    v2 = { t: r > 1.2 ? 'Juega más' : r < 0.8 ? 'Juega menos' : 'Igual que antes' };
+    f2 = `<b>${r > 1.2 ? 'Juega más' : r < 0.8 ? 'Juega menos' : 'Juega parecido'}:</b> ${horasTxt(ahora)} en ${sem[0]}, ${horasTxt(antes)} en ${sem[1]}.`;
+  }
+  const m2 = Math.max(ahora, antes, 1);
+  const g2 = `<div class="g-comp" role="img" aria-label="${esc(`${cap(sem[0])}: ${horasTxt(ahora)}. ${cap(sem[1])}: ${horasTxt(antes)}.`)}">
+    <div class="g-comp-f"><span>${cap(sem[0])}</span><div class="g-comp-b"><i class="ahora" style="width:${(100 * ahora / m2).toFixed(1)}%"></i></div><b>${horasTxt(ahora)}</b></div>
+    <div class="g-comp-f"><span>${cap(sem[1])}</span><div class="g-comp-b"><i style="width:${(100 * antes / m2).toFixed(1)}%"></i></div><b>${horasTxt(antes)}</b></div></div>`;
+  /* 3 · ¿Gana EXP normal? (la franja: lo que gana la mayoría jugando ese mismo tiempo) */
+  const conExp = D.filter(x => x.exp != null), raros = D.filter(x => x.sen);
+  const totExp = conExp.reduce((a, x) => a + Math.max(0, x.exp), 0);
+  const banda = x => (x.jug > 0 && x.ref.exp_hora_mediana && x.ref.exp_hora_p90 ? [x.ref.exp_hora_mediana * x.jug / 60, x.ref.exp_hora_p90 * x.jug / 60] : null);
+  const vals = conExp.map(x => Math.max(0, x.exp)).sort((a, b) => b - a);
+  const tope = vals.length > 1 && vals[1] > 0 && vals[0] > 3 * vals[1] ? niceMax(vals[1] * 1.5) : niceMax(Math.max(1, vals[0] || 0, ...D.map(x => (banda(x) || [0, 0])[1])));
+  const equipoExp = D.reduce((a, x) => a + x.ed.filter(e => e.accion === 'exp').reduce((b, e) => b + ((e.detalle || {}).despues - (e.detalle || {}).antes || 0), 0), 0);
+  let v3, f3;
+  if (raros.length) { v3 = { v: 'raro' }; f3 = raros.length === 1 ? `El <b>${diaCorto(raros[0].f)}</b> ${esc(raros[0].sen.replace(/^🚨\s*/, ''))}. Toque la barra roja para ver el día.` : `En <b>${raros.length} días</b> algo no cuadra (barras rojas). El último, ${diaCorto(raros[raros.length - 1].f)}: ${esc(raros[raros.length - 1].sen.replace(/^🚨\s*/, ''))}.`; }
+  else if (!conExp.length) { v3 = { t: 'Sin datos' }; f3 = 'Todavía no hay fotos de la EXP de estos días.'; }
+  else if (!totExp) { v3 = { t: 'No ganó' }; f3 = `No ganó EXP en estos ${n} días.`; }
+  else { v3 = { v: 'ok' }; f3 = `Gana EXP como la mayoría de los que juegan ese tiempo: <b>${miles(totExp)}</b> en ${n} días.`; }
+  if (equipoExp) f3 += ` <span class="tenue">El equipo le cambió ${signo(equipoExp)} de EXP en estos días.</span>`;
+  const g3 = columnas(D, D.map(x => { const b = banda(x), corta = x.exp != null && x.exp > tope;
+    return { f: x.f, v: x.exp == null ? 0 : Math.min(Math.max(0, x.exp), tope), lo: b && b[0], hi: b && b[1], cls: (x.sen ? 'raro' : '') + (corta ? ' corte' : ''), etq: corta ? compacto(x.exp) : '', marca: x.sen ? 'raro' : '',
+      tip: `${diaCorto(x.f)}|${x.exp == null ? 'sin dato' : miles(x.exp) + ' de EXP'}${b ? `|lo normal: ${compacto(b[0])} a ${compacto(b[1])}` : ''}${x.sen ? '|' + x.sen.replace(/^🚨\s*/, '') : ''}` }; }), tope, compacto, 'EXP ganada por día');
+  const l3 = `<span><i style="background:var(--g-serie)"></i>EXP que ganó</span><span><i class="g-ley-franja"></i>lo que gana la mayoría jugando ese tiempo</span>${raros.length ? '<span><i style="background:var(--red)"></i>algo no cuadra</span>' : ''}`;
+  /* 4 · ¿Gana o gasta Rcoin? */
+  const conRc = D.filter(x => x.rc != null);
+  const gano = conRc.reduce((a, x) => a + Math.max(0, x.rc), 0), gasto = conRc.reduce((a, x) => a + Math.max(0, -x.rc), 0), neto = gano - gasto;
+  const edRc = D.flatMap(x => x.ed.filter(e => e.accion === 'rcoin').map(e => ({ f: x.f, d: ((e.detalle || {}).despues || 0) - ((e.detalle || {}).antes || 0), por: e.por })));
+  const equipoRc = edRc.reduce((a, e) => a + e.d, 0);
+  let v4, f4;
+  if (!conRc.length) { v4 = { t: 'Sin datos' }; f4 = 'Todavía no hay fotos del Rcoin de estos días.'; }
+  else if (!gano && !gasto) { v4 = { t: 'Sin movimiento' }; f4 = `No ganó ni gastó Rcoin en estos ${n} días.`; }
+  else {
+    v4 = equipoRc > 0 && equipoRc > 0.5 * gano ? { v: 'mirar' } : { t: neto >= 0 ? 'Gana más' : 'Gasta más' };
+    f4 = `${neto >= 0 ? '<b>Gana más de lo que gasta</b>' : '<b>Gasta más de lo que gana</b>'}: ${signo(neto)} en ${n} días (ganó ${miles(gano)} y gastó ${miles(gasto)}).`;
+  }
+  if (v4.v === 'mirar') f4 += ' La mayor parte del Rcoin que recibió se lo dio el equipo.';
+  if (equipoRc) f4 += ` <span class="tenue">De eso, ${signo(equipoRc)} se lo dio el equipo (${edRc.map(e => `${diaCorto(e.f)}, ${esc(e.por)}`).join('; ')}).</span>`;
+  const g4 = columnasSigno(D, D.map(x => ({ f: x.f, v: x.rc || 0, marca: x.ed.some(e => e.accion === 'rcoin'),
+    tip: `${diaCorto(x.f)}|${x.rc == null ? 'sin dato' : x.rc > 0 ? `ganó ${miles(x.rc)} Rcoin` : x.rc < 0 ? `gastó ${miles(-x.rc)} Rcoin` : 'no movió Rcoin'}${x.ed.some(e => e.accion === 'rcoin') ? '|incluye un cambio del equipo' : ''}` })), compacto, 'Rcoin ganado o gastado por día');
+  const l4 = `<span><i style="background:var(--g-serie)"></i>ganó</span><span><i style="background:var(--g-gasta)"></i>gastó</span>${edRc.length ? '<span><i class="g-ley-equipo"></i>el equipo le dio o le quitó</span>' : ''}`;
+  const md = (F.h.mide_desde || {}).actividad;
+  return cab + `<div class="caja-cuerpo">
+    <div class="preguntas">
+      ${pregunta('¿Cuánto juega?', v1, f1, g1, '')}
+      ${pregunta('¿Juega más o menos que antes?', v2, f2, g2, '')}
+      ${pregunta('¿Gana EXP normal?', v3, f3, g3, l3)}
+      ${pregunta('¿Gana o gasta Rcoin?', v4, f4, g4, l4)}
+    </div>
+    <div class="g-pie-act"><button type="button" class="btn chico fantasma" data-accion="g-tabla" aria-expanded="${G.verTabla}">${ic(G.verTabla ? 'up' : 'down', 's14')}${G.verTabla ? 'Ocultar' : 'Ver'} los números día por día</button>
+      ${md && D[0].f < md ? `<span class="tenue">El servidor mide desde el ${fechaNov(md)}: antes no hay datos.</span>` : '<span class="tenue">Toque una barra para ver ese día.</span>'}</div>
+    ${G.verTabla ? tablaDias(D) : ''}</div>`;
+}
+function tablaDias(D) {
+  return `<div class="g-tabla-caja"><table class="t compacta g-tabla"><thead><tr><th>Día</th><th class="der">Conectado</th><th class="der">Carreras</th><th class="der">EXP</th><th class="der">Rcoin</th><th>Nota</th></tr></thead>
+    <tbody>${D.slice().reverse().map(x => `<tr class="click ${x.sen ? 'marca-raro' : ''}" tabindex="0" data-accion="g-dia" data-f="${esc(x.f)}"><td>${diaCorto(x.f)}</td><td class="der num">${x.con ? horasTxt(x.con) : '—'}</td><td class="der num">${x.car || '—'}</td>
+      <td class="der num">${x.exp == null ? '—' : miles(x.exp)}</td><td class="der num">${x.rc == null ? '—' : signo(x.rc)}</td><td class="g-nota-celda">${x.sen ? esc(x.sen.replace(/^🚨\s*/, '')) : x.ed.length ? 'cambio del equipo' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+}
+/* la etiqueta flotante de las barras (al pasar o al enfocar): las líneas van con textContent */
+function mostrarTip(col) {
+  const plot = col.closest('.g-plot'), tip = plot && $('.g-tip', plot); if (!tip) return;
+  tip.textContent = '';
+  String(col.dataset.tip || '').split('|').forEach((l, i) => { const e = document.createElement(i ? 'span' : 'b'); e.textContent = l; tip.appendChild(e); });
+  tip.hidden = false;
+  const pr = plot.getBoundingClientRect(), cr = col.getBoundingClientRect();
+  const x = cr.left - pr.left + cr.width / 2, w = tip.offsetWidth;
+  tip.style.left = Math.max(0, Math.min(pr.width - w, x - w / 2)) + 'px';
+}
+['mouseover', 'focusin'].forEach(ev => document.addEventListener(ev, e => { const c = e.target.closest && e.target.closest('.g-col'); if (c) mostrarTip(c); }));
+['mouseout', 'focusout'].forEach(ev => document.addEventListener(ev, e => { const c = e.target.closest && e.target.closest('.g-col'); if (c && !(e.relatedTarget && c.contains(e.relatedTarget))) { const t = c.closest('.g-plot') && $('.g-tip', c.closest('.g-plot')); if (t) t.hidden = true; } }));
+
+/* el DÍA: el desglose en un panel lateral, primero en frases */
+async function abrirDia(J, fecha) {
+  const uid = J.sel; if (!uid) return;
+  const F = J.g.fichas[String(uid)], nick = F && F.f ? F.f.nick : '';
+  const pn = abrirCapa(`<aside class="cajon" role="dialog" aria-modal="true" aria-labelledby="dTit"><div class="cajon-cab">${ava(nick || '?', 'm')}<div style="min-width:0"><h2 id="dTit">${cap(diaCorto(fecha))}</h2><p>${esc(nick)} · ${esc(juegoCat(J.jid).nombre)}</p></div>
+    <button type="button" class="btn icono chico fantasma cerrar" data-accion="cerrar-capa" aria-label="Cerrar">${ic('x', 's16')}</button></div>
+    <div class="cajon-cuerpo" id="dCuerpo"><span class="esq" style="height:90px"></span><span class="esq" style="height:180px"></span></div></aside>`);
+  const r = await api(gRuta(J, `usuario/${uid}/dia?fecha=${encodeURIComponent(fecha)}`));
+  const c = $('#dCuerpo', pn); if (!c) return;
+  if (!r.ok) { c.innerHTML = vacio('No se pudo leer el día', errTxt(r)); return; }
+  const d = r.d, fr = [];
+  const dh = F && F.h ? (F.h.dias || []).find(x => x.fecha === fecha) : null;
+  if (dh && dh.senal) fr.push(`<b style="color:var(--red)">Algo no cuadra:</b> ${esc(dh.senal.replace(/^🚨\s*/, ''))}.`);
+  fr.push(d.seg_conectado ? `Estuvo conectado <b>${horasTxt(d.seg_conectado / 60)}</b>${d.seg_jugando ? `, y corrió <b>${horasTxt(d.seg_jugando / 60)}</b>` : ''}.` : 'No entró al juego.');
+  if (d.carreras_n) fr.push(`Corrió <b>${d.carreras_n} ${d.carreras_n === 1 ? 'carrera' : 'carreras'}</b>.`);
+  if (d.exp_ganada != null) fr.push(`Ganó <b>${miles(d.exp_ganada)}</b> de EXP${d.exp_fuera != null ? (d.exp_fuera > 0 ? `, y <b>${miles(d.exp_fuera)}</b> de eso vino de afuera de las carreras` : ', todo en carreras') : ''}.`);
+  fr.push(d.ediciones && d.ediciones.length ? `El equipo lo tocó: ${d.ediciones.map(e => `${esc(e.por)} · ${esc(AUD_TXT[e.accion] || e.accion)}${audDet(e) ? ` (${audDet(e)})` : ''}`).join('; ')}.` : 'Nadie del equipo lo tocó.');
+  const car = d.carreras || [], ses = d.sesiones || [];
+  const hora = t => { const x = new Date(t * 1000); return `${dos(x.getHours())}:${dos(x.getMinutes())}`; };
+  c.innerHTML = `<ul class="dia-frases">${fr.map(t => `<li>${ic('right', 's14')}<span>${t}</span></li>`).join('')}</ul>
+    ${car.length ? `<div><span class="lab">Sus carreras</span><div class="g-tabla-caja"><table class="t compacta"><thead><tr><th>Hora</th><th>Sala</th><th class="der">Duró</th><th class="der">EXP</th></tr></thead>
+      <tbody>${car.map(x => `<tr class="${x.rara ? 'marca-raro' : ''}"><td class="num">${hora(x.inicio)}</td><td>${esc(x.sala_nombre || '—')}${x.modo ? ` <span class="tenue">· ${esc(x.modo)}</span>` : ''}</td><td class="der num">${x.seg ? fmtDur(x.seg / 60) : '—'}</td><td class="der num">${x.exp == null ? '—' : miles(x.exp)}</td></tr>`).join('')}</tbody></table></div></div>`
+      : d.desglosado === false ? '<p class="tenue g-nota">Ese día el servidor todavía no anotaba cada carrera.</p>' : ''}
+    ${ses.length ? `<div><span class="lab">Cuándo entró</span><ul class="lista">${ses.map(s => `<li><div class="t"><b>${hora(s.inicio)} a ${s.fin ? hora(s.fin) : s.abierta ? 'ahora' : '—'}</b><span>${s.exp != null ? `${miles(s.exp)} de EXP` : ''}${s.ip ? ` · ${esc(s.pais || '')} ${esc(s.ip)}` : ''}</span></div></li>`).join('')}</ul></div>` : ''}`;
+}
+
+/* ══════════════ las ACCIONES sobre un personaje ══════════════ */
+function fichaSel(J) { const F = J.g.fichas[String(J.sel)]; return F && F.f ? F.f : null; }
+async function trasAccion(J, uid, r, titulo, sub) {
+  if (!r.ok) { toast({ t: 'No se pudo', sub: errTxt(r), tipo: 'err', ms: 8000 }); return false; }
+  toast({ t: titulo, sub: (sub ? sub + ' ' : '') + 'Quedó en la auditoría.' });
+  const F = J.g.fichas[String(uid)]; if (F) F.pjs = null;       // se relee en el lugar: sin saltar arriba
+  if (J.g.res) J.g.res = null;
+  pintarAccJ();
+  if (String(J.sel) === String(uid)) cargarFicha(J, uid);
+  return true;
+}
+function accionFicha(J, a) {
+  const f = fichaSel(J); if (!f) return;
+  const uid = f.uid, nick = esc(f.nick);
+  const k = a.dataset.accion;
+  if (k === 'g-aviso-uno') return formAviso(J, 'uid', uid, f.nick);
+  if (k === 'g-echar') return confirmar({ titulo: `¿Echar a ${nick}?`, icono: 'logout', ok: 'Echar',
+    txt: 'Lo desconecta del juego al instante. Puede volver a entrar cuando quiera.',
+    extra: '<span class="lab">Motivo (opcional, para la auditoría)</span><label class="campo"><span class="sr">Motivo</span><input id="mdExtra" maxlength="200" autocomplete="off" placeholder="Por ejemplo: trabado en una sala"></label>',
+    alAceptar: async m => trasAccion(J, uid, await gPost(J, `usuario/${uid}/echar`, { motivo: m.trim() }), `${nick} fue desconectado`) });
+  if (k === 'g-desmute') return confirmar({ titulo: `¿Devolverle el chat a ${nick}?`, icono: 'check', peligro: false, ok: 'Devolver el chat',
+    txt: `Hoy está sin chat (faltan ${esc(f.mute ? f.mute.falta : '')}). Vuelve a poder escribir al instante.`,
+    alAceptar: async () => trasAccion(J, uid, await gPost(J, `usuario/${uid}/desmute`, {}), `${nick} ya puede usar el chat`) });
+  if (k === 'g-mute') return formMute(J, f);
+  if (k === 'g-moneda') return formMoneda(J, f, a.dataset.k);
+  if (k === 'g-item-dar') return formItem(J, f);
+  if (k === 'g-apodo') return formApodo(J, f);
+  if (k === 'g-item-quitar') {
+    const it = (f.inventario || []).find(x => Number(x.id) === Number(a.dataset.item)); if (!it) return;
+    return confirmar({ titulo: `¿Quitarle «${esc(it.nombre)}»?`, icono: 'x', ok: 'Quitar',
+      txt: `Se le saca del inventario${it.puesto ? ' (y se le quita de encima)' : ''}${it.cant ? `, con sus ${it.cant} ${it.cargas ? 'cargas' : 'unidades'}` : ''}.${f.conectado ? ' <b>Si está conectado, el juego lo desconecta</b> para guardar el cambio.' : ''}`,
+      alAceptar: async () => trasAccion(J, uid, await gPost(J, `usuario/${uid}/item/quitar`, { item: it.id }), `Se le quitó «${esc(it.nombre)}»`) });
+  }
+}
+function formMute(J, f) {
+  const MAX = 60, HS = [[1, '1 hora'], [3, '3 horas'], [12, '12 horas'], [24, '1 día'], [72, '3 días'], [168, '1 semana']];
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="muTit">
+    <div class="modal-cab"><span class="ic">${ic('micoff', 's20')}</span><div><h2 id="muTit">Sacarle el chat a ${esc(f.nick)}</h2><p>Puede seguir jugando, pero no escribir. Cuando intenta, el juego le muestra el motivo y cuánto falta.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:16px">
+      <div><span class="lab">Por cuánto tiempo</span><div class="chips" role="group" aria-label="Tiempo">${HS.map(([h, t]) => `<button type="button" class="chipb" data-mu="${h}" aria-pressed="${h === 24}">${t}</button>`).join('')}</div>
+        <label class="campo" style="margin-top:8px;max-width:220px"><span class="sr">Horas</span><input id="muH" type="number" min="1" max="8760" step="1" value="24" inputmode="numeric"><span class="tenue" style="font-size:13px">horas</span></label></div>
+      <div><span class="lab">Motivo (lo ve el jugador)</span><label class="campo"><span class="sr">Motivo</span><input id="muM" maxlength="${MAX}" autocomplete="off" placeholder="Por ejemplo: insultos en la sala"></label>
+        <div class="cuenta-txt"><span id="muErr" style="color:var(--red)"></span><span id="muN">0/${MAX}</span></div></div>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn peligro lleno" id="muOk">Sacarle el chat</button></div></div>`);
+  const h = $('#muH', pn), m = $('#muM', pn), err = t => { $('#muErr', pn).textContent = t || ''; };
+  $$('[data-mu]', pn).forEach(b => b.addEventListener('click', () => { h.value = b.dataset.mu; $$('[data-mu]', pn).forEach(x => x.setAttribute('aria-pressed', x === b)); err(''); }));
+  h.addEventListener('input', () => $$('[data-mu]', pn).forEach(x => x.setAttribute('aria-pressed', x.dataset.mu === h.value)));
+  m.addEventListener('input', () => { $('#muN', pn).textContent = `${m.value.length}/${MAX}`; err(''); });
+  $('#muOk', pn).addEventListener('click', async () => {
+    const horas = Number(h.value);
+    if (!Number.isInteger(horas) || horas < 1 || horas > 8760) return err('Las horas van de 1 a 8760 (un año).');
+    if (!m.value.trim()) { m.focus(); return err('Escriba el motivo.'); }
+    const b = $('#muOk', pn); b.disabled = true;
+    const r = await gPost(J, `usuario/${f.uid}/mute`, { horas, motivo: m.value.trim() });
+    b.disabled = false;
+    if (!r.ok) return err((r.d && r.d.error) || `Error ${r.status}`);
+    cerrarCapa();
+    trasAccion(J, f.uid, r, `${esc(f.nick)} quedó sin chat por ${fmtDur(horas * 60)}`, r.d.detalle && r.d.detalle.en_vivo ? 'Se le avisó en el juego.' : '');
+  });
+}
+const MONEDA = { rcoin: { n: 'Rcoin', campo: 'rcoin', ruta: 'rcoin', ic: 'coins' }, exp: { n: 'EXP', campo: 'exp', ruta: 'exp', ic: 'sparkle' }, gorila: { n: 'monedas gorila', campo: 'monedas_gorila', ruta: 'gorila', ic: 'coins', tope: 9999 } };
+function formMoneda(J, f, k) {
+  const M = MONEDA[k]; if (!M || !puedeG(J, k)) return;
+  const admin = J.g.mios.rol === 'admin', cupo = k !== 'gorila' && J.g.mios.cupos ? J.g.mios.cupos[k] : null;
+  const tiene = Number(f[M.campo]) || 0;
+  const modos = [['dar', 'Dar'], ['quitar', 'Quitar']];
+  if (admin || k === 'gorila') modos.push(['poner', 'Dejarlo en']);
+  if (admin && k === 'exp') modos.push(['nivel', 'Llevarlo al nivel']);
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="moTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(227,187,103,.12);color:var(--gold)">${ic(M.ic, 's20')}</span><div><h2 id="moTit">${cap(M.n)} de ${esc(f.nick)}</h2><p>Hoy tiene <b>${miles(tiene)}</b>${k === 'exp' ? ` (nivel ${Number(f.nivel) || 1})` : ''}.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:14px">
+      <div class="seg" role="group" aria-label="Qué hacer">${modos.map(([m, t], i) => `<button type="button" data-mo="${m}" aria-pressed="${!i}">${t}</button>`).join('')}</div>
+      <label class="campo" style="max-width:260px"><span class="sr">Cantidad</span><input id="moV" type="number" min="1" step="1" inputmode="numeric" placeholder="0" autofocus><span class="tenue" id="moU" style="font-size:13px">${esc(M.n)}</span></label>
+      <div class="g-resumen" id="moRes" aria-live="polite"></div>
+      ${cupo ? `<p class="tenue g-nota">${ic('info', 's14')} Su cupo de ${M.n}: le quedan <b>${miles(cupo.queda)}</b> de ${miles(cupo.cupo)}. Quitar no gasta cupo. Más cupo: lo asigna un ADMIN.</p>` : ''}
+      ${k === 'exp' && f.conectado ? `<p class="g-alerta">${ic('alert', 's14')} Está conectado: para guardar la EXP, el juego lo desconecta.</p>` : k === 'rcoin' || k === 'gorila' ? `<p class="tenue g-nota">${ic('check', 's14')} Le llega en vivo, sin desconectarlo.</p>` : ''}
+      <span id="moErr" style="color:var(--red);font-size:12.5px"></span>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="moOk" disabled>Confirmar</button></div></div>`);
+  let modo = 'dar';
+  const v = $('#moV', pn), ok = $('#moOk', pn), res = $('#moRes', pn), err = t => { $('#moErr', pn).textContent = t || ''; };
+  const calc = () => {
+    const n = Number(v.value);
+    if (!v.value || !Number.isInteger(n) || n < (modo === 'poner' ? 0 : 1)) { res.innerHTML = ''; ok.disabled = true; ok.textContent = 'Confirmar'; return null; }
+    let fin = modo === 'dar' ? tiene + n : modo === 'quitar' ? Math.max(0, tiene - n) : modo === 'poner' ? n : null;
+    if (M.tope && fin != null) fin = Math.min(fin, M.tope);
+    if (modo === 'dar' && cupo && n > cupo.queda) { res.innerHTML = `<span style="color:var(--red)">Pasa su cupo: le quedan ${miles(cupo.queda)}.</span>`; ok.disabled = true; return null; }
+    res.innerHTML = fin == null ? `Va al comienzo del nivel <b>${n}</b>.` : `Tiene <b>${miles(tiene)}</b> → quedará en <b>${miles(fin)}</b> <span class="tenue">(${signo(fin - tiene)})</span>`;
+    ok.disabled = false;
+    ok.textContent = modo === 'dar' ? `Dar ${miles(n)}` : modo === 'quitar' ? `Quitar ${miles(n)}` : modo === 'poner' ? `Dejarlo en ${miles(n)}` : `Llevarlo al nivel ${n}`;
+    return { n, fin };
+  };
+  $$('[data-mo]', pn).forEach(b => b.addEventListener('click', () => { modo = b.dataset.mo; $$('[data-mo]', pn).forEach(x => x.setAttribute('aria-pressed', x === b)); $('#moU', pn).textContent = modo === 'nivel' ? 'nivel' : M.n; err(''); calc(); v.focus(); }));
+  v.addEventListener('input', () => { err(''); calc(); });
+  ok.addEventListener('click', async () => {
+    const c = calc(); if (!c) return;
+    const cuerpo = modo === 'dar' ? { modo: 'sumar', valor: c.n } : modo === 'quitar' ? { modo: 'sumar', valor: -c.n } : { modo, valor: c.n };
+    ok.disabled = true;
+    const r = await gPost(J, `usuario/${f.uid}/${M.ruta}`, cuerpo);
+    if (!r.ok) { ok.disabled = false; return err((r.d && r.d.error) || `Error ${r.status}`); }
+    cerrarCapa();
+    const det = r.d.detalle || {};
+    trasAccion(J, f.uid, r, `${cap(M.n)} de ${esc(f.nick)}: ${miles(det.antes != null ? det.antes : tiene)} → ${miles(det.despues != null ? det.despues : c.fin)}`,
+      r.d.echado ? 'Se lo desconectó para guardar.' : k === 'exp' ? '' : 'Le llega en vivo.');
+  });
+}
+function formApodo(J, f) {
+  const pn = abrirCapa(`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="apTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(81,216,229,.12);color:var(--cyan)">${ic('user', 's20')}</span><div><h2 id="apTit">Cambiar el apodo</h2><p>Hoy se llama <b>${esc(f.nick)}</b>. Mismas reglas que en el juego: sin espacios en los bordes y que no lo use otro.</p></div></div>
+    <div class="modal-cuerpo"><label class="campo"><span class="sr">Apodo nuevo</span><input id="apV" maxlength="24" value="${esc(f.nick)}" autocomplete="off" spellcheck="false" autofocus></label>
+      ${f.conectado ? `<p class="g-alerta" style="margin-top:10px">${ic('alert', 's14')} Está conectado: para cambiarlo, el juego lo desconecta.</p>` : ''}
+      <div id="apErr" style="color:var(--red);font-size:12.5px;margin-top:8px"></div></div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="apOk">Cambiar</button></div></div>`);
+  $('#apOk', pn).addEventListener('click', async () => {
+    const apodo = $('#apV', pn).value;
+    if (!apodo.trim() || apodo === f.nick) { $('#apErr', pn).textContent = 'Escriba un apodo distinto.'; return; }
+    const b = $('#apOk', pn); b.disabled = true;
+    const r = await gPost(J, `usuario/${f.uid}/apodo`, { apodo });
+    b.disabled = false;
+    if (!r.ok) { $('#apErr', pn).textContent = (r.d && r.d.error) || `Error ${r.status}`; return; }
+    cerrarCapa();
+    trasAccion(J, f.uid, r, `Ahora se llama ${esc(apodo)}`, r.d.echado ? 'Se lo desconectó para guardar.' : '');
+  });
+}
+function formItem(J, f) {
+  let elegido = null;
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="itTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(243,38,134,.12);color:var(--pink)">${ic('gift', 's20')}</span><div><h2 id="itTit">Darle un ítem a ${esc(f.nick)}</h2><p>Como una compra de la tienda: los packs se abren y lo de pareja le llega a la pareja. Le llega en vivo.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:14px">
+      <div id="itSel"><label class="campo">${ic('search', 's16')}<span class="sr">Buscar ítem</span><input id="itQ" placeholder="Nombre o número del ítem…" autocomplete="off" spellcheck="false" autofocus></label>
+        <div class="jc-bus-res g-items" id="itRes" role="listbox" aria-label="Ítems"><p class="tenue g-nada">Escriba para buscar en el catálogo.</p></div></div>
+      <div id="itCfg" hidden></div>
+      <span id="itErr" style="color:var(--red);font-size:12.5px"></span>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="itOk" disabled>Dar</button></div></div>`);
+  let reloj = null, nq = 0;
+  const q = $('#itQ', pn), res = $('#itRes', pn), cfg = $('#itCfg', pn), ok = $('#itOk', pn), err = t => { $('#itErr', pn).textContent = t || ''; };
+  const filas = {};
+  q.addEventListener('input', () => {
+    clearTimeout(reloj);
+    reloj = setTimeout(async () => {
+      const t = q.value.trim(); if (!t) { res.innerHTML = '<p class="tenue g-nada">Escriba para buscar en el catálogo.</p>'; return; }
+      const n = ++nq, r = await api(gRuta(J, 'catalogo?q=' + encodeURIComponent(t)));
+      if (n !== nq || !res.isConnected) return;
+      if (!r.ok) { res.innerHTML = `<p class="tenue g-nada">${errTxt(r)}</p>`; return; }
+      const fs = r.d.filas || [];
+      fs.forEach(x => { filas[x.id] = x; });
+      res.innerHTML = fs.length ? fs.slice(0, 40).map(x => `<button type="button" data-it="${Number(x.id)}"><span class="ip svg chico" style="--c:${hashStr(String(x.id)) % 2 ? '243,38,134' : '179,139,255'}">${ic(/wardrobe/.test(x.familia) ? 'shirt' : 'gift')}</span><span>${esc(x.nombre)}</span><small>#${Number(x.id)}</small></button>`).join('')
+        : `<p class="tenue g-nada">Nada con «${esc(t)}».</p>`;
+    }, 250);
+  });
+  res.addEventListener('click', e => {
+    const b = e.target.closest('[data-it]'); if (!b) return;
+    elegido = filas[b.dataset.it]; if (!elegido) return;
+    $('#itSel', pn).hidden = true; cfg.hidden = false;
+    cfg.innerHTML = `<div class="g-item-elegido"><span class="ip svg" style="--c:243,38,134">${ic(/wardrobe/.test(elegido.familia) ? 'shirt' : 'gift')}</span><div><b>${esc(elegido.nombre)}</b><small>#${Number(elegido.id)}</small></div><button type="button" class="btn chico fantasma" id="itOtro">Elegir otro</button></div>
+      <div><span class="lab">Por cuánto tiempo</span><div class="chips" role="group" aria-label="Duración">${[[0, 'Permanente'], [7, '7 días'], [30, '30 días'], [90, '90 días']].map(([d, t]) => `<button type="button" class="chipb" data-di="${d}" aria-pressed="${d === 0}">${t}</button>`).join('')}</div>
+        <label class="campo" style="margin-top:8px;max-width:200px"><span class="sr">Días</span><input id="itD" type="number" min="0" max="3650" value="0" inputmode="numeric"><span class="tenue" style="font-size:13px">días (0 = permanente)</span></label></div>
+      ${elegido.cargas ? `<div><span class="lab">Cargas</span><label class="campo" style="max-width:160px"><span class="sr">Cargas</span><input id="itC" type="number" min="1" max="999" value="1" inputmode="numeric"></label></div>` : ''}`;
+    ok.disabled = false; ok.textContent = `Dar «${elegido.nombre}»`;
+    $('#itOtro', pn).addEventListener('click', () => { elegido = null; cfg.hidden = true; $('#itSel', pn).hidden = false; ok.disabled = true; ok.textContent = 'Dar'; q.focus(); });
+    $$('[data-di]', pn).forEach(x => x.addEventListener('click', () => { $('#itD', pn).value = x.dataset.di; $$('[data-di]', pn).forEach(y => y.setAttribute('aria-pressed', y === x)); }));
+    $('#itD', pn).focus();
+  });
+  ok.addEventListener('click', async () => {
+    if (!elegido) return;
+    const dias = Number($('#itD', pn).value), cant = elegido.cargas ? Number($('#itC', pn).value) : 1;
+    if (!Number.isInteger(dias) || dias < 0 || dias > 3650) return err('Los días van de 0 (permanente) a 3650.');
+    if (!Number.isInteger(cant) || cant < 1 || cant > 999) return err('Las cargas van de 1 a 999.');
+    ok.disabled = true;
+    const r = await gPost(J, `usuario/${f.uid}/item/dar`, { item: elegido.id, dias, cant });
+    if (!r.ok) { ok.disabled = false; return err((r.d && r.d.error) || `Error ${r.status}`); }
+    cerrarCapa();
+    trasAccion(J, f.uid, r, `${esc(f.nick)} recibió «${esc(elegido.nombre)}»`, dias ? `Por ${dias} días.` : 'Permanente.');
+  });
+}
+
+/* la barra de la derecha de las pestañas, en la gestión */
+function accG(J) {
+  const n = suciasJc(J).length, sucias = n ? `<span class="chip oro" title="En el contenido del launcher">${ic('clock', 's14')}${n} sin publicar</span>` : '';
+  if (J.tab === 'resumen') return `${sucias}<span class="tenue g-act" id="gAct">${J.g.t ? '' : 'Cargando…'}</span>
+    <button type="button" class="btn icono fantasma" data-accion="g-recargar" aria-label="Actualizar ahora" title="Actualizar ahora (se actualiza solo cada 15 s)">${ic('refresh', 's16')}</button>
+    ${puedeG(J, 'aviso') ? `<button type="button" class="btn prim" data-accion="g-aviso" data-a="todos">${ic('mega', 's16')}Aviso a todos</button>` : ''}`;
+  const M = J.g.mios, cu = M.cupos;
+  if (M.rol === 'admin') return `${sucias}<span class="chip">${ic('crown', 's14')}ADMIN · sin cupo</span>`;
+  const partes = ['rcoin', 'exp'].filter(k => puedeG(J, k) && cu && cu[k]).map(k => `${k === 'rcoin' ? 'Rcoin' : 'EXP'} ${miles(cu[k].queda)}`);
+  return `${sucias}<span class="chip ${partes.length ? 'cian' : ''}" title="Lo que todavía puede dar. Lo asigna un ADMIN.">${ic('shieldok', 's14')}${partes.length ? 'Le queda: ' + partes.join(' · ') : 'Moderador'}</span>`;
+}
+function repintarFicha(J, foco) {
+  const c = $('#gPers'); if (!c || !J.sel) return;
+  const y = window.scrollY;
+  c.innerHTML = fichaHtml(J);
+  window.scrollTo(0, y);
+  if (foco) { const f = $(foco); if (f) f.focus(); }
+}
+function accionG(a) {
+  const J = S.jc; if (!J || !J.g) return;
+  const k = a.dataset.accion;
+  switch (k) {
+    case 'g-recargar': cargarTablero(J); break;
+    case 'g-estado': J.g.estado = a.dataset.k; $$('[data-accion="g-estado"]').forEach(b => b.setAttribute('aria-pressed', b === a)); { const l = $('#gCon'); if (l) l.innerHTML = filasConectados(J); } break;
+    case 'g-aviso': formAviso(J, a.dataset.a, a.dataset.id, a.dataset.nom || ''); break;
+    case 'g-dias': { const n = Number(a.dataset.n); if (n === J.g.dias || !J.sel) break;
+      J.g.dias = n; const F = J.g.fichas[String(J.sel)]; if (F) { F.h = null; F.dias = null; }
+      repintarFicha(J, `[data-accion="g-dias"][data-n="${n}"]`); cargarFicha(J, J.sel, 'historia'); break; }
+    case 'g-tabla': J.g.verTabla = !J.g.verTabla; repintarFicha(J, '[data-accion="g-tabla"]'); break;
+    case 'g-dia': abrirDia(J, a.dataset.f); break;
+    case 'g-inv-todo': { const f = fichaSel(J); if (!f) break; J.g.invTodo = J.g.invTodo === f.uid ? null : f.uid; repintarFicha(J, '[data-accion="g-inv-todo"]'); break; }
+    default: accionFicha(J, a);
+  }
+}
+
+/* ══════════════ el EQUIPO (La red): permisos y cupos de cada moderador, por juego (sólo ADMIN) ══════════════ */
+function resumenPermisos(m) {
+  const P = S.permisos; if (!P || m.rol === 'admin' || m.juegos === null) return '';
+  const nom = id => (P.asignables.find(a => a.id === id) || { nombre: id }).nombre;
+  const fs = P.permisos.filter(x => x.uid === m.uid && (m.juegos || []).includes(x.juego) && (x.acciones.length || x.cupo_rcoin || x.cupo_exp));
+  if (!fs.length) return (m.juegos || []).some(j => P.gestionables.includes(j)) ? '<div class="g-perm-res tenue">En los juegos: sólo lo de base</div>' : '';
+  return `<div class="g-perm-res">${fs.map(x => `<div>${etqJuego(x.juego)} ${x.acciones.map(a => esc(nom(a))).join(' · ') || 'sólo lo de base'}${x.acciones.includes('rcoin') ? ` <i>· Rcoin dado ${miles(x.dado_rcoin)} de ${miles(x.cupo_rcoin)}</i>` : ''}${x.acciones.includes('exp') ? ` <i>· EXP dada ${miles(x.dado_exp)} de ${miles(x.cupo_exp)}</i>` : ''}</div>`).join('')}</div>`;
+}
+async function cargarPermisos() {
+  const r = await api('gestion/permisos');
+  if (r.ok) { S.permisos = r.d; if (S.equipo && $('#listaMods')) pintarMods(S.equipo); }
+}
+function formPermisos(i) {
+  const m = S.equipoLista[i], P = S.permisos; if (!m || !P) return;
+  const js = (m.juegos || []).filter(j => P.gestionables.includes(j));
+  const otros = (m.juegos || []).filter(j => !P.gestionables.includes(j));
+  const de = j => P.permisos.find(x => x.uid === m.uid && x.juego === j) || { acciones: [], cupo_rcoin: 0, cupo_exp: 0, dado_rcoin: 0, dado_exp: 0 };
+  const medidor = (dado, cupo) => `<div class="g-medidor" role="img" aria-label="Usó ${miles(dado)} de ${miles(cupo)}"><i style="width:${cupo ? Math.min(100, (100 * dado) / cupo).toFixed(1) : 0}%"></i></div>`;
+  const seccion = j => { const x = de(j), nj = juegoCat(j).nombre;
+    return `<section class="g-perm" data-juego="${esc(j)}"><h3>${etqJuego(j)} ${esc(nj)}</h3>
+      <p class="tenue g-nota">${ic('check', 's14')} Siempre puede: mirar el tablero y las fichas, mandar avisos, echar y sacar el chat.</p>
+      <div class="g-perm-acc">${P.asignables.map(a => `<label class="radio"><input type="checkbox" value="${esc(a.id)}" ${x.acciones.includes(a.id) ? 'checked' : ''}><span><b>${esc(a.nombre)}</b>${a.cupo ? `<span>con un cupo de ${a.cupo === 'rcoin' ? 'Rcoin' : 'EXP'} (lo que puede dar en total)</span>` : ''}</span></label>`).join('')}</div>
+      <div class="g-cupos">${['rcoin', 'exp'].map(k => `<div class="g-cupo-f" data-cupo="${k}" ${x.acciones.includes(k) ? '' : 'hidden'}><span class="lab">Cupo de ${k === 'rcoin' ? 'Rcoin' : 'EXP'}</span>
+        <label class="campo"><span class="sr">Cupo</span><input type="number" min="0" max="100000000" step="1" inputmode="numeric" value="${x['cupo_' + k]}"></label>
+        ${medidor(x['dado_' + k], x['cupo_' + k])}<small class="tenue">Ya dio <b>${miles(x['dado_' + k])}</b> de ${miles(x['cupo_' + k])}.</small></div>`).join('')}</div>
+      <div class="g-perm-pie">${x.cambiado ? `<span class="tenue">Cambiado por ${esc(x.quien || '—')} · ${fechaTxt(x.cambiado)}</span>` : '<span class="tenue">Sin cambios todavía.</span>'}
+        ${x.dado_rcoin || x.dado_exp ? `<button type="button" class="btn chico fantasma" data-perm="reiniciar">${ic('refresh', 's14')}Empezar el cupo de cero</button>` : ''}
+        <button type="button" class="btn chico prim" data-perm="guardar">Guardar ${esc(nj)}</button></div></section>`; };
+  const pn = abrirCapa(`<aside class="cajon g-cajon-perm" role="dialog" aria-modal="true" aria-labelledby="pmTit"><div class="cajon-cab">${ava(m.nombre, 'm redondo')}<div style="min-width:0"><h2 id="pmTit">Permisos de ${esc(m.nombre)}</h2><p>Moderador · Eñeños-ID ${esc(m.uid)}. Lo que puede hacer en cada juego, además de lo de base.</p></div>
+    <button type="button" class="btn icono chico fantasma cerrar" data-accion="cerrar-capa" aria-label="Cerrar">${ic('x', 's16')}</button></div>
+    <div class="cajon-cuerpo">${js.length ? js.map(seccion).join('') : vacio('Ningún juego para gestionar', 'Asígnele un juego que ya tenga gestión en el Coordinador (hoy, R2Beat).')}
+      ${otros.length ? `<p class="tenue g-nota">${ic('info', 's14')} ${otros.map(j => esc(juegoCat(j).nombre)).join(', ')}: todavía sin gestión en el Coordinador.</p>` : ''}</div></aside>`);
+  pn.addEventListener('change', e => { if (e.target.type === 'checkbox' && ['rcoin', 'exp'].includes(e.target.value)) { const s = e.target.closest('.g-perm'), c = $(`[data-cupo="${e.target.value}"]`, s); if (c) c.hidden = !e.target.checked; } });
+  pn.addEventListener('click', async e => {
+    const b = e.target.closest('[data-perm]'); if (!b) return;
+    const s = b.closest('.g-perm'), j = s.dataset.juego;
+    const acciones = $$('.g-perm-acc input:checked', s).map(c => c.value);
+    const cupo = k => { const c = $(`[data-cupo="${k}"] input`, s); return acciones.includes(k) ? Number(c.value) || 0 : 0; };
+    const cuerpo = { uid: m.uid, juego: j, acciones, cupo_rcoin: cupo('rcoin'), cupo_exp: cupo('exp') };
+    const mandar = async reiniciar => {
+      b.disabled = true;
+      const r = await api('gestion/permisos', Object.assign(cuerpo, reiniciar ? { reiniciar_dado: true } : {}));
+      b.disabled = false;
+      if (!r.ok) { toast({ t: 'No se pudo guardar', sub: errTxt(r), tipo: 'err' }); return; }
+      S.permisos = r.d;
+      toast({ t: reiniciar ? `El cupo de ${esc(m.nombre)} empieza de cero` : `Permisos de ${esc(m.nombre)} guardados`, sub: `${esc(juegoCat(j).nombre)} · vale desde su próximo pedido. Quedó en la auditoría.` });
+      if (capas.innerHTML) formPermisos(i);
+      if ($('#listaMods')) pintarMods(S.equipo);
+      pintarAuditoria();
+    };
+    if (b.dataset.perm === 'reiniciar') confirmar({ titulo: '¿Empezar el cupo de cero?', icono: 'refresh', peligro: false, ok: 'Empezar de cero',
+      txt: `Lo que ${esc(m.nombre)} ya dio en ${esc(juegoCat(j).nombre)} deja de contar: vuelve a tener el cupo entero. También guarda lo marcado.`, alAceptar: () => mandar(true) });
+    else mandar(false);
+  });
+}
+
+/* ══════════════ los PERMISOS del moderador (La red → «Sus permisos») y sus personajes (la ficha de la persona) ══════════════ */
+async function pintarMisPermisos() {
+  const c = $('#misPermisosG'); if (!c) return;
+  const js = (S.sesion.juegos || []);
+  const rs = await Promise.all(js.map(j => api('gestion/mios?juego=' + encodeURIComponent(j))));
+  if (!$('#misPermisosG')) return;
+  const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', gorila: 'monedas gorila', chat: 'leer el chat guardado' };
+  c.innerHTML = js.map((j, i) => { const r = rs[i]; if (!r.ok || !r.d.gestionable) return '';
+    const ex = r.d.acciones.filter(a => nom[a]), cu = r.d.cupos || {};
+    return `<span>${ic('dash', 's14')} ${esc(juegoCat(j).nombre)}: tablero, fichas, avisos, echar y sacar el chat${ex.length ? `; además ${ex.map(a => nom[a] + (cu[a] ? ` (le quedan ${miles(cu[a].queda)} de ${miles(cu[a].cupo)})` : '')).join(', ')}` : ''}.</span>`; }).join('');
+}
+async function personajesDePersona(p) {
+  const c = $('#perPjs'); if (!c) return;
+  const juegos = p.juegos || [];
+  const out = await Promise.all(juegos.map(async j => {
+    const m = await api('gestion/mios?juego=' + encodeURIComponent(j.id));
+    if (!m.ok || !m.d.gestionable || !m.d.acciones.includes('ver')) return null;
+    const r = await api(`gestion/${encodeURIComponent(j.id)}/live/usuarios?q=${encodeURIComponent(p.uid)}`);
+    if (!r.ok) return { j, error: errTxt(r) };
+    return { j, pjs: (r.d.filas || []).filter(x => x.enenos_id === p.uid && x.uid != null) };
+  }));
+  if (!$('#perPjs')) return;
+  const hay = out.filter(Boolean);
+  if (!hay.length) { c.remove(); return; }
+  c.innerHTML = `<div class="titulo-sec"><h2>Sus personajes</h2><span class="tenue">en los juegos que ya se gestionan desde el Coordinador</span></div>
+    ${hay.map(x => `<div class="pj-grupo"><h3>${etqJuego(x.j.id)} ${esc(x.j.nombre)}${x.pjs && x.pjs.length ? `<a class="btn chico fantasma g-ver-en" href="${urlPj({ jid: x.j.id, env: 'live' }, x.pjs[0].uid)}">Ver en ${esc(x.j.nombre)}${ic('arrow', 's14')}</a>` : ''}</h3>${x.error ? `<p class="tenue">${x.error}</p>`
+      : x.pjs.length ? `<div class="g-pjs g-pjs-persona">${x.pjs.map(f => pjChip({ jid: x.j.id, env: 'live' }, f)).join('')}</div>` : '<p class="tenue g-nada">Todavía no tiene personaje en este juego.</p>'}</div>`).join('')}`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -1672,7 +2577,13 @@ window.addEventListener('beforeunload', e => { if (hayCambios()) { e.preventDefa
 function go(h, reemplazar, forzar) {
   if (!forzar && hayCambios() && !mismaPagina(h)) { pedirSalir(() => go(h, reemplazar, true)); return; }
   if (!forzar && mismaPagina(h)) {                        // ★ la misma página: cambiar de parte sin perder el borrador
-    if (S.jc) { const t = h.split('/')[4]; if (tabsJc(S.jc).includes(t) && t !== S.jc.tab) { S.jc.tab = t; pintarJ(); } }
+    if (S.jc) {
+      const [t, u] = h.split('/').slice(4), sel = t === 'personas' && /^\d+$/.test(u || '') ? u : null;
+      if (tabsJc(S.jc).includes(t) && (t !== S.jc.tab || (t === 'personas' && sel !== S.jc.sel))) {
+        try { if (!reemplazar && location.hash !== h) history.pushState(null, '', h); } catch (err) { /* nada */ }
+        S.ruta = h; S.jc.tab = t; S.jc.sel = sel; cerrarCapa(); pintarJ(); window.scrollTo(0, 0);
+      }
+    }
     return;
   }
   S.ruta = h;
@@ -1686,7 +2597,7 @@ function ruta() {
   window.scrollTo(0, 0);
   if (!S.sesion) { vistaLogin(); return; }
   if (h[0] === 'entrar' || !h[0]) { go('#/juegos', true); return; }
-  if (h[0] === 'j' && h[1]) vistaJuego(h[1], h[2] === 'test' ? 'test' : 'live', h[3]);
+  if (h[0] === 'j' && h[1]) vistaJuego(h[1], h[2] === 'test' ? 'test' : 'live', h[3], h[4]);
   else if (h[0] === 'novedades') vistaNovedades();
   else if (h[0] === 'persona' && /^\d+$/.test(h[1] || '')) vistaPersona(h[1]);
   else if (h[0] === 'red') vistaRed();
@@ -1702,6 +2613,8 @@ let buscarReloj = null;
 document.addEventListener('input', e => {
   if (e.target.id === 'qCuenta') { clearTimeout(buscarReloj); const v = e.target.value; buscarReloj = setTimeout(() => pintarCuentas(v), 250); return; }
   if (e.target.id === 'jcBusq') { clearTimeout(busqReloj); const v = e.target.value; busqReloj = setTimeout(() => buscarItem(v), 250); return; }
+  if (e.target.id === 'gBusq' && S.jc && S.jc.g) { clearTimeout(gBusqReloj); const v = e.target.value, J = S.jc; J.g.q = v; gBusqReloj = setTimeout(() => buscarPersonas(J, v), 300); return; }
+  if (e.target.id === 'gFiltro' && S.jc && S.jc.g) { S.jc.g.filtro = e.target.value; const l = $('#gCon'); if (l) l.innerHTML = filasConectados(S.jc); return; }
   if (e.target.dataset && e.target.dataset.jc && e.target.type !== 'radio' && e.target.type !== 'checkbox' && e.target.tagName !== 'SELECT') cambioJc(e.target, false);
 });
 /* los que terminan con «change»: casillas, radios, listas, fechas; y los números se ajustan a su rango al salir del campo */
@@ -1727,6 +2640,7 @@ document.addEventListener('click', async e => {
       toast({ t: a.dataset.dec === 'aprobar' ? 'Invitación aprobada' : 'Invitación rechazada', sub: 'Se avisa en Discord y queda en la auditoría.', tipo: a.dataset.dec === 'aprobar' ? 'ok' : 'info' });
       pintarInvitaciones(); pintarLanzamientos(); pintarAuditoria(); break; }
     case 'mod-juego': cambiarJuegosMod(Number(a.dataset.i), a.dataset.j); break;
+    case 'mod-permisos': formPermisos(Number(a.dataset.i)); break;
     case 'quitar-mod': { const m = S.equipoLista[Number(a.dataset.i)]; if (!m) break;
       confirmar({ titulo: `¿Sacar a ${esc(m.nombre)} del equipo?`, ok: 'Sacar', icono: 'shieldok', txt: 'Pierde el acceso al Coordinador al instante. Su cuenta sigue igual.',
         alAceptar: async () => { const r = await api('equipo', { accion: 'quitar', uid: m.uid }); if (!r.ok) { toast({ t: 'No se pudo', sub: errTxt(r), tipo: 'err' }); return; } pintarMods(r.d); toast({ t: `${esc(m.nombre)} ya no está en el equipo` }); pintarAuditoria(); } }); break; }
@@ -1742,12 +2656,13 @@ document.addEventListener('click', async e => {
     case 'jc-item-elegir': elegirItem(a.dataset.item); break;
     default:
       if (a.dataset.accion.startsWith('jc-')) accionJc(a);
+      else if (a.dataset.accion.startsWith('g-')) accionG(a);
       else if (a.dataset.accion.startsWith('nov-')) accionNov(a);
   }
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if (pop) { const an = pop._ancla; cerrarPop(); if (an) an.focus(); } else if (capas.innerHTML) cerrarCapa(); return; }
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('li[role="link"]')) { e.preventDefault(); e.target.click(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('li[role="link"], tr[data-accion]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Enter' && e.target.id === 'mdExtra') { const b = $('#mdOk'); if (b) b.click(); return; }
   if (e.key === 'Enter' && e.target.id === 'jcBusq') { e.preventDefault(); const b = $('#jcBusRes button'); if (b) b.click(); return; }
   if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && e.target.matches('[role="tab"][data-accion="jc-tab"], [role="tab"][data-accion="nov-juego"]')) {
