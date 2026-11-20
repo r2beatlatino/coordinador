@@ -165,6 +165,34 @@ temporal se borró de los dos VPS). Respaldo de antes en el VPS de USA: `/root/c
 - **Launcher 3.0.5**: sonido de mensaje (`sonido-mensaje.mp3`) con el launcher abierto y fuera del juego; no suena
   en el juego ni con el chat de esa persona abierto (sí minimizado o cerrado).
 
+## 5h · ✅ EDA desconectado de Chile: el EDA viejo se RETIRÓ (20-nov)
+
+Benja: *«desconectar EDA de Chile, para que el diagrama ya sea todo Miami USA, y que el repo autoactualizar esté
+desconectado de Chile, sólo USA»*. Eligió **retirar** el EDA viejo (no pasarlo a Cuenta Eñeños) y que sus datos
+**empiecen de cero** (1 cuenta y 3 inventarios `r2b_<uid>`: quedan sólo en el respaldo).
+
+Lo que ataba EDA a Chile eran DOS cosas, ninguna en el código del repo de EDA:
+- `eda-prod` validaba el pase con el JWKS de `https://r2beatlatino.com/cuentas/clave-publica` (`/opt/eda/prod.env`,
+  `EDA_PORTERO_CLAVES`) — se entraba por el launcher VIEJO;
+- el Caddy del sistema mandaba `https://eñeños.link/admin*` a `r2beatlatino.com/cuentas/admin` (el panel de
+  aprobaciones del portero de R2Beat).
+
+Lo que se hizo (`herramientas/contenedores/usa/retirar_eda_viejo.sh` → `/root/`, respaldo en `/root/respaldo_eda_viejo_20261120_1739`: el estado, el cron,
+el Caddyfile, `prod.env` y la imagen/política del contenedor):
+1. `eda-prod` **apagado, no borrado** (`docker update --restart=no` + `stop`). Volver: `docker update
+   --restart=unless-stopped eda-prod && docker start eda-prod` y restaurar el cron del respaldo.
+2. `/etc/cron.d/eda`: la línea de prod ya NO arma ni reinicia `eda-prod`: sólo baja `main` a `/opt/eda/prod`
+   (`git fetch` + `reset --hard`, con el mismo candado). De ahí `eda_ensayo.sh` (§5d) arma el EDA de Miami: **el repo
+   se sigue actualizando solo, y sólo en USA**. La de prueba (develop → `eda-prueba`, sin login de Chile) queda igual.
+3. Caddy: `sh /opt/eda/caddy.sh xn--eeos-gqab.link 25901` SIN el tercer dato ⇒ sin `/admin` (ninguna línea con
+   `r2beatlatino` queda en `/etc/caddy/Caddyfile`). `/eda/*` del dominio raíz era el canje de `eda-prod`: ahora da 502.
+   Siguen: `/files-eda/*` y `/eda/manifiesto.jws` (los archivos los usa la CDN del EDA de Miami).
+4. ⚠ La imagen `eda-server:prod` NO se borra: con ella `eda_ensayo.sh` firma la lista del cliente.
+
+Comprobado: el EDA de Miami contesta, su lista (`ensayo…/eda/manifiesto.jws`) 200, sus archivos por la CDN 200, el
+canje `POST /eda/pase` vivo (400 «formato» con un cuerpo vacío), `eñeños.link/admin` 404. **El launcher viejo ya no
+entra a EDA** (era la condición de retirarlo).
+
 ## 6 · Lo que queda
 
 - El **R2Beat moderno** (server + cliente de ~15 GB) lo arma la sesión de Fluidez en este mismo VPS, cuando Benja
