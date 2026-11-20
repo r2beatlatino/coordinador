@@ -13,6 +13,9 @@ Cada regla con su control al revés (⟲):
       ⟲ si el juego dice que no, se devuelve ⟲ dos a la vez no pasan el cupo
   6 · ⟲ el moderador de otro juego: 404 · ⟲ el de formato viejo: 403
   7 · cada acción queda en la auditoría del Coordinador
+  8 · ★ el CONTRATO común (GunBound/EDA, «contrato1:»): sus rutas, y la moneda con cupo POR MONEDA
+      ⟲ las rutas del panel viejo de R2Beat no pasan ⟲ «rcoin» no se le asigna a un juego del contrato
+      ⟲ una moneda sin cupo asignado: 403 ⟲ pasarse del cupo de oro: 403 y no viaja ⟲ el cash no gasta el del oro
 """
 import contextlib
 import io
@@ -75,7 +78,7 @@ class Juego(BaseHTTPRequestHandler):
             return self._mandar(404, {"error": "no existe"})
         d = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         self._anotar(d)
-        if d.get("valor") == 333:
+        if d.get("valor") == 333 or d.get("cantidad") == 222:
             return self._mandar(400, {"error": "ese uid no tiene personaje"})
         return self._mandar(200, {"ok": True})
 
@@ -229,6 +232,53 @@ ok(cod == 200 and "gestión · rcoin" in vio and "gestión · aviso" in vio,
 cod, d = callado(CO.auditoria, P, MGB)
 ok(cod == 200 and not any(x["accion"].startswith("gestión") for x in d["auditoria"]),
    "⟲ el de GunBound no ve lo de R2Beat")
+
+print("8 · el contrato común (GunBound)")
+os.environ["R2_PANEL_GESTION"] = f"r2beat2013={URL};gunbound=contrato1:{URL.replace('/api/interno/panel', '/interno/panel')}"
+ok(GE.tipo_de(CO, P, "gunbound") == "contrato1" and GE.tipo_de(CO, P, "r2beat2013") == "r2beat", "cada juego con su tipo")
+cod, _ = pedir(MGB, "GET", "capacidades", juego="gunbound")
+ok(cod == 200 and VISTO[-1]["ruta"].startswith("/interno/panel/capacidades"), f"el moderador de GunBound mira sus capacidades ({cod})")
+for metodo, ruta in (("GET", "usuario/5"), ("POST", "usuario/5/rcoin"), ("GET", "conectados/../x"), ("POST", "mute")):
+    cod, _ = pedir(JEFA, metodo, ruta, {} if metodo == "POST" else None, juego="gunbound")
+    ok(cod == 404, f"⟲ {metodo} {ruta} (del panel viejo) en GunBound: 404 ({cod})")
+cod, _ = pedir(JEFA, "GET", "ficha/abc-12", juego="gunbound")
+ok(cod == 200, f"una ficha con id de texto ({cod})")
+cod, _ = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MGB, "juego": "gunbound", "acciones": ["rcoin"]})
+ok(cod == 400, f"⟲ «rcoin» no es de GunBound: 400 ({cod})")
+cod, d = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MGB, "juego": "gunbound", "acciones": ["moneda"],
+                                                  "cupos_monedas": {"oro": 1000}})
+fila = next((x for x in d.get("permisos", []) if x["uid"] == MGB), {})
+ok(cod == 200 and fila.get("monedas") == {"oro": {"cupo": 1000, "dado": 0}}, f"la ADMIN le da monedas: oro con cupo 1.000 ({cod})")
+n = len(VISTO)
+cod, d = pedir(MGB, "POST", "moneda", {"id": "7", "moneda": "cash", "cantidad": 5}, juego="gunbound")
+ok(cod == 403 and "cash" in d.get("error", "") and len(VISTO) == n, f"⟲ cash sin cupo asignado: 403 y no viaja ({d.get('error')})")
+cod, d = pedir(MGB, "POST", "moneda", {"id": "7", "moneda": "oro", "cantidad": 700}, juego="gunbound")
+ok(cod == 200 and d.get("cupos", {}).get("moneda:oro", {}).get("queda") == 300, f"+700 de oro: le quedan 300 ({cod})")
+n = len(VISTO)
+cod, d = pedir(MGB, "POST", "moneda", {"id": "7", "moneda": "oro", "cantidad": 301}, juego="gunbound")
+ok(cod == 403 and len(VISTO) == n, f"⟲ +301 pasa el cupo de oro: 403 y no viaja ({d.get('error')})")
+cod, _ = pedir(MGB, "POST", "moneda", {"id": "7", "moneda": "oro", "cantidad": 222}, juego="gunbound")
+per = GE.permisos(P, MGB, "gunbound")
+ok(cod == 400 and per["cupos"]["moneda:oro"]["dado"] == 700, f"⟲ +222 (entra) que el juego rechaza: se devuelve (dado {per['cupos']['moneda:oro']['dado']})")
+cod, _ = pedir(MGB, "POST", "moneda", {"id": "7", "moneda": "oro", "cantidad": -50}, juego="gunbound")
+ok(cod == 200 and GE.permisos(P, MGB, "gunbound")["cupos"]["moneda:oro"]["dado"] == 700, "⟲ restar no gasta cupo")
+cod, d = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MGB, "juego": "gunbound", "acciones": ["moneda"],
+                                                  "cupos_monedas": {"oro": 1000, "cash": 10}})
+ok(GE.permisos(P, MGB, "gunbound")["cupos"]["moneda:oro"]["dado"] == 700, "⟲ agregar el cash no le borra lo dado de oro")
+res = []
+hilos = [threading.Thread(target=lambda: res.append(GE.pedir(CO, P, MGB, "gunbound", "live", "POST", "moneda",
+                                                             cuerpo={"id": "7", "moneda": "oro", "cantidad": 200})[0]))
+         for _ in range(4)]
+for h in hilos:
+    h.start()
+for h in hilos:
+    h.join()
+ok(sorted(res) == [200, 403, 403, 403], f"⟲ cuatro +200 de oro a la vez con 300 libres: pasa UNO ({sorted(res)})")
+cod, _ = pedir(MR2, "GET", "capacidades", juego="gunbound")
+ok(cod == 404, f"⟲ el moderador de R2Beat en GunBound: 404 ({cod})")
+cod, d = callado(GE.ver_permisos, CO, P, JEFA)
+ok(d.get("asignables_de", {}).get("gunbound") == ["moneda"] and "rcoin" in d["asignables_de"]["r2beat2013"],
+   "el panel sabe qué se asigna en cada juego")
 
 juego_srv.shutdown()
 P.cerrar_conexiones()
