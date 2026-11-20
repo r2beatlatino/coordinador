@@ -17,6 +17,7 @@ Cómo es por dentro (lo lee también RECONSTRUIR.md):
   privada la tiene sólo Benja (protegida con su contraseña).
 """
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -120,11 +121,19 @@ def armar(lista, origen, salida, para, ahora=None):
                 shutil.copy2(src, dst)
                 item["sha256"], item["bytes"] = sha256(dst), dst.stat().st_size
             else:
+                # archivo por archivo (no copytree): una base de la lista puede vivir ADENTRO de esta carpeta (EDA:
+                # estado-prod/porteria.db) y ya estar copiada; la carpeta anota sólo lo suyo
                 ignorar = c.get("ignorar", [])
-                shutil.copytree(src, dst, ignore=shutil.ignore_patterns(*ignorar), symlinks=True)
-                item["archivos"] = {str(p.relative_to(dst)).replace("\\", "/"): sha256(p)
-                                    for p in sorted(dst.rglob("*")) if p.is_file()}
-                item["bytes"] = sum(p.stat().st_size for p in dst.rglob("*") if p.is_file())
+                item["archivos"], item["bytes"] = {}, 0
+                for q in sorted(src.rglob("*")):
+                    rel = q.relative_to(src)
+                    if any(fnmatch.fnmatch(parte, pat) for parte in rel.parts for pat in ignorar) or not q.is_file():
+                        continue
+                    destino = dst / rel
+                    destino.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(q, destino)
+                    item["archivos"][rel.as_posix()] = sha256(destino)
+                    item["bytes"] += destino.stat().st_size
             manifiesto["cosas"].append(item)
             print(f"  ✔ {c['nombre']}: {item['bytes']:,} bytes"
                   + (f" · {sum(item['filas'].values()):,} filas" if "filas" in item else "")

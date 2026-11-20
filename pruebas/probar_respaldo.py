@@ -65,12 +65,24 @@ with tempfile.TemporaryDirectory() as tmp:
     (origen / "vol/cuentas/config").mkdir()
     (origen / "vol/cuentas/config/admin.txt").write_text("1\n")
     (origen / "vol/cuentas/config/viejo.antes").write_text("no va\n")
+    # como EDA en el VPS: una base ADENTRO de una carpeta que también se guarda (19-nov: el 1.er respaldo real se cayó acá)
+    (origen / "vol/eda/cuentas").mkdir(parents=True)
+    e = sqlite3.connect(origen / "vol/eda/porteria.db")
+    e.execute("CREATE TABLE tickets (uid INTEGER)")
+    e.executemany("INSERT INTO tickets VALUES (?)", [(i,) for i in range(7)])
+    e.commit()
+    e.close()
+    (origen / "vol/eda/cuentas/en_1.json").write_text('{"nivel": 3}')
+    (origen / "vol/eda/relay.log").write_text("ruido
+")
     lista = tmp / "lista.json"
     lista.write_text(json.dumps({"cosas": [
         {"nombre": "base", "tipo": "sqlite", "ruta": "vol/cuentas/cuentas.db"},
         {"nombre": "llave", "tipo": "archivo", "ruta": "vol/cuentas/clave.json"},
         {"nombre": "roles", "tipo": "carpeta", "ruta": "vol/cuentas/config", "ignorar": ["*.antes"]},
         {"nombre": "un juego que todavía no está", "tipo": "sqlite", "ruta": "vol/futuro/x.db", "opcional": True},
+        {"nombre": "eda base", "tipo": "sqlite", "ruta": "vol/eda/porteria.db"},
+        {"nombre": "eda estado", "tipo": "carpeta", "ruta": "vol/eda", "ignorar": ["*.db", "*.log"]},
     ]}))
     priv, pub = llave(tmp, "benja")
     priv_otra, _ = llave(tmp, "otra")
@@ -100,6 +112,8 @@ with tempfile.TemporaryDirectory() as tmp:
     ver((caja / "datos/vol/cuentas/clave.json").read_text() == '{"semilla": "de-prueba"}', "la llave viene igual")
     ver(set(base["roles"]["archivos"]) == {"admin.txt"}, "la carpeta viene sin lo ignorado (*.antes)")
     ver(man["faltan_opcionales"] == ["un juego que todavía no está"], "lo opcional que falta queda anotado")
+    ver(base["eda base"]["filas"] == {"tickets": 7} and set(base["eda estado"]["archivos"]) == {"cuentas/en_1.json"},
+        "una base ADENTRO de una carpeta guardada: van las dos, y la carpeta anota sólo lo suyo (sin la base ni el .log)")
 
     # control: con OTRA llave no se abre
     try:
