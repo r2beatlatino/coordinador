@@ -17,6 +17,11 @@ CÓMO
   pasa del cupo aunque mande dos a la vez) y se DEVUELVE si el juego dice que no. El moderador sólo SUMA o RESTA
   («poner» un valor fijo es de ADMIN: podría saltarse el cupo). Restar no gasta cupo.
 - PRIVACIDAD: a un moderador nunca le llega una IP, un login ni con quién comparte IP (`_SIN_PRIVADOS`).
+- ★ 20-nov (Benja: «GunBound y EDA… haz ambos a la vez; cuando maduren se editarán sus secciones»): DOS TIPOS de
+  servidor. «r2beat» = el panel viejo de R2Beat (`RUTAS`). «contrato1» = el CONTRATO común de los juegos nuevos
+  (`documentacion/CONTRATO_PANEL.md`, `RUTAS_CONTRATO1`): capacidades, salud, conectados, buscar, ficha, aviso,
+  echar y moneda. En `R2_PANEL_GESTION` el tipo va delante de la URL: «gunbound=contrato1:http://…/interno/panel».
+  La acción asignable «moneda» lleva un cupo POR MONEDA (oro, cash…), guardado en `permisos_juego.monedas`.
 """
 import json
 import os
@@ -39,7 +44,12 @@ ASIGNABLES = {
     "apodo": ("Cambiar el apodo", None),
     "gorila": ("Monedas gorila", None),
     "chat": ("Leer el chat público guardado", None),
+    "moneda": ("Dar o quitar monedas del juego", "moneda"),     # ★ contrato1: con cupo por moneda
 }
+# lo que se puede asignar en cada tipo de servidor
+ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "gorila", "chat"),
+                 "contrato1": ("moneda",)}
+_MONEDA_ID = re.compile(r"^[a-z0-9_]{1,20}$")
 CUPOS = ("rcoin", "exp")
 CUPO_MAX = 100_000_000
 
@@ -69,6 +79,18 @@ RUTAS = [
     ("POST", rf"usuario/{_N}/gorila", "gorila"),
 ]
 _RUTAS = [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS]
+_ID = r"[A-Za-z0-9_.-]{1,40}"
+RUTAS_CONTRATO1 = [
+    ("GET", r"capacidades", "ver"),
+    ("GET", r"salud", "ver"),
+    ("GET", r"conectados", "ver"),
+    ("GET", r"buscar", "ver"),
+    ("GET", rf"ficha/{_ID}", "ver"),
+    ("POST", r"aviso", "aviso"),
+    ("POST", r"echar", "echar"),
+    ("POST", r"moneda", "moneda"),
+]
+_RUTAS_DE = {"r2beat": _RUTAS, "contrato1": [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS_CONTRATO1]}
 _SIN_PRIVADOS = frozenset({"ip", "ips", "login", "username", "misma_ip", "comparte_ip", "correo", "email", "geoip"})
 
 ESQUEMA = """
@@ -82,6 +104,7 @@ CREATE TABLE IF NOT EXISTS permisos_juego (
     dado_exp   INTEGER NOT NULL DEFAULT 0,
     cambiado   TEXT,
     quien      TEXT,
+    monedas    TEXT NOT NULL DEFAULT '{}',   -- ★ contrato1: {"oro": {"cupo": n, "dado": n}, …}
     PRIMARY KEY (uid, juego)
 );
 """
@@ -93,19 +116,35 @@ def _con(P):
     c = P._propia()
     if id(c) not in _tabla_ok:
         c.executescript(ESQUEMA)
+        if "monedas" not in {r[1] for r in c.execute("PRAGMA table_info(permisos_juego)")}:   # (la tabla del 20-nov)
+            c.execute("ALTER TABLE permisos_juego ADD COLUMN monedas TEXT NOT NULL DEFAULT '{}'")
+            c.commit()
         _tabla_ok.add(id(c))
     return c
 
 
 # ── la red de adentro ─────────────────────────────────────────────────────────────────────────────
 def fuentes():
+    """{pase: (tipo, url)}. «pase=http://…» = el panel viejo de R2Beat · «pase=contrato1:http://…» = el contrato."""
     out = {}
     for parte in (os.environ.get("R2_PANEL_GESTION") or "").split(";"):
         if "=" in parte:
             p, u = parte.split("=", 1)
-            if p.strip() and u.strip().startswith(("http://", "https://")):
-                out[p.strip()] = u.strip().rstrip("/")
+            u = u.strip()
+            tipo = "r2beat"
+            if u.startswith("contrato1:"):
+                tipo, u = "contrato1", u[len("contrato1:"):]
+            if p.strip() and u.startswith(("http://", "https://")):
+                out[p.strip()] = (tipo, u.rstrip("/"))
     return out
+
+
+def tipo_de(CO, P, jid):
+    """El tipo de servidor de ese juego («r2beat» / «contrato1»), o None si ningún servidor suyo se gestiona."""
+    for p, (tipo, _u) in fuentes().items():
+        if CO.juego_de_pase(P, p) == jid:
+            return tipo
+    return None
 
 
 def _http(url, ruta, query, cuerpo, quien, admin):
@@ -145,8 +184,17 @@ def _juego_ok(CO, P, viewer, jid):
     return P.rol_de(viewer) is not None and any(j["id"] == jid for j in CO.visibles(P, viewer))
 
 
+def _monedas_de(r):
+    try:
+        m = json.loads(r["monedas"] or "{}") if r is not None else {}
+    except (ValueError, IndexError, KeyError):
+        m = {}
+    return {k: {"cupo": int(v.get("cupo") or 0), "dado": int(v.get("dado") or 0)}
+            for k, v in (m.items() if isinstance(m, dict) else []) if _MONEDA_ID.match(str(k)) and isinstance(v, dict)}
+
+
 def permisos(P, viewer, jid):
-    """{rol, acciones: [...], cupos: {rcoin: {cupo, dado, queda}, exp: …}} de esa cuenta en ese juego."""
+    """{rol, acciones: [...], cupos: {rcoin: {cupo, dado, queda}, exp: …, "moneda:oro": …}} de esa cuenta en ese juego."""
     rol = P.rol_de(viewer)
     if rol == "admin":
         return {"rol": "admin", "acciones": list(BASE) + list(ASIGNABLES), "cupos": None, "poner": True}
@@ -156,13 +204,14 @@ def permisos(P, viewer, jid):
     r = _con(P).execute("SELECT * FROM permisos_juego WHERE uid = ? AND juego = ?", (int(viewer), jid)).fetchone()
     extra = [a for a in json.loads(r["acciones"]) if a in ASIGNABLES] if r else []
     cupos = {k: {"cupo": int(r[f"cupo_{k}"]) if r else 0, "dado": int(r[f"dado_{k}"]) if r else 0} for k in CUPOS}
+    cupos.update({f"moneda:{k}": v for k, v in _monedas_de(r).items()})
     for c in cupos.values():
         c["queda"] = max(0, c["cupo"] - c["dado"])
     return {"rol": "moderador", "acciones": list(BASE) + extra, "cupos": cupos, "poner": False}
 
 
-def _pide(metodo, ruta):
-    for m, rx, accion in _RUTAS:
+def _pide(metodo, ruta, tipo="r2beat"):
+    for m, rx, accion in _RUTAS_DE.get(tipo, ()):
         if m == metodo and rx.match(ruta):
             return accion
     return None
@@ -173,8 +222,15 @@ def _cupo_de(accion, cuerpo):
     k = (ASIGNABLES.get(accion) or (None, None))[1]
     if not k:
         return None, 0
+    if k == "moneda":                                    # ★ contrato1: {id, moneda, cantidad}
+        mid = str(cuerpo.get("moneda") or "")
+        if not _MONEDA_ID.match(mid):
+            return "moneda:?", 0
+        k, campo = f"moneda:{mid}", "cantidad"
+    else:
+        campo = "valor"
     try:
-        v = int(cuerpo.get("valor"))
+        v = int(cuerpo.get(campo))
     except (TypeError, ValueError, AttributeError):
         return k, 0
     return k, max(0, v)
@@ -182,6 +238,8 @@ def _cupo_de(accion, cuerpo):
 
 def _reservar(P, uid, jid, k, n):
     """Suma `n` a lo dado SI entra en el cupo (en una sola sentencia: dos pedidos a la vez no lo pasan)."""
+    if k.startswith("moneda:"):
+        return _reservar_moneda(P, uid, jid, k[7:], n)
     with _lock:
         c = _con(P)
         cur = c.execute(f"UPDATE permisos_juego SET dado_{k} = dado_{k} + ? WHERE uid = ? AND juego = ? "
@@ -190,7 +248,31 @@ def _reservar(P, uid, jid, k, n):
         return cur.rowcount == 1
 
 
+def _reservar_moneda(P, uid, jid, mid, n, devolver=False):
+    """El cupo de UNA moneda vive en JSON: se lee, se mira y se escribe bajo el candado (un solo proceso)."""
+    with _lock:
+        c = _con(P)
+        r = c.execute("SELECT monedas FROM permisos_juego WHERE uid = ? AND juego = ?", (int(uid), jid)).fetchone()
+        if r is None:
+            return False
+        m = _monedas_de(r)
+        if mid not in m:
+            return False
+        if devolver:
+            m[mid]["dado"] = max(0, m[mid]["dado"] - n)
+        elif m[mid]["dado"] + n > m[mid]["cupo"]:
+            return False
+        else:
+            m[mid]["dado"] += n
+        c.execute("UPDATE permisos_juego SET monedas = ? WHERE uid = ? AND juego = ?", (json.dumps(m), int(uid), jid))
+        c.commit()
+        return True
+
+
 def _devolver(P, uid, jid, k, n):
+    if k.startswith("moneda:"):
+        _reservar_moneda(P, uid, jid, k[7:], n, devolver=True)
+        return
     with _lock:
         c = _con(P)
         c.execute(f"UPDATE permisos_juego SET dado_{k} = MAX(0, dado_{k} - ?) WHERE uid = ? AND juego = ?", (n, int(uid), jid))
@@ -204,11 +286,12 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
         return 404, {"error": "Ese juego no existe o no está asignado a su cuenta."}
     j = next((x for x in CO.catalogo(P) if x["id"] == jid), None)
     pase = ((j or {}).get("pases") or {}).get(entorno) if entorno in ("live", "test") else None
-    url = fuentes().get(pase or "")
-    if not url:
+    fuente = fuentes().get(pase or "")
+    if not fuente:
         return 404, {"error": "Este servidor todavía no se puede gestionar desde el Coordinador."}
+    tipo, url = fuente
     ruta = str(ruta or "").strip("/")
-    accion = _pide(metodo, ruta)
+    accion = _pide(metodo, ruta, tipo)
     if not accion:
         return 404, {"error": "no existe"}
     per = permisos(P, viewer, jid)
@@ -222,8 +305,11 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
             return 403, {"error": "Un moderador sólo suma o resta (poner un valor fijo es de un ADMIN)."}
         k, n = _cupo_de(accion, cuerpo)
         if k and n and not _reservar(P, viewer, jid, k, n):
-            q = per["cupos"][k]["queda"]
-            return 403, {"error": f"Eso pasa su cupo de {'Rcoin' if k == 'rcoin' else 'EXP'}: le quedan {q:,}.".replace(",", ".")}
+            q = (per["cupos"].get(k) or {}).get("queda", 0)
+            nombre = {"rcoin": "Rcoin", "exp": "EXP"}.get(k, k.split(":", 1)[-1])
+            if k.startswith("moneda:") and k not in per["cupos"]:
+                return 403, {"error": f"No tiene cupo de «{nombre}» en este juego. Lo asigna un ADMIN."}
+            return 403, {"error": f"Eso pasa su cupo de {nombre}: le quedan {q:,}.".replace(",", ".")}
     q = {k2: str(v)[:120] for k2, v in (query or {}).items() if k2 not in ("juego", "entorno")} if metodo == "GET" else None
     quien = "coordinador:" + (P._login_de(viewer) or f"uid {viewer}")
     cod, d = _http(url, ruta, q, cuerpo if metodo == "POST" else None, quien, admin)
@@ -246,14 +332,22 @@ def ver_permisos(CO, P, viewer):
     filas = _con(P).execute("SELECT * FROM permisos_juego").fetchall()
     out = [{"uid": int(r["uid"]), "juego": r["juego"], "acciones": [a for a in json.loads(r["acciones"]) if a in ASIGNABLES],
             "cupo_rcoin": int(r["cupo_rcoin"]), "cupo_exp": int(r["cupo_exp"]), "dado_rcoin": int(r["dado_rcoin"]),
-            "dado_exp": int(r["dado_exp"]), "cambiado": r["cambiado"] or "", "quien": r["quien"] or ""} for r in filas]
+            "dado_exp": int(r["dado_exp"]), "monedas": _monedas_de(r), "cambiado": r["cambiado"] or "",
+            "quien": r["quien"] or ""} for r in filas]
+    tipos = {}
+    for p, (tipo, _u) in fuentes().items():
+        jid = CO.juego_de_pase(P, p)
+        if jid:
+            tipos[jid] = tipo
     return 200, {"permisos": out, "base": list(BASE),
                  "asignables": [{"id": k, "nombre": v[0], "cupo": v[1]} for k, v in ASIGNABLES.items()],
-                 "gestionables": sorted({CO.juego_de_pase(P, p) for p in fuentes()} - {None})}
+                 "asignables_de": {jid: list(ASIGNABLES_DE[t]) for jid, t in tipos.items()},
+                 "gestionables": sorted(tipos)}
 
 
 def poner_permisos(CO, P, viewer, d):
-    """POST /api/gestion/permisos {uid, juego, acciones, cupo_rcoin, cupo_exp, reiniciar_dado?} (ADMIN)."""
+    """POST /api/gestion/permisos {uid, juego, acciones, cupo_rcoin, cupo_exp, cupos_monedas?: {oro: n}, reiniciar_dado?}
+    (ADMIN). Sólo se asigna lo que ese tipo de servidor tiene (`ASIGNABLES_DE`)."""
     if P.rol_de(viewer) != "admin":
         return 403, {"error": "Sólo un ADMIN reparte permisos."}
     d = d if isinstance(d, dict) else {}
@@ -268,8 +362,21 @@ def poner_permisos(CO, P, viewer, d):
     if mios is None or jid not in mios:
         return 409, {"error": "Primero asígnele ese juego en el equipo."}
     acc = d.get("acciones") or []
-    if not isinstance(acc, list) or not all(isinstance(a, str) and a in ASIGNABLES for a in acc):
-        return 400, {"error": "Acciones: " + " · ".join(ASIGNABLES)}
+    validas = ASIGNABLES_DE.get(tipo_de(CO, P, jid) or "", ())
+    if not isinstance(acc, list) or not all(isinstance(a, str) and a in validas for a in acc):
+        return 400, {"error": "Acciones de este juego: " + (" · ".join(validas) or "ninguna (todavía no se gestiona)")}
+    cm = d.get("cupos_monedas") or {}
+    if not isinstance(cm, dict) or len(cm) > 10 or not all(_MONEDA_ID.match(str(k)) for k in cm):
+        return 400, {"error": "Cupos de monedas: {moneda: cupo}."}
+    cupos_m = {}
+    for k, v in cm.items():
+        try:
+            v = int(v or 0)
+        except (TypeError, ValueError):
+            return 400, {"error": f"El cupo de {k} tiene que ser un número."}
+        if not 0 <= v <= CUPO_MAX:
+            return 400, {"error": f"El cupo de {k}: entre 0 y {CUPO_MAX:,}.".replace(",", ".")}
+        cupos_m[str(k)] = v
     cupos = {}
     for k in CUPOS:
         try:
@@ -282,14 +389,17 @@ def poner_permisos(CO, P, viewer, d):
     reiniciar = bool(d.get("reiniciar_dado"))
     with _lock:
         c = _con(P)
-        c.execute("INSERT INTO permisos_juego (uid, juego, acciones, cupo_rcoin, cupo_exp, cambiado, quien) "
-                  "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(uid, juego) DO UPDATE SET acciones = excluded.acciones, "
+        antes = _monedas_de(c.execute("SELECT monedas FROM permisos_juego WHERE uid = ? AND juego = ?", (uid, jid)).fetchone())
+        monedas = {k: {"cupo": v, "dado": 0 if reiniciar else antes.get(k, {}).get("dado", 0)} for k, v in cupos_m.items()}
+        c.execute("INSERT INTO permisos_juego (uid, juego, acciones, cupo_rcoin, cupo_exp, cambiado, quien, monedas) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(uid, juego) DO UPDATE SET acciones = excluded.acciones, "
                   "cupo_rcoin = excluded.cupo_rcoin, cupo_exp = excluded.cupo_exp, cambiado = excluded.cambiado, "
-                  "quien = excluded.quien" + (", dado_rcoin = 0, dado_exp = 0" if reiniciar else ""),
+                  "quien = excluded.quien, monedas = excluded.monedas" + (", dado_rcoin = 0, dado_exp = 0" if reiniciar else ""),
                   (uid, jid, json.dumps(sorted(set(acc))), cupos["rcoin"], cupos["exp"],
-                   time.strftime("%Y-%m-%d %H:%M:%S"), P._login_de(viewer) or ""))
+                   time.strftime("%Y-%m-%d %H:%M:%S"), P._login_de(viewer) or "", json.dumps(monedas)))
         c.commit()
     P._auditar(viewer, "equipo: permisos del moderador", uid, jid,
                f"{','.join(sorted(set(acc))) or 'sólo base'} · cupo Rcoin {cupos['rcoin']} · EXP {cupos['exp']}"
+               + "".join(f" · {k} {v}" for k, v in sorted(cupos_m.items()))
                + (" · cupo reiniciado" if reiniciar else ""))
     return ver_permisos(CO, P, viewer)

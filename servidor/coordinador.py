@@ -896,7 +896,8 @@ def atender(P, H, metodo, p, d):
                 return H._mandar(404, {"error": "Ese juego no existe o no está asignado a su cuenta."})
             pases = (next((j for j in catalogo(P) if j["id"] == jid), {}).get("pases") or {})
             entornos = {e: bool(pases.get(e)) and pases.get(e) in GE.fuentes() for e in ("live", "test")}
-            return H._mandar(200, dict(GE.permisos(P, viewer, jid), gestionable=any(entornos.values()), entornos=entornos))
+            return H._mandar(200, dict(GE.permisos(P, viewer, jid), gestionable=any(entornos.values()), entornos=entornos,
+                                       tipo=GE.tipo_de(_yo(), P, jid)))
         if len(api) >= 4 and api[0] == "gestion":
             return H._mandar(*GE.pedir(_yo(), P, viewer, api[1], api[2], "GET", "/".join(api[3:]), query=q))
         return H._mandar(404, {"error": "no existe"})
