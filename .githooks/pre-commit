@@ -1,0 +1,4 @@
+#!/bin/sh
+# frena el commit si entra una base, un .env o una llave (el repo es público)
+export PYTHONIOENCODING=utf-8
+python herramientas/guardia.py && python herramientas/catalogo.py --comprobar

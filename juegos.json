@@ -1,0 +1,45 @@
+{
+  "_como_se_usa": "El catálogo de los juegos de Eñeños. Un juego nuevo = un bloque más. Después: python herramientas/catalogo.py (rehace la tabla del README). Lo leen el panel del Coordinador y el launcher. estado: produccion | beta | alpha | en_preparacion | en_planes",
+  "juegos": [
+    {
+      "id": "r2beat2013",
+      "nombre": "R2Beat 2013",
+      "repo": "r2beatlatino/R2beat-2013",
+      "estado": "produccion",
+      "pases": { "live": "r2beat2013", "test": "r2beat2013-prueba" },
+      "nota": "El más completo. Su panel viejo (sólo R2Beat) es la base del panel del Coordinador."
+    },
+    {
+      "id": "gunbound",
+      "nombre": "GunBound",
+      "repo": "r2beatlatino/GunBound",
+      "estado": "beta",
+      "pases": { "live": "gunbound", "test": "gunbound-prueba" },
+      "nota": "Server propio en Python. Admin hoy: /salud y comandos de chat."
+    },
+    {
+      "id": "eda",
+      "nombre": "EDA · Espada del Alma",
+      "repo": "r2beatlatino/EDA",
+      "estado": "beta",
+      "pases": { "live": "eda", "test": null },
+      "nota": "Corre en el VPS de USA (eda-prod y eda-prueba). Su prueba todavía no tiene pase propio."
+    },
+    {
+      "id": "r2beat-moderno",
+      "nombre": "Eñeñosbit 2027",
+      "repo": null,
+      "estado": "en_preparacion",
+      "pases": { "live": "r2beat-moderno", "test": null },
+      "nota": "El server lo está montando la sesión de fluidez. El repo se crea cuando esté."
+    },
+    {
+      "id": "wolfteam",
+      "nombre": "Wolf Team",
+      "repo": "r2beatlatino/Wolf-Team",
+      "estado": "en_planes",
+      "pases": { "live": null, "test": null },
+      "nota": "Va a tardar."
+    }
+  ]
+}

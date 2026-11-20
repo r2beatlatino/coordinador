@@ -1,0 +1,12 @@
+# nunca: datos ni secretos (los frena también herramientas/guardia.py)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+.env
+*.pem
+*.key
+*.age
+__pycache__/
+_trabajo/
