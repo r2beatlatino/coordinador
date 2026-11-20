@@ -77,13 +77,15 @@ debe recibir un popup con el motivo de su ban + el tiempo»*.
   renglón por servidor, con la duración y el motivo (`por 3 días · Insultos en el chat`).
 - **Varios juegos de una vez**: `juegos: [...]` (ids del catálogo: cada uno con TODOS sus servidores — PROD, TEST y los
   `<live>-…`), o `pases: [...]`, o `pase` (uno, como antes). **Todo o nada**: si uno no se puede, no se toca ninguno.
-- **Duración**: `horas: n`, `dias: n` o `permanente: true` (una sola). **Motivo obligatorio, ≤ 200**: lo ve la persona.
+- **Duración**: `horas: n`, `dias: n`, `meses: n` (un mes = 30 días justos) o `permanente: true` (una sola). **Motivo obligatorio, ≤ 200**: lo ve la persona.
 - **Sólo ADMIN**: permanente y `red: true` (toda la red = todos los pases de los juegos del catálogo; `parches` y `web`
   no). Un ADMIN sin duración = permanente (como antes).
 - **Moderador con juegos**: sólo en sus juegos, siempre con duración y hasta `portero.BANEO_TOPE_MODERADOR_SEG`.
-  ⚠ **A confirmar con Benja: el tope quedó en 30 días.** El moderador de formato viejo sigue sin banear.
+  ★ **El tope se ajusta** con `R2_BANEO_TOPE_MODERADOR_DIAS` (de fábrica **365 = 12 meses**; entre 1 y 3650; se
+  lee al arrancar). Benja, 20-nov: *«que los mod puedan banear horas, días, meses, tiempo ajustable»*.
+  El moderador de formato viejo sigue sin banear.
 - **El panel**: en la ficha de la persona, «Banear en varios juegos…» (casillas de juegos, «Toda la red» sólo admin,
-  Horas / Días / Permanente, motivo con contador) y el «Banear» de cada servidor abre el mismo formulario para ese solo
+  Horas / Días / Meses / Permanente, motivo con contador) y el «Banear» de cada servidor abre el mismo formulario para ese solo
   servidor; cada servidor baneado dice «vence en 2 d 3 h» o «permanente». En **La red**, la caja **Baneos vigentes**
   (los que vencen antes primero) con «Desbanear» antes de tiempo.
 - **El pase negado** (`POST /pase`): el MISMO **403** de «no permitido», con los campos nuevos:

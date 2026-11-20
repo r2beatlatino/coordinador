@@ -26,7 +26,9 @@ function fmtDur(min) {
   min = Math.max(0, Math.round(min));
   if (min < 60) return `${min} min`;
   if (min < 1440) { const h = Math.floor(min / 60), m = min % 60; return m ? `${h} h ${m} min` : `${h} h`; }
-  const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60); return h ? `${d} d ${h} h` : `${d} ${d === 1 ? 'día' : 'días'}`;
+  const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60);
+  if (d >= 60 || (d >= 30 && d % 30 === 0)) { const me = Math.floor(d / 30), r = d % 30; return `${me} ${me === 1 ? 'mes' : 'meses'}${r ? ` ${r} d` : ''}`; }
+  return h ? `${d} d ${h} h` : `${d} ${d === 1 ? 'día' : 'días'}`;
 }
 /* ★ 20-nov: el tiempo de un baneo, de los segundos que faltan (los da el servidor: no depende del reloj de esta PC) */
 const venceTxt = s => s == null ? 'permanente' : `vence en ${fmtDur(Math.ceil(Number(s) / 60))}`;
@@ -554,7 +556,7 @@ function accionPersona(acc, pase) {
 }
 
 /* ★ 20-nov — EL FORMULARIO DEL BANEO. `pase` = un solo servidor (el botón de la fila); sin él, casillas con los juegos
-   (cada uno con TODOS sus servidores). Duración: horas / días / permanente (sólo Admin); un moderador, hasta su tope.
+   (cada uno con TODOS sus servidores). Duración: horas / días / meses (30 d) / permanente (sólo Admin); un moderador, hasta su tope.
    El motivo es obligatorio (≤ 200): lo ve la persona en el launcher al apretar «Jugar». El servidor exige lo mismo. */
 function formBaneo(pase) {
   const p = S.persona; if (!p) return;
@@ -569,7 +571,7 @@ function formBaneo(pase) {
       ${uno ? '' : `<div><span class="lab">Juegos</span><div class="alcance" id="bnJuegos">${juegos.map(j => `<label class="radio"><input type="checkbox" value="${esc(j.id)}"><span><b>${esc(j.nombre)}</b><span>${j.pases.map(x => x.entorno === 'extra' ? 'OTRO' : ENV_TXT[x.entorno]).join(' · ')}${j.pases.some(x => x.baneada) ? ' · ya tiene un baneo (se reemplaza)' : ''}</span></span></label>`).join('')}
         ${lim.red ? `<label class="radio"><input type="checkbox" id="bnRed"><span><b>Toda la red</b><span>Todos los juegos de Eñeños, con todos sus servidores (sólo Admin)</span></span></label>` : ''}</div></div>`}
       <div><span class="lab">Duración</span>
-        <div class="chips" role="group" aria-label="Duración"><button type="button" class="chipb" data-bn="horas" aria-pressed="true">Horas</button><button type="button" class="chipb" data-bn="dias" aria-pressed="false">Días</button>${lim.permanente ? '<button type="button" class="chipb" data-bn="permanente" aria-pressed="false">Permanente</button>' : ''}</div>
+        <div class="chips" role="group" aria-label="Duración"><button type="button" class="chipb" data-bn="horas" aria-pressed="true">Horas</button><button type="button" class="chipb" data-bn="dias" aria-pressed="false">Días</button><button type="button" class="chipb" data-bn="meses" aria-pressed="false">Meses</button>${lim.permanente ? '<button type="button" class="chipb" data-bn="permanente" aria-pressed="false">Permanente</button>' : ''}</div>
         <label class="campo" id="bnCantCampo" style="margin-top:8px;max-width:200px"><span class="sr">Cantidad</span><input id="bnCant" type="number" min="1" step="1" value="24" inputmode="numeric"><span class="tenue" id="bnUnidad" style="font-size:13px">horas</span></label>
         ${lim.tope_seg ? `<div class="tenue" style="font-size:12px;margin-top:6px">Como moderador puede banear hasta ${fmtDur(lim.tope_seg / 60)}. Más largo, o permanente: un Admin.</div>` : ''}</div>
       <div><span class="lab">Motivo (lo ve la persona y queda en la auditoría)</span>
@@ -578,12 +580,13 @@ function formBaneo(pase) {
     </div>
     <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn peligro lleno" id="bnOk">Banear</button></div></div>`);
   let tipo = 'horas';
+  const UNI = { horas: { txt: 'horas', min: 60 }, dias: { txt: 'días', min: 1440 }, meses: { txt: 'meses (30 días)', min: 43200 } };
   const err = t => { $('#bnErr', pn).textContent = t || ''; };
   $$('[data-bn]', pn).forEach(b => b.addEventListener('click', () => {
     tipo = b.dataset.bn;
     $$('[data-bn]', pn).forEach(x => x.setAttribute('aria-pressed', x === b));
     $('#bnCantCampo', pn).hidden = tipo === 'permanente';
-    $('#bnUnidad', pn).textContent = tipo === 'dias' ? 'días' : 'horas';
+    $('#bnUnidad', pn).textContent = UNI[tipo] ? UNI[tipo].txt : '';
     err('');
   }));
   const red = $('#bnRed', pn);
@@ -602,7 +605,7 @@ function formBaneo(pase) {
     else {
       const n = Number($('#bnCant', pn).value);
       if (!Number.isInteger(n) || n < 1) return err('La duración tiene que ser un número entero, 1 o más.');
-      if (lim.tope_seg && n * (tipo === 'dias' ? 86400 : 3600) > lim.tope_seg) return err(`Como moderador, hasta ${fmtDur(lim.tope_seg / 60)}.`);
+      if (lim.tope_seg && n * UNI[tipo].min * 60 > lim.tope_seg) return err(`Como moderador, hasta ${fmtDur(lim.tope_seg / 60)}.`);
       cuerpo[tipo] = n;
     }
     if (!cuerpo.motivo) { mot.focus(); return err('Escriba el motivo.'); }
@@ -612,7 +615,7 @@ function formBaneo(pase) {
     if (!r.ok) return err((r.d && (r.d.texto || r.d.error)) || `Error ${r.status}`);
     cerrarCapa();
     pintarPersona(r.d.persona);
-    const dur = tipo === 'permanente' ? 'de forma permanente' : `por ${fmtDur(Number(cuerpo[tipo]) * (tipo === 'dias' ? 1440 : 60))}`;
+    const dur = tipo === 'permanente' ? 'de forma permanente' : `por ${fmtDur(Number(cuerpo[tipo]) * UNI[tipo].min)}`;
     toast({ t: `Baneada ${dur}`, sub: (uno ? esc(uno.nombre) : cuerpo.red ? 'En toda la red' : esc(cuerpo.juegos.map(id => (juegos.find(j => j.id === id) || { nombre: id }).nombre).join(', '))) + ' · quedó en la auditoría.' });
   });
 }

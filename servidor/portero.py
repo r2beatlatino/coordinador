@@ -53,7 +53,7 @@ LA LISTA DE APROBADOS — se maneja desde la consola del VPS (el panel, más ade
 -----------------------------------------------------------------------------------
     python -m servidor.portero aprobar <usuario> [juego]      (juego por omisión: eda)
     python -m servidor.portero quitar <usuario> [juego]
-    python -m servidor.portero banear <usuario> [juego] [--horas N | --dias N] [motivo…]   (sin tiempo: permanente)
+    python -m servidor.portero banear <usuario> [juego] [--horas N | --dias N | --meses N] [motivo…]   (sin tiempo: permanente)
     python -m servidor.portero desbanear <usuario> [juego]    (antes de tiempo; el baneo vencido ya no cuenta solo)
     python -m servidor.portero lista [juego]
     python -m servidor.portero clave                          imprime la clave PÚBLICA (JWKS)
@@ -83,6 +83,8 @@ VARIABLES
                          IPs o redes separadas por coma. Por omisión `127.0.0.1,::1`
     R2_PORTERO_MANIFIESTOS  la carpeta con `<juego>.json` (el manifest de cada cliente). Sin ella: 503 «todavía no
                          hay cliente publicado». Se lee del disco en cada pedido (cambiarlo no pide reiniciar).
+    R2_BANEO_TOPE_MODERADOR_DIAS  ★ 20-nov: lo más largo que banea un MODERADOR, en días (de fábrica 365 = 12 meses;
+                         1..3650). Permanente y toda la red: sólo un ADMIN.
     R2_CUENTAS_DUENA     ★ 15-nov: `1` = Cuenta Eñeños es la DUEÑA de las cuentas (`cuentas.db`, nunca abre `datos.db`).
                          Sin esta variable (o != `1`), se comporta exactamente como antes.
     R2_CUENTAS_BASE      ruta a `cuentas.db` (por omisión: en la misma carpeta donde vive `portero.db`)
@@ -528,8 +530,17 @@ def estado_r2beat(uid):
 #    · Sólo un ADMIN banea PERMANENTE y en TODA LA RED. Un moderador: sólo en sus juegos y hasta BANEO_TOPE_MODERADOR_SEG.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 BANEO_MOTIVO_MAX = 200
-# ⚠ PARA QUE BENJA LO CONFIRME: el tope de un baneo puesto por un MODERADOR (30 días). Más largo o permanente: un ADMIN.
-BANEO_TOPE_MODERADOR_SEG = 30 * 86400
+# ★ 20-nov (Benja: «que los mod puedan banear horas, días, meses, tiempo ajustable»): el tope de un MODERADOR se
+#   AJUSTA con R2_BANEO_TOPE_MODERADOR_DIAS (de fábrica 365 = 12 meses). Permanente o toda la red: sólo un ADMIN.
+BANEO_MES_SEG = 30 * 86400             # un «mes» de baneo = 30 días justos (así «vence en …» no depende del calendario)
+
+
+def _tope_moderador_dias():
+    v = (os.environ.get("R2_BANEO_TOPE_MODERADOR_DIAS") or "").strip()
+    return max(1, min(3650, int(v))) if v.isdigit() else 365
+
+
+BANEO_TOPE_MODERADOR_SEG = _tope_moderador_dias() * 86400
 BANEO_TOPE_SEG = 3650 * 86400          # (el más largo con fecha: 10 años; más que eso, que sea permanente)
 
 
@@ -555,6 +566,9 @@ def texto_restante(seg):
     m = max(1, -(-int(seg) // 60))
     d, h, mi = m // 1440, (m % 1440) // 60, m % 60
     uno = lambda n, s, p: f"{n} {s if n == 1 else p}"
+    if d >= 60 or (d >= 30 and d % 30 == 0):
+        me, d = d // 30, d % 30
+        return uno(me, "mes", "meses") + (" y " + uno(d, "día", "días") if d else "")
     if d:
         return uno(d, "día", "días") + (" y " + uno(h, "hora", "horas") if h else "")
     if h:
@@ -1372,21 +1386,21 @@ def admin_lista(juego="eda", rol="admin"):
 
 
 def leer_duracion(d):
-    """★ 20-nov: la duración de un baneo pedida como {horas: n} · {dias: n} · {permanente: true}.
+    """★ 20-nov: la duración de un baneo pedida como {horas: n} · {dias: n} · {meses: n} (30 días) · {permanente: true}.
     -> (dicha, seg, error): seg None = permanente · dicha False = no vino ninguna (el ADMIN: permanente, como antes)."""
     d = d if isinstance(d, dict) else {}
-    vinieron = [k for k in ("horas", "dias") if d.get(k) not in (None, "")]
+    vinieron = [k for k in ("horas", "dias", "meses") if d.get(k) not in (None, "")]
     perm = d.get("permanente") in (True, 1, "1", "si", "sí", "true")
     if len(vinieron) + perm > 1:
-        return True, None, "Elija una sola duración: horas, días o permanente."
+        return True, None, "Elija una sola duración: horas, días, meses o permanente."
     if perm:
         return True, None, None
     if not vinieron:
         return False, None, None
     v = d[vinieron[0]]
     if isinstance(v, bool) or not (isinstance(v, int) or (isinstance(v, str) and v.strip().isdigit())):
-        return True, None, "La duración tiene que ser un número entero de horas o de días."
-    seg = int(v) * (3600 if vinieron[0] == "horas" else 86400)
+        return True, None, "La duración tiene que ser un número entero de horas, días o meses."
+    seg = int(v) * {"horas": 3600, "dias": 86400, "meses": BANEO_MES_SEG}[vinieron[0]]
     if seg <= 0:
         return True, None, "La duración tiene que ser de al menos 1 hora."
     if seg > BANEO_TOPE_SEG:
@@ -1429,7 +1443,7 @@ def _puede_sancionar(uid_admin, uid, pases):
 
 def admin_banear(uid_admin, uid, pases, motivo, duracion=None, red=False, ahora=None):
     """★ 20-nov: banea a `uid` en VARIOS pases de una vez (o en toda la red), por un tiempo o permanente.
-    `duracion` = {horas | dias | permanente} (ver `leer_duracion`). Todo o nada: si un pase no se puede, no se toca
+    `duracion` = {horas | dias | meses | permanente} (ver `leer_duracion`). Todo o nada: si un pase no se puede, no se toca
     ninguno. Cada pase queda en la auditoría. -> (código, datos)."""
     ahora = int(time.time() if ahora is None else ahora)
     rol = rol_de(uid_admin)
@@ -1448,7 +1462,7 @@ def admin_banear(uid_admin, uid, pases, motivo, duracion=None, red=False, ahora=
         return 400, {"error": err_dur}
     if rol != "admin":
         if not dicha:
-            return 400, {"error": "Ponga cuánto dura el baneo (en horas o días)."}
+            return 400, {"error": "Ponga cuánto dura el baneo (en horas, días o meses)."}
         if seg is None:
             return 403, {"error": "Sólo un ADMIN banea de forma permanente."}
         if seg > BANEO_TOPE_MODERADOR_SEG:
@@ -2081,9 +2095,9 @@ def consola(args):
     uid = _uid_de(args[1])
     juego = _juego_valido(args[2] if len(args) > 2 else "eda")
     resto = " ".join(args[3:])
-    if orden == "banear":                    # ★ 20-nov: [--horas N | --dias N] antes del motivo; sin eso, permanente
+    if orden == "banear":                    # ★ 20-nov: [--horas N | --dias N | --meses N] antes del motivo; sin eso, permanente
         dur, palabras = {}, list(args[3:])
-        while palabras and palabras[0] in ("--horas", "--dias", "--permanente"):
+        while palabras and palabras[0] in ("--horas", "--dias", "--meses", "--permanente"):
             k = palabras.pop(0)[2:]
             dur[k] = True if k == "permanente" else (palabras.pop(0) if palabras else "")
         dicha, seg, err = leer_duracion(dur)

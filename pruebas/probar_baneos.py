@@ -197,6 +197,15 @@ ok(cod == 200 and not P.permitido(CTRL, "gunbound") and not P.permitido(CTRL, "g
    f"el tope justo ({tope_d} días) en SU juego: sí, con sus dos servidores ({cod})")
 cod, d = callado(CO.accion, P, MOD, {"accion": "desbanear", "uid": CTRL, "juegos": ["gunbound"]})
 ok(cod == 200 and P.permitido(CTRL, "gunbound"), f"y lo desbanea antes de tiempo ({cod})")
+# ★ en MESES (Benja: «que los mod puedan banear horas, días, meses»): un mes = 30 días justos
+cod, d = callado(CO.accion, P, MOD, {"accion": "banear", "uid": CTRL, "juegos": ["gunbound"], "meses": 3, "motivo": "Trampas"})
+b = P.baneo_vigente(CTRL, "gunbound")
+ok(cod == 200 and b and 90 * 86400 - 60 < b["hasta"] - time.time() <= 90 * 86400,
+   f"el moderador banea 3 MESES en su juego: vence en 90 días ({cod})")
+callado(CO.accion, P, MOD, {"accion": "desbanear", "uid": CTRL, "juegos": ["gunbound"]})
+tope_m = tope_d // 30 + 1
+cod, d = callado(CO.accion, P, MOD, {"accion": "banear", "uid": CTRL, "juegos": ["gunbound"], "meses": tope_m, "motivo": "x"})
+ok(cod == 403 and P.permitido(CTRL, "gunbound"), f"⟲ {tope_m} meses (más del tope): 403 ({cod})")
 cod, d = callado(CO.accion, P, MOD, {"accion": "banear", "uid": JEFA, "juegos": ["gunbound"], "horas": 1, "motivo": "x"})
 ok(cod == 403, f"⟲ a una cuenta del equipo: 403 ({cod})")
 cod, d = callado(CO.accion, P, VIEJO, {"accion": "banear", "uid": CTRL, "juegos": ["gunbound"], "horas": 1, "motivo": "x"})
@@ -218,6 +227,11 @@ cod, d = callado(CO.accion, P, JEFA, {"accion": "banear", "uid": CTRL, "juegos":
 ok(cod == 400, f"⟲ 201 caracteres: 400 ({cod})")
 cod, d = callado(CO.accion, P, JEFA, {"accion": "banear", "uid": CTRL, "juegos": ["eda"], "horas": 1, "dias": 1, "motivo": "x"})
 ok(cod == 400, f"⟲ horas Y días: 400 ({cod})")
+cod, d = callado(CO.accion, P, JEFA, {"accion": "banear", "uid": CTRL, "juegos": ["eda"], "dias": 1, "meses": 1, "motivo": "x"})
+ok(cod == 400, f"⟲ días Y meses: 400 ({cod})")
+for malo in (0, "2.5", "x"):
+    cod, d = callado(CO.accion, P, JEFA, {"accion": "banear", "uid": CTRL, "juegos": ["eda"], "meses": malo, "motivo": "x"})
+    ok(cod == 400, f"⟲ meses = {malo!r}: 400 ({cod})")
 for malo in (0, -1, "1.5", True, "abc"):
     cod, d = callado(CO.accion, P, JEFA, {"accion": "banear", "uid": CTRL, "juegos": ["eda"], "horas": malo, "motivo": "x"})
     ok(cod == 400, f"⟲ horas = {malo!r}: 400 ({cod})")
@@ -242,10 +256,29 @@ ok(cod == 200 and d["baneos"] and all(x["juego"] == "gunbound" for x in d["baneo
 
 print("10 · la frase del tiempo")
 casos = {2 * 86400 + 3 * 3600: "2 días y 3 horas", 45 * 60: "45 minutos", 44 * 60 + 1: "45 minutos", 1: "1 minuto",
-         3600: "1 hora", 86400: "1 día", 86400 + 3600 + 59 * 60: "1 día y 1 hora", 5 * 3600 + 12 * 60: "5 horas y 12 minutos"}
+         3600: "1 hora", 86400: "1 día", 86400 + 3600 + 59 * 60: "1 día y 1 hora", 5 * 3600 + 12 * 60: "5 horas y 12 minutos",
+         90 * 86400: "3 meses", 30 * 86400: "1 mes", 70 * 86400: "2 meses y 10 días", 90 * 86400 - 5: "3 meses",
+         45 * 86400: "45 días", 59 * 86400 + 3600: "59 días y 1 hora", 365 * 86400: "12 meses y 5 días"}
 for seg, esperado in casos.items():
     ok(P.texto_restante(seg) == esperado, f"{seg} s -> «{P.texto_restante(seg)}» (esperado «{esperado}»)")
 ok(P.texto_restante(None) is None, "⟲ permanente: sin frase de tiempo")
+
+print("11 · el tope del moderador se AJUSTA (R2_BANEO_TOPE_MODERADOR_DIAS)")
+viejo = os.environ.pop("R2_BANEO_TOPE_MODERADOR_DIAS", None)
+ok(P._tope_moderador_dias() == 365, f"de fábrica: 365 días = 12 meses ({P._tope_moderador_dias()})")
+for dado, esperado in (("90", 90), ("1", 1), ("0", 1), ("99999", 3650), ("abc", 365), ("-5", 365), ("", 365)):
+    os.environ["R2_BANEO_TOPE_MODERADOR_DIAS"] = dado
+    ok(P._tope_moderador_dias() == esperado, f"{dado!r} -> {P._tope_moderador_dias()} días (esperado {esperado})")
+os.environ.pop("R2_BANEO_TOPE_MODERADOR_DIAS", None)
+if viejo is not None:
+    os.environ["R2_BANEO_TOPE_MODERADOR_DIAS"] = viejo
+tope_antes = P.BANEO_TOPE_MODERADOR_SEG
+P.BANEO_TOPE_MODERADOR_SEG = 7 * 86400            # (lo que haría la variable en 7, al arrancar)
+cod, d = callado(CO.accion, P, MOD, {"accion": "banear", "uid": CTRL, "juegos": ["gunbound"], "dias": 8, "motivo": "x"})
+ok(cod == 403, f"⟲ con el tope en 7 días, 8 días: 403 ({cod})")
+ok(CO.limites_sancion(P, MOD)["tope_seg"] == 7 * 86400 and CO.limites_sancion(P, JEFA)["tope_seg"] is None,
+   "y el panel le avisa el tope nuevo al moderador")
+P.BANEO_TOPE_MODERADOR_SEG = tope_antes
 
 srv.shutdown()
 P.cerrar_conexiones()

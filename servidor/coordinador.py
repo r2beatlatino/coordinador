@@ -38,7 +38,7 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     POST /coordinador/api/oauth {proveedor, destino?}  · canjear {ticket} · salir
     POST /coordinador/api/accion {accion, uid, pase, detalle}   aprobar | quitar | banear | desbanear (por pase)
          ★ 20-nov banear / desbanear: además `pases: [...]`, `juegos: [...]` (con todos sus servidores), `red: true`
-         (sólo ADMIN), y para banear `horas: n` | `dias: n` | `permanente: true` (sólo ADMIN) + `motivo` (obligatorio,
+         (sólo ADMIN), y para banear `horas: n` | `dias: n` | `meses: n` (30 d) | `permanente: true` (sólo ADMIN) + `motivo` (obligatorio,
          ≤ 200). Un moderador: sólo en sus juegos y hasta portero.BANEO_TOPE_MODERADOR_SEG.
     POST /coordinador/api/invitacion {id, accion}      aprobar | rechazar
     POST /coordinador/api/equipo {accion, uid, juegos} juegos | agregar | quitar (sólo ADMIN; escribe moderadores.txt)
