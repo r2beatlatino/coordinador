@@ -1,0 +1,10 @@
+# LISTA BLANCA: sólo los archivos del portero (Cuenta Eñeños).
+*
+!servidor/__init__.py
+!servidor/portero.py
+!servidor/vinculos.py
+!servidor/social.py
+!servidor/firma_ed25519.py
+!servidor/lanzamientos.py
+!servidor/portero_panel.html
+!servidor/portero_panel.js

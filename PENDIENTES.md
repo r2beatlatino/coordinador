@@ -9,12 +9,19 @@
 - [x] **GunBound** con repo público propio (sin arte de Softnyx, sin correos personales) — 19-nov
 - [x] **Licencia AGPL-3.0** en el padre y en GunBound (como R2beat-2013) — 19-nov
 - [ ] **1 · El código de las cuentas** acá: login, Google/Discord, el pase firmado, el panel chico, lanzamientos, amigos y presencia (hoy en una rama del repo privado del 2013; se copia SIN su historial)
+  - [x] copiado SIN historial de la rama `claude/topologia-docker-99488b`: `servidor/` (portero, vínculos, social, lanzamientos, firma, panel) y sus pruebas, verdes solas acá — 19-nov
+  - [ ] que la FUENTE sea este repo: dejar de editar esos archivos en la rama del 2013 (si cambian allá, esta copia queda vieja)
+  - (del lado de cada juego quedan, a propósito, en su repo: `pase.py`, `presencia.py`, `enlazar_cuentas.py`)
 - [ ] **2 · La casa** acá: compose, Caddy, scripts del VPS, mudanza, server de parches del launcher, la página de login
+  - [x] copiado: compose (+ red-host), Dockerfile de `cuentas`/`parches`/`puerta`, `Caddyfile`, `auth/`, `parches/`, `puerta/`, `mudanza.py`, `publicar_imagenes.sh`, `actualizar_prueba.sh`, `usa/` — 19-nov
+  - [ ] la imagen `web` (Caddy) todavía la arma el repo del 2013 (junta su sitio Astro con el `Caddyfile` y `auth/`): separar el proxy de la casa del sitio del juego, para que el `Caddyfile` viva en un solo lugar
+  - [ ] la parte B de `pruebas/probar_contenedores.py` (con Docker) corrida desde acá: pide `R2BEAT2013_REPO` y la imagen del juego (`--imagenes`)
+  - [ ] `pruebas/probar_puerta_login.py` se salta sin `R2BEAT2013_REPO` (arma los paquetes con el generador del juego): correrla con él
 - [ ] **3 · «Generar backup»**: botón manual (sólo admin) + comando; UN archivo cifrado con la clave de Benja con las bases (cuentas + cada juego), la configuración y los secretos (llaves de firma, `.env`, OAuth, tokens)
 - [ ] **6 · La ficha `enenos.json`** de cada juego (qué sabe hacer su server, para que el panel muestre sólo lo que funciona)
   - [x] GunBound — 19-nov
-  - [ ] R2beat-2013
-  - [ ] EDA
+  - [ ] R2beat-2013 — PR #3 listo (pruebas en verde), falta fusionarlo
+  - [x] EDA — 19-nov (PR #58, aprobado por Benja)
 
 ## Pendientes (esperan otra cosa)
 

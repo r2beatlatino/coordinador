@@ -9,6 +9,18 @@ El **padre** de los juegos de Eñeños. Acá vive todo lo que NO es de un juego 
 
 Cada juego tiene **su propio repo** (los hijos). Este repo los cita; no los copia.
 
+## Qué hay acá
+
+| dónde | qué |
+|---|---|
+| `servidor/` | **las cuentas** (Cuenta Eñeños, «el portero»): `portero.py` (registro, login, el pase firmado Ed25519 y el panel chico `/cuentas/admin`), `vinculos.py` (Google y Discord), `social.py` (amigos, estado y chat), `lanzamientos.py` (cuándo abre cada juego e invitaciones anticipadas), `firma_ed25519.py` |
+| `herramientas/contenedores/` | **la casa**: `docker-compose.yml`, los Dockerfile de `cuentas`, `parches` y `puerta`, el `Caddyfile` y `auth/` (las páginas de auth), `parches/` (el servidor de parches del launcher), `puerta/` (el repartidor del 48004), `mudanza.py`, `publicar_imagenes.sh`, `actualizar_prueba.sh` y `usa/` (los scripts del VPS de USA) |
+| `pruebas/` | las pruebas de todo lo anterior: `python pruebas/correr_todas.py` |
+| `documentacion/` | `PORTERO_CUENTAS.md`, `TOPOLOGIA_CONTENEDORES.md` (la guía larga de la casa) y `MUDANZA_ENSAYO_A_USA.md` |
+
+Las imágenes de cada juego (`r2beat2013`, `web`, EDA, GunBound) se arman **en el repo de ese juego**: la cabecera de
+`herramientas/contenedores/docker-compose.yml` dice de dónde sale cada una.
+
 ## Los juegos
 
 <!-- juegos:inicio (la arma herramientas/catalogo.py desde juegos.json; no editar a mano) -->
@@ -39,6 +51,7 @@ Es un repo **público**: ni bases de datos, ni `.env`, ni llaves, ni listas de c
 ```bash
 git config core.hooksPath .githooks      # una vez, al clonar
 python pruebas/probar_repo.py            # el catálogo y la guardia, con sus controles
+python pruebas/correr_todas.py           # todas las pruebas (cuentas, casa, catálogo), con el resumen al final
 ```
 
 ## Licencia

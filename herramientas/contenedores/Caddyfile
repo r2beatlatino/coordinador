@@ -1,0 +1,131 @@
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+#  Caddyfile — la web estática (Astro) y el proxy hacia las tres piezas de atrás.
+#  La guía: documentacion/TOPOLOGIA_CONTENEDORES.md
+#
+#  · WEB_NOMBRE define el sitio:
+#      - un nombre de dominio (que apunte directo a esta máquina, sin la nube) -> Caddy saca y
+#        renueva solo el certificado HTTPS y lo guarda en el volumen `/data`.
+#      - `:80` (por omisión) -> sirve por HTTP liso en el puerto 80, sin pedir certificados
+#        (para probar en local).
+#  · Ninguna IP ni nombre clavados acá: todo llega por variables de entorno.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+{$WEB_NOMBRE::80} {
+	encode zstd gzip
+
+	# La API del servidor del juego (web pública, panel /admin y launcher).
+	# Conserva el prefijo `/api/*` porque `servidor/api_web.py` espera las rutas así.
+	# ★ 16-nov: lo INTERNO del juego (la presencia para los amigos: la pide Cuenta Eñeños por la red de adentro)
+	#   no sale a internet, aunque igual pida la ficha.
+	@juego_interno path /api/interno /api/interno/*
+	handle @juego_interno {
+		respond 404
+	}
+	handle /api/* {
+		reverse_proxy {$WEB_JUEGO_DESTINO:r2beat2013:48190}
+	}
+
+	# Cuenta Eñeños (hoy: el portero). `servidor/portero.py` acepta las rutas con o sin `/cuentas`.
+	# ⛔ 15-nov: los pedidos INTERNOS de Cuenta Eñeños (el panel del juego le pregunta y le avisa cosas de las
+	#   cuentas, con su ficha) van por la red de adentro (`http://cuentas:48195`), nunca por acá: a internet, 404.
+	@cuentas_interno path /cuentas/interno /cuentas/interno/* /interno /interno/*
+	handle @cuentas_interno {
+		respond 404
+	}
+	@cuentas path /cuentas /cuentas/*
+	handle @cuentas {
+		reverse_proxy {$WEB_CUENTAS_DESTINO:cuentas:48195}
+	}
+
+	# El servidor de parches bajo `/parches/*`.
+	# `handle_path` le quita el prefijo `/parches` antes de pasarlo al contenedor: `/parches/auth`
+	# llega como `/auth`, `/parches/manifest` como `/manifest`, `/parches/files/...` como `/files/...`.
+	# Así convive en el mismo dominio sin chocar con `/admin` de la web nueva ni pedir otro DNS.
+	# ── EDA (otro juego): la lista FIRMADA de su cliente, sin caché, y el canje del pase por su ticket.
+	#    Si EDA no está prendido en esta máquina, el canje da 502 y el manifiesto 404: no molesta a nadie.
+	handle /eda/manifiesto.jws {
+		header Cache-Control "no-store"
+		root * /eda-web
+		rewrite * /manifiesto.jws
+		file_server
+	}
+	handle /eda/* {
+		reverse_proxy {$WEB_EDA_DESTINO:eda:25901}
+	}
+	# ★ 18-nov: GUNBOUND (otro juego, repo propio gunbound-servidor). Dos servers: prod y PRUEBA.
+	#   · /gunbound/lista.jws       la lista FIRMADA de su cliente (clave de publicación de la plataforma), sin caché
+	#   · /files-gunbound/<versión>/  los archivos del cliente (carpetas por versión: nunca cambian, se cachean)
+	#   · /gunbound/*  /gunbound-prueba/*   el canje del pase y la pantalla de personajes (el server acepta el prefijo)
+	#   Todo sale de GUNBOUND_WEB_ORIGEN (-> /gunbound-web, sólo lectura). Si GunBound no está prendido: 502 / 404.
+	handle /gunbound/lista.jws {
+		header Cache-Control "no-store"
+		root * /gunbound-web
+		rewrite * /lista.jws
+		file_server
+	}
+	handle_path /files-gunbound/* {
+		header Cache-Control "public, max-age=86400"
+		root * /gunbound-web/cliente
+		file_server
+	}
+	handle /gunbound-prueba/* {
+		reverse_proxy {$WEB_GUNBOUND_PRUEBA_DESTINO:gunbound-prueba:9371}
+	}
+	handle /gunbound/* {
+		reverse_proxy {$WEB_GUNBOUND_DESTINO:gunbound:8371}
+	}
+	redir /parches /parches/
+	handle_path /parches/* {
+		reverse_proxy {$WEB_PARCHES_DESTINO:parches:8080}
+	}
+
+	# Descarga directa de archivos de la release (`/files/<release>/<archivo>`), por si el manifest
+	# usa la base por omisión (`/files/...`) en la raíz del mismo sitio.
+	handle /files/* {
+		reverse_proxy {$WEB_PARCHES_DESTINO:parches:8080}
+	}
+
+	# ★ 17-nov: la ZONA WEB del launcher (la ruleta y los eventos, a la derecha del personaje). Es una carpeta de la
+	#   máquina (ZONA_ORIGEN -> /zona, sólo lectura): se cambia copiando archivos, sin rearmar la imagen ni sacar
+	#   launcher. «no-cache» = el launcher pregunta cada vez si cambió (si no cambió, no la vuelve a bajar).
+	#   La fuente: taller/launcher_zona/ (rama del launcher) · cómo se sube: su LEEME.md
+	redir /zona /zona/
+	handle_path /zona/* {
+		header Cache-Control "no-cache"
+		header X-Content-Type-Options "nosniff"
+		root * /zona
+		try_files {path} {path}/index.html
+		file_server
+	}
+
+	# El sitio estático compilado desde `web/` (`npm run build` -> `dist/`).
+	handle {
+		root * /srv
+		try_files {path} {path}/index.html {path}.html
+		file_server
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+#  ★ 16-nov: auth.eñeños.link — Cuenta Eñeños para Google y Discord (la VUELTA registrada en Google/Discord:
+#    /oauth/vuelta) y las dos páginas que Google pide para verificar la marca (inicio y /privacidad, en /auth).
+#    Es un nombre aparte a propósito: al mudar de servidor sólo se apunta el DNS, y Google no cambia nada.
+#    Sin WEB_AUTH_NOMBRE queda en `http://auth.localhost` (local: sin certificados ni pedidos a internet).
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+{$WEB_AUTH_NOMBRE:http://auth.localhost} {
+	encode zstd gzip
+	@interno path /interno /interno/* /cuentas/interno /cuentas/interno/*
+	handle @interno {
+		respond 404
+	}
+	@cuentas path /oauth/* /cuentas/*
+	handle @cuentas {
+		reverse_proxy {$WEB_CUENTAS_DESTINO:cuentas:48195}
+	}
+	handle {
+		header Cache-Control "public, max-age=300"
+		root * /auth
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+}

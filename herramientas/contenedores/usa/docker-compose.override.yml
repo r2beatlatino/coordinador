@@ -1,0 +1,14 @@
+# ★ 18-nov (VPS de USA): la web del ensayo detrás del Caddy del SISTEMA (que tiene 443 con eñeños.link y EDA).
+#   Escucha sólo adentro, en HTTP; el Caddy de afuera le pasa ensayo.* y auth.* (/etc/caddy/enenos-ensayo.caddy).
+services:
+  web:
+    ports: !override
+      - "127.0.0.1:8088:80"
+  # ★ 18-nov el EDA del ENSAYO, en otros puertos: el 25900 y el relay 26000+ son del EDA real de esta máquina
+  #   (eda-prod). Su lista firmada (eda_web/manifiesto.jws) dice servidor 185.147.157.33:25910.
+  eda:
+    environment:
+      EDA_PUERTO: "25910"
+    ports: !override
+      - "0.0.0.0:25910:25910"
+      - "0.0.0.0:26400-26440:26400-26440/udp"

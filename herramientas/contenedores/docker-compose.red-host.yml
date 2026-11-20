@@ -1,0 +1,24 @@
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+#  VARIANTE: los contenedores usan la red DE LA MÁQUINA (sin la red de Docker en el medio).
+#
+#      docker compose -f docker-compose.yml -f docker-compose.red-host.yml up -d
+#
+#  Para qué: es lo MÁS PARECIDO a cómo corre prod hoy con systemd. El juego abre sus puertos
+#  directo en la máquina, ve la IP real de cada jugador y Docker no arma reglas de NAT para él.
+#  Es la variante pensada para el VPS de prod (TOPOLOGIA_CONTENEDORES.md §8).
+#  El precio: dos piezas que usen el mismo puerto no pueden vivir en la misma máquina.
+#  ⚠ `R2_IP_PUBLICA` sigue haciendo falta en el .env (en la nube la máquina no ve su IP pública).
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+services:
+  cuentas:
+    network_mode: host
+    ports: !reset []
+    environment:
+      R2_PORTERO_HOST: 127.0.0.1          # como hoy: sólo el proxy de la misma máquina le llega
+      R2_PORTERO_PROXIES: 127.0.0.1,::1
+  r2beat2013:
+    network_mode: host
+    ports: !reset []
+    environment:
+      R2_API_HOST: 127.0.0.1
+      R2_API_PROXIES: 127.0.0.1,::1

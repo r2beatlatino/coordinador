@@ -61,6 +61,7 @@ casos_malos = {
     "config/moderadores.txt": None, "algo.py": "-----BEGIN " + "PRIVATE KEY-----\nabc",
     "x.md": "hook https://discord.com/api/webhooks/123456/" + "a" * 30,
     "y.py": "t = 'ghp_" + "A" * 30 + "'", "z.sql": "pass_hash = '$" + "argon2id$v=19$m=65536,t=3,p=4$" + "x" * 30 + "'",
+    "datos/portero_clave.json": None, "copia.json": '{"ed25519_' + 'semilla": "' + "ab" * 32 + '"}',
 }
 for ruta, texto in casos_malos.items():
     ver(guardia.problemas(ruta, texto), f"control: la guardia frena {ruta}")

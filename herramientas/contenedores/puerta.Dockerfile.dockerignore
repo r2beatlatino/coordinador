@@ -1,0 +1,3 @@
+# LISTA BLANCA: sólo el archivo de la puerta.
+*
+!herramientas/contenedores/puerta/puerta_login.py

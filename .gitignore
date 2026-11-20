@@ -8,5 +8,9 @@
 *.pem
 *.key
 *.age
+portero_clave.json
+moderadores.txt
+admin.txt
+gm.txt
 __pycache__/
 _trabajo/

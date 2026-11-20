@@ -29,6 +29,7 @@ NOMBRES = [
     (r"(^|/)id_(rsa|ed25519|ecdsa)(\.pub)?$", "una llave SSH"),
     (r"\.(bak|bundle|tar|tgz|zip|7z|age|gpg)$", "un respaldo o un comprimido"),
     (r"(^|/)(moderadores|admin|gm)\.txt$", "una lista de cuentas reales"),
+    (r"(^|/)portero_clave\.json$", "la clave privada de Cuenta Eñeños (la que firma los pases)"),
 ]
 PERMITIDOS = [r"(^|/)ejemplo\.env$", r"(^|/)\.env\.ejemplo$"]
 # por CONTENIDO (sólo texto)
@@ -37,6 +38,7 @@ CONTENIDO = [
     (r"https://(discord(app)?\.com)/api/webhooks/\d+/[\w-]{20,}", "un webhook de Discord"),
     (r"\b(ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{20,}", "un token de GitHub"),
     (r"\bAKIA[0-9A-Z]{16}\b", "una llave de AWS/R2"),
+    (r"\"ed25519_semilla\"\s*:\s*\"[0-9a-fA-F]{64}\"", "la semilla de una clave Ed25519 (portero_clave.json)"),
     (r"\$(argon2(id|i|d)?|pbkdf2[-\w]*|scrypt|2[aby])\$[^\s\"']{20,}", "un hash de contraseña"),
 ]
 

@@ -1,0 +1,7 @@
+# LISTA BLANCA: sólo los tres archivos del servidor de parches.
+*
+!herramientas/contenedores/parches/patchserver.py
+!herramientas/contenedores/parches/make_manifest.py
+!herramientas/contenedores/parches/arranque.py
+!herramientas/contenedores/parches/subidas.py
+!herramientas/contenedores/parches/juez.py

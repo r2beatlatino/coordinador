@@ -1,0 +1,395 @@
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+#  Eñeños en contenedores — ETAPA 0: R2Beat 2013 + el servicio de cuentas (el portero de hoy).
+#  La guía: documentacion/TOPOLOGIA_CONTENEDORES.md      ⛔ NO es prod: prod sigue con systemd.
+#
+#      cp ejemplo.env .env        (y completar R2_IP_PUBLICA)
+#      docker compose build
+#      docker compose up -d
+#
+#  ★ Cada servicio es INDEPENDIENTE: ninguno tiene `depends_on` del otro, a propósito.
+#    Se puede levantar uno solo:   docker compose up -d cuentas
+#  ★ El ESTADO vive en dos volúmenes con nombre. Las imágenes no traen ni base ni clave.
+#  ★ Ni una IP ni un dominio escritos acá: todo sale del `.env` (ver ejemplo.env).
+#
+#  ★ DE DÓNDE SALE CADA IMAGEN (coordinador, 19-nov). Cada juego arma la suya EN SU REPO:
+#      cuentas · parches · puerta  -> ESTE repo (`docker compose build` las arma desde acá)
+#      r2beat2013 (JUEGO_IMAGEN)    -> repo del R2Beat 2013: `herramientas/contenedores/juego.Dockerfile`
+#      web (WEB_IMAGEN)             -> repo del R2Beat 2013: `herramientas/contenedores/web.Dockerfile`
+#                                      (su sitio Astro + el `Caddyfile` y `auth/` de acá, copiados allá)
+#      r2beat2013-prueba            -> repo público R2beat-2013 (`despliegue/Dockerfile`), con `actualizar_prueba.sh`
+#      eda · gunbound               -> su repo (`despliegue/`): r2beatlatino/EDA y r2beatlatino/GunBound
+#    Las de afuera se traen hechas (`docker load` o un registro) con el nombre de su variable de imagen.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+
+x-registro: &registro          # el log de Docker con tope: sin esto crece hasta llenar el disco
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+
+  # ── Cuenta Eñeños (hoy: el portero) ─────────────────────────────────────────────────────────
+  cuentas:
+    image: ${CUENTAS_IMAGEN:-enenos-cuentas:local}
+    build:
+      context: ../..
+      dockerfile: herramientas/contenedores/cuentas.Dockerfile
+    init: true                   # para que el `docker stop` le llegue a Python (si no, espera 10 s y mata)
+    restart: unless-stopped
+    read_only: true              # el contenedor no puede escribir FUERA de sus volúmenes
+    tmpfs:
+      - /tmp
+    environment:
+      TZ: ${TZ:-America/Lima}
+      # A quién se le cree la IP del jugador (el proxy de adelante). Ver portero.py.
+      R2_PORTERO_PROXIES: ${CUENTAS_PROXIES:-127.0.0.1,::1}
+      # Modo dueña de las cuentas (`1` = usa `cuentas.db` propia y nunca abre `/juego/datos.db`). Vacío = etapa 0.
+      R2_CUENTAS_DUENA: ${R2_CUENTAS_DUENA:-}
+      R2_CUENTAS_FICHA_INTERNA: ${R2_CUENTAS_FICHA_INTERNA:-}
+      # ★ 16-nov: entrar / registrarse / vincular con Google y Discord (servidor/vinculos.py). Sin ID y secreto, ese
+      #   proveedor queda APAGADO. La vuelta que se registra en Google/Discord es <R2_OAUTH_BASE>/oauth/vuelta.
+      #   ⛔ Los secretos van sólo en el .env del VPS: nunca al repo ni a un log.
+      # ★ 16-nov: de dónde lee el estado de cada juego para los amigos (servidor/social.py)
+      R2_PRESENCIA: ${R2_PRESENCIA:-}
+      R2_OAUTH_BASE: ${R2_OAUTH_BASE:-}
+      R2_OAUTH_GOOGLE_ID: ${R2_OAUTH_GOOGLE_ID:-}
+      R2_OAUTH_GOOGLE_SECRETO: ${R2_OAUTH_GOOGLE_SECRETO:-}
+      R2_OAUTH_DISCORD_ID: ${R2_OAUTH_DISCORD_ID:-}
+      R2_OAUTH_DISCORD_SECRETO: ${R2_OAUTH_DISCORD_SECRETO:-}
+      # ★ 18-nov: el WEBHOOK del canal de eventos de Discord (invitaciones anticipadas, lanzamientos.py). Vacío = sin aviso
+      R2_DISCORD_EVENTOS_WEBHOOK: ${R2_DISCORD_EVENTOS_WEBHOOK:-}
+      # La dirección pública de Cuenta Eñeños (para el enlace del panel en el aviso de Discord). Vacía = la que trae
+      #   `servidor/lanzamientos.py` por omisión.
+      R2_CUENTAS_URL_PUBLICA: ${R2_CUENTAS_URL_PUBLICA:-}
+    volumes:
+      - cuentas_datos:/datos
+      # ⚠ ETAPA 0 y migración inicial: lee `datos.db` de R2Beat en etapa 0, o una sola vez al importar a `cuentas.db`
+      #   (`python -m servidor.portero importar /juego/datos.db`). Con `R2_CUENTAS_DUENA=1` ya migrada, `cuentas` no
+      #   abre `/juego/datos.db` en tiempo de ejecución: se puede comentar esta línea para llevar `cuentas` a otro VPS.
+      #   ⛔ Mientras esté montado, no poner `:ro`: SQLite en WAL necesita abrir el `-shm` de al lado (medido).
+      - r2beat2013_datos:/juego
+    ports:
+      # ⛔ Sólo hacia el proxy (Caddy). Acá adentro no hay HTTPS: nunca abrirlo a internet.
+      - "${CUENTAS_PUBLICAR:-127.0.0.1:48195}:48195"
+    logging: *registro
+
+  # ── R2Beat 2013 ─────────────────────────────────────────────────────────────────────────────
+  r2beat2013:
+    image: ${JUEGO_IMAGEN:-r2beat2013-juego:local}
+    # (sin `build:`: la imagen la arma el repo del R2Beat 2013 con su `juego.Dockerfile`; ver la cabecera)
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      TZ: ${TZ:-America/Lima}
+      # ⛔ OBLIGATORIA con la red de Docker: adentro del contenedor el server ve una IP 172.x y,
+      #    sin esto, le anunciaría ESA al cliente como dirección de los canales.
+      R2_PUBLIC_IP: ${R2_IP_PUBLICA:?falta R2_IP_PUBLICA en el .env (la IP por la que los jugadores llegan a esta máquina)}
+      # ★ El NOMBRE público del juego (el mismo por el que entra el launcher). Si está, el server lo resuelve cada 5
+      #   minutos y anuncia ESA IP en los canales, siempre que por ella se llegue a él; R2_IP_PUBLICA queda de red de
+      #   seguridad. Así mudar de máquina es cambiar el DNS. Vacío = como siempre. Ver servidor/nombre_publico.py.
+      R2_NOMBRE_PUBLICO: ${R2_NOMBRE_PUBLICO:-}
+      R2_NOMBRE_PUBLICO_PRIVADAS: ${R2_NOMBRE_PUBLICO_PRIVADAS:-}
+      R2_NOMBRE_PUBLICO_SIN_COMPROBAR: ${R2_NOMBRE_PUBLICO_SIN_COMPROBAR:-}
+      R2_API_PROXIES: ${JUEGO_PROXIES:-127.0.0.1,::1}
+      # Login por pase de Cuenta Eñeños (`pase`). Vacío = usuario + hash directo contra `datos.db` como siempre.
+      R2_LOGIN: ${R2_LOGIN:-}
+      R2_CUENTAS_CLAVE_PUBLICA: ${R2_CUENTAS_CLAVE_PUBLICA:-}
+      R2_CUENTAS_URL: ${R2_CUENTAS_URL:-}
+      R2_CUENTAS_FICHA_INTERNA: ${R2_CUENTAS_FICHA_INTERNA:-}
+      R2_CONSOLA_GM: ${R2_CONSOLA_GM:-}
+      R2_LOG_CONSOLA: ${R2_LOG_CONSOLA:-1}
+      R2_RESPALDO: ${R2_RESPALDO:-1}
+      # ★ 15-nov (dos servers por juego, §34): con el server de PRUEBA prendido, el 48004 lo atiende la `puerta` y
+      #   el login de prod escucha adentro en JUEGO_LOGIN_PUERTO (47004). Vacío = 48004, como siempre.
+      R2_LOGIN_PUERTO: ${JUEGO_LOGIN_PUERTO:-}
+      # Por dónde se comprueba el nombre público desde afuera (con la puerta: 48004). Vacío = el del login.
+      R2_NOMBRE_PUBLICO_PUERTO: ${JUEGO_NOMBRE_PUBLICO_PUERTO:-}
+    volumes:
+      - r2beat2013_datos:/datos
+    ports:
+      # El login y los 10 canales. El número de adentro y el de afuera tienen que ser EL MISMO:
+      # el cliente aprende los puertos de los canales del propio server (FF02).
+      # ★ Con la puerta: JUEGO_LOGIN_PUBLICAR=127.0.0.1:47004 y JUEGO_LOGIN_PUERTO=47004 (afuera no se abre).
+      - "${JUEGO_LOGIN_PUBLICAR:-0.0.0.0:48004}:${JUEGO_LOGIN_PUERTO:-48004}"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48005:48005"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48015:48015"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48025:48025"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48035:48035"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48045:48045"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48055:48055"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48065:48065"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48075:48075"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48085:48085"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48095:48095"
+      # La API de la web, el panel y el launcher: sólo hacia el proxy.
+      - "${JUEGO_API_PUBLICAR:-127.0.0.1:48190}:48190"
+    logging: *registro
+
+  # ── Servidor de parches (launcher: /auth, /manifest, /files/*, /launcher/*) ─────────────────
+  parches:
+    image: ${PARCHES_IMAGEN:-r2beat2013-parches:local}
+    build:
+      context: ../..
+      dockerfile: herramientas/contenedores/parches.Dockerfile
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      TZ: ${TZ:-America/Lima}
+      PARCHES_RELEASE_ACTIVA: ${PARCHES_RELEASE_ACTIVA:-}
+      # ★ 16-nov: la lista del cliente del server de PRUEBA (`/manifest?canal=prueba`). Vacía = la misma que prod.
+      PARCHES_RELEASE_PRUEBA: ${PARCHES_RELEASE_PRUEBA:-}
+      PARCHES_URL_ARCHIVOS: ${PARCHES_URL_ARCHIVOS:-}
+      # ★ 18-nov: R2 (10 GB gratis) para la release de PROD, sólo cuando r2_al_dia.py la dejó entera allá
+      PARCHES_URL_R2: ${PARCHES_URL_R2:-}
+      PARCHES_LAUNCHER_VERSION: ${PARCHES_LAUNCHER_VERSION:-0}
+      PARCHES_LAUNCHER_BIN: ${PARCHES_LAUNCHER_BIN:-}
+      PARCHES_LAUNCHER_URL: ${PARCHES_LAUNCHER_URL:-}
+      # Lo que el server le ANUNCIA al launcher para mudarse sin recompilar (como el patchserver de prod):
+      # la dirección del servidor de parches y un mapa host -> IP de emergencia (JSON). Vacías = no anuncia.
+      PARCHES_LAUNCHER_BASE: ${PARCHES_LAUNCHER_BASE:-}
+      PARCHES_LAUNCHER_IPS: ${PARCHES_LAUNCHER_IPS:-}
+      PARCHES_TOKEN_TTL_SEG: ${PARCHES_TOKEN_TTL_SEG:-3600}
+      PARCHES_CUOTA_TOKEN_MB: ${PARCHES_CUOTA_TOKEN_MB:-1500}
+      PARCHES_CUOTA_IP_MB_HORA: ${PARCHES_CUOTA_IP_MB_HORA:-3000}
+      PARCHES_AUTH_IP_HORA: ${PARCHES_AUTH_IP_HORA:-30}
+      PARCHES_BAN_MINUTOS: ${PARCHES_BAN_MINUTOS:-30}
+      PARCHES_CLAVE_PANEL: ${PARCHES_CLAVE_PANEL:-}
+      PARCHES_CLAVE_PANEL_ARCHIVO: ${PARCHES_CLAVE_PANEL_ARCHIVO:-}
+      # Login por pase en `/auth` (`pase`). Vacío = usuario + hash contra `/juego/datos.db` como siempre.
+      PARCHES_LOGIN: ${PARCHES_LOGIN:-}
+      PARCHES_CUENTAS_CLAVE_PUBLICA: ${PARCHES_CUENTAS_CLAVE_PUBLICA:-}
+    volumes:
+      - ${PARCHES_RELEASES_ORIGEN:-parches_releases}:/releases
+      # ⚠ Con `PARCHES_LOGIN` vacío, `/auth` lee `users` de `/juego/datos.db`. Con `PARCHES_LOGIN=pase`, `/auth`
+      #   verifica el pase firmado en memoria y no abre `datos.db`: una vez activo (y con el panel viejo apagado),
+      #   se puede comentar esta línea para separar `parches` del volumen del juego.
+      #   ⛔ Mientras esté montado, no poner `:ro`: SQLite en WAL necesita abrir el `-shm` de al lado.
+      - r2beat2013_datos:/juego
+    # No publica puertos hacia afuera: sale por `web` (Caddy), que le pone HTTPS y `X-Forwarded-For`.
+    logging: *registro
+
+  # ── Web (Astro estático) + proxy (Caddy) ────────────────────────────────────────────────────
+  web:
+    image: ${WEB_IMAGEN:-r2beat2013-web:local}
+    # (sin `build:`: la arma el repo del R2Beat 2013 con su `web.Dockerfile`, que copia el sitio Astro de allá y el
+    #  `Caddyfile` + `auth/` de ESTE repo; ver la cabecera)
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /config
+    environment:
+      TZ: ${TZ:-America/Lima}
+      # Nombre del sitio para HTTPS automático de Caddy, o `:80` para HTTP liso en local.
+      WEB_NOMBRE: ${WEB_NOMBRE:-:80}
+      # ★ 16-nov: el nombre de «auth» (Google/Discord y las páginas de la marca). Vacío = sólo local.
+      WEB_AUTH_NOMBRE: ${WEB_AUTH_NOMBRE:-http://auth.localhost}
+      WEB_JUEGO_DESTINO: ${WEB_JUEGO_DESTINO:-r2beat2013:48190}
+      WEB_CUENTAS_DESTINO: ${WEB_CUENTAS_DESTINO:-cuentas:48195}
+      WEB_PARCHES_DESTINO: ${WEB_PARCHES_DESTINO:-parches:8080}
+      WEB_EDA_DESTINO: ${WEB_EDA_DESTINO:-eda:25901}
+    volumes:
+      - web_datos:/data
+      # Lo de EDA que se reparte por la web: `manifiesto.jws` (la lista de su cliente, FIRMADA). Un volumen, o una
+      # carpeta de la máquina con EDA_WEB_ORIGEN. Sólo lectura. Vacío = EDA no publicó nada todavía (404).
+      - ${EDA_WEB_ORIGEN:-eda_web}:/eda-web:ro
+      # ★ 17-nov: la ZONA WEB del launcher (la ruleta y los eventos). Una carpeta de la máquina con ZONA_ORIGEN
+      #   (adentro: comun/ y r2beat2013/); se cambia copiando archivos. Vacía = el launcher usa su ruleta de adentro.
+      - ${ZONA_ORIGEN:-zona}:/zona:ro
+      # ★ 18-nov GunBound: su cliente (cliente/<versión>/) y su lista FIRMADA (lista.jws). Lo maneja la sesión de
+      #   GunBound (Caddy: /gunbound/lista.jws y /files-gunbound/*). Sólo lectura.
+      - ${GUNBOUND_WEB_ORIGEN:-gunbound_web}:/gunbound-web:ro
+    ports:
+      - "${WEB_PUBLICAR:-0.0.0.0}:80:80"
+      - "${WEB_PUBLICAR:-0.0.0.0}:443:443"
+      - "${WEB_PUBLICAR:-0.0.0.0}:443:443/udp"
+    logging: *registro
+
+  # ── EDA (Espada del Alma) ───────────────────────────────────────────────�
+  #  Es OTRO juego y OTRO repo (r2beatlatino/EDA): acá no se construye, sólo se lo enchufa. Su imagen sale de
+  #  `despliegue/Dockerfile` de ese repo (ver TOPOLOGIA_CONTENEDORES.md §30).
+  #  ⛔ Con perfil: no arranca con un `docker compose up` común. Se prende con `COMPOSE_PROFILES=eda` en el `.env`.
+  #  · Entra con el PASE de Cuenta Eñeños (`aud` = eda), que comprueba solo con la clave PÚBLICA: no le pregunta
+  #    nada a nadie. Su estado (personajes, por Eñeños ID: `r2b_<id>`) vive en SU volumen.
+  eda:
+    profiles: ["eda"]
+    image: ${EDA_IMAGEN:-eda-server:local}
+    init: true
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Lima}
+      EDA_PUERTO: "25900"
+      # La IP pública de la máquina: prende el relay UDP (un puerto por jugador). Vacía = toma la del juego.
+      EDA_RELAY_IP: ${EDA_RELAY_IP:-${R2_IP_PUBLICA:-}}
+      EDA_RELAY_BASE: ${EDA_RELAY_BASE:-26000}
+      EDA_MAX_CONEXIONES: ${EDA_MAX_CONEXIONES:-200}
+      EDA_LOGIN: ${EDA_LOGIN:-pase}
+      # La clave pública de Cuenta Eñeños: LA MISMA variable que usa R2Beat. EDA comprueba el pase solo, sin salir a
+      #   la red (rama `cuenta-enenos` de su repo). EDA_PORTERO_CLAVES (un JWKS por https o archivo) queda de respaldo.
+      EDA_CUENTAS_CLAVE_PUBLICA: ${R2_CUENTAS_CLAVE_PUBLICA:-}
+      EDA_PORTERO_CLAVES: ${EDA_PORTERO_CLAVES:-}
+      # La cuenta de EDA se llama `<prefijo><Eñeños ID>`.
+      EDA_PREFIJO_CUENTA: ${EDA_PREFIJO_CUENTA:-en_}
+      # El Eñeños ID da el PASE para entrar, no personajes hechos: quien entra por primera vez nace sin personajes y
+      #   crea los suyos en la pantalla del juego (Benja, 15-nov). `personaje` = el de siempre ya hecho.
+      EDA_CUENTA_NUEVA: ${EDA_CUENTA_NUEVA:-vacia}
+      # El canje del pase (`POST /eda/pase`, puerto 25901) escucha dentro de la red de contenedores y NO se publica:
+      #   afuera sale por `web` (Caddy), con HTTPS, porque el ticket que devuelve es un secreto.
+      EDA_HTTP_ESCUCHAR: 0.0.0.0
+      EDA_ANUNCIO: ${EDA_ANUNCIO:-}
+      EDA_CLAVES: ${EDA_CLAVES:-}
+      EDA_P2P_ENTRE_CASAS: ${EDA_P2P_ENTRE_CASAS:-}
+    volumes:
+      - eda_estado:/eda/estado
+    ports:
+      - "${EDA_PUBLICAR:-0.0.0.0}:25900:25900"
+      # El relay: de EDA_RELAY_BASE a EDA_RELAY_BASE + EDA_MAX_CONEXIONES (EDA_RELAY_FIN tiene que decir lo mismo).
+      - "${EDA_PUBLICAR:-0.0.0.0}:${EDA_RELAY_BASE:-26000}-${EDA_RELAY_FIN:-26200}:${EDA_RELAY_BASE:-26000}-${EDA_RELAY_FIN:-26200}/udp"
+    logging: *registro
+
+  # ── R2Beat 2013 · el server de PRUEBA y la PUERTA del 48004 (§34) ─────────────────────────────
+  #  Benja (15-nov): cada juego corre DOS servers. Prod es el de arriba. El de PRUEBA sale del repo PÚBLICO,
+  #  rama `develop` (lo que mandan los amigos por PR), y se actualiza solo: `actualizar_prueba.sh` por cron cada
+  #  5 minutos arma la imagen con SU Dockerfile (que corre sus pruebas: si fallan no se arma y sigue el anterior).
+  #  · Mismas cuentas (Cuenta Eñeños), pase propio (`aud` = r2beat2013-prueba), base APARTE: romper el de prueba
+  #    no toca prod. Canales en 49005…49095 (R2_PUERTOS=1000).
+  #  · El exe entra SIEMPRE por el 48004: lo atiende la `puerta`, que reparte cada conexión según el pase.
+  #  ⛔ Con perfil: se prende con `prueba` en COMPOSE_PROFILES, junto con JUEGO_LOGIN_PUERTO=47004 y
+  #    JUEGO_LOGIN_PUBLICAR=127.0.0.1:47004 (si no, el 48004 lo quieren dos y no arranca).
+  puerta:
+    profiles: ["prueba"]
+    image: ${PUERTA_IMAGEN:-enenos-puerta:local}
+    build:
+      context: ../..
+      dockerfile: herramientas/contenedores/puerta.Dockerfile
+    init: true
+    restart: unless-stopped
+    read_only: true
+    environment:
+      TZ: ${TZ:-America/Lima}
+      PUERTA_PROD: r2beat2013:${JUEGO_LOGIN_PUERTO:-47004}
+      PUERTA_PRUEBA: r2beat2013-prueba:49004
+    volumes:
+      - puerta_datos:/datos
+    ports:
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:48004:48004"
+    logging: *registro
+
+  r2beat2013-prueba:
+    profiles: ["prueba"]
+    image: ${PRUEBA_IMAGEN:-r2b2013-server:prueba}
+    init: true
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Lima}
+      R2_PUERTOS: "1000"
+      R2_PUBLIC_IP: ${R2_IP_PUBLICA:-}
+      R2_LOGIN: ${PRUEBA_LOGIN:-pase}
+      R2_PASE_JUEGO: r2beat2013-prueba
+      # ★ 16-nov (Benja): en el server de PRUEBA todos con licencia SOL (Estrella|Luna|Sol = 7)
+      R2_LICENCIA_MINIMA: ${PRUEBA_LICENCIA_MINIMA:-7}
+      # ★ 16-nov: el .npc para todos en el de prueba, y su presencia (para los amigos y Discord) en un puerto propio
+      R2_COMANDOS_TODOS: ${PRUEBA_COMANDOS_TODOS:-npc,npcs}
+      R2_PRESENCIA_PUERTO: "48510"
+      R2_PRESENCIA_JUEGO: r2beat2013-prueba
+      # Un aviso fijo en la tira del lobby, para que se note dónde está uno (vacío = ninguno).
+      # (entre comillas: el texto lleva «: » y YAML lo leería como otra clave)
+      R2_AVISO_TIRA: "${PRUEBA_AVISO_TIRA:-SERVIDOR DE PRUEBA - lo nuevo de develop, todavia sin aprobar: se puede romper}"
+      # El exe prístino (de dónde salen los niveles). Va en la carpeta de las tablas; si falta, el server sigue.
+      R2_EXE: ${PRUEBA_EXE:-/r2b/juego/R2Beat.exe.pristino}
+      R2_CUENTAS_CLAVE_PUBLICA: ${R2_CUENTAS_CLAVE_PUBLICA:-}
+      R2_CUENTAS_URL: ${R2_CUENTAS_URL:-http://cuentas:48195}
+      R2_CUENTAS_FICHA_INTERNA: ${R2_CUENTAS_FICHA_INTERNA:-}
+    volumes:
+      - r2beat2013_prueba_datos:/r2b/datos
+      # Las tablas y las notas del juego (de Softnyx: no van en el repo público). Una carpeta de la máquina.
+      - ${PRUEBA_JUEGO_DIR:-r2beat2013_prueba_juego}:/r2b/juego:ro
+    ports:
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49005:49005"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49015:49015"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49025:49025"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49035:49035"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49045:49045"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49055:49055"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49065:49065"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49075:49075"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49085:49085"
+      - "${JUEGO_PUBLICAR:-0.0.0.0}:49095:49095"
+    logging: *registro
+
+
+  # ── ★ 18-nov GUNBOUND (otro juego; repo propio r2beatlatino/GunBound, despliegue/) ─────────────────────
+  #  Dos servers (prod y prueba), como R2Beat: mismas cuentas (Cuenta Eñeños), pase propio (`aud` gunbound /
+  #  gunbound-prueba), base APARTE. El canje (8371/9371) NO se publica: sale por `web` (Caddy) con HTTPS en
+  #  /gunbound/* y /gunbound-prueba/*. El broker y el mundo sí (el mundo también por UDP), con los MISMOS números
+  #  adentro y afuera: el broker anuncia la IP pública y ese puerto (GB_IP_PUBLICA).
+  #  ⛔ Con perfil: se prende con `gunbound` en COMPOSE_PROFILES.
+  gunbound:
+    profiles: ["gunbound"]
+    image: ${GUNBOUND_IMAGEN:-gunbound-server:local}
+    init: true
+    restart: unless-stopped
+    environment: &gunbound_env
+      TZ: ${TZ:-America/Lima}
+      GB_ENTORNO: prod
+      GB_PUERTO_BROKER: "8372"
+      GB_PUERTO_MUNDO: "8370"
+      GB_PUERTO_HTTP: "8371"
+      GB_ESCUCHA_HTTP: 0.0.0.0
+      GB_IP_PUBLICA: ${GB_IP_PUBLICA:-${R2_IP_PUBLICA:-}}
+      GB_BROKER_PUBLICO: ${GB_BROKER_PUBLICO:-}
+      GB_CUENTAS_CLAVE_PUBLICA: ${R2_CUENTAS_CLAVE_PUBLICA:-}
+      GB_NOMBRE_MUNDO: ${GB_NOMBRE_MUNDO:-Eñeños}
+      GB_DESCRIPCION_MUNDO: ${GB_DESCRIPCION_MUNDO:-Avatar ON}
+      GB_GM: ${GB_GM:-}
+      GB_P2P: ${GB_P2P:-}
+    volumes:
+      - gunbound_datos:/datos
+    ports:
+      - "8372:8372"
+      - "8370:8370"
+      - "8370:8370/udp"
+    logging: *registro
+
+  gunbound-prueba:
+    profiles: ["gunbound"]
+    image: ${GUNBOUND_PRUEBA_IMAGEN:-${GUNBOUND_IMAGEN:-gunbound-server:local}}
+    init: true
+    restart: unless-stopped
+    environment:
+      <<: *gunbound_env
+      GB_ENTORNO: prueba
+      GB_PUERTO_BROKER: "9372"
+      GB_PUERTO_MUNDO: "9370"
+      GB_PUERTO_HTTP: "9371"
+      GB_BROKER_PUBLICO: ${GB_PRUEBA_BROKER_PUBLICO:-}
+    volumes:
+      - gunbound_prueba_datos:/datos
+    ports:
+      - "9372:9372"
+      - "9370:9370"
+      - "9370:9370/udp"
+    logging: *registro
+
+volumes:
+  gunbound_datos:          # ★ 18-nov los jugadores de GunBound (prod)
+  gunbound_prueba_datos:   # ★ 18-nov los de GunBound de prueba
+  gunbound_web:            # ★ 18-nov su cliente y su lista firmada (si no se usa GUNBOUND_WEB_ORIGEN)
+  puerta_datos:          # mapa.json: qué sesión (usn + permiso) va al server de prueba
+  r2beat2013_prueba_datos:   # la base del server de PRUEBA (aparte de la de prod)
+  r2beat2013_prueba_juego:   # tablas y notas para el de prueba (si no se usa una carpeta con PRUEBA_JUEGO_DIR)
+  eda_estado:           # las cuentas de EDA (un JSON por jugador) y porteria.db (tickets) — es lo único que hay que mudar
+  eda_web:              # manifiesto.jws (si no se usa una carpeta de la máquina con EDA_WEB_ORIGEN)
+  zona:                 # la zona web del launcher (si no se usa una carpeta de la máquina con ZONA_ORIGEN)
+  cuentas_datos:        # portero.db · portero_clave.json (⛔ la clave que firma) · config/ · manifiestos/
+  r2beat2013_datos:     # datos.db · panel.db · sesiones.json · status.json · logs/ · respaldos/ · config/
+  parches_releases:     # <release>/manifest.json + archivos del cliente (o carpeta del host con PARCHES_RELEASES_ORIGEN)
+  web_datos:            # certificados TLS y cuenta ACME de Caddy (si se pierde, los pide de nuevo y lo bloquean)
