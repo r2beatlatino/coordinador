@@ -48,3 +48,19 @@
 
 - `R2_PANEL_GESTION` = «`pase=contrato1:http://…/interno/panel`;…» (sin `contrato1:` = el panel viejo de R2Beat).
 - `gestion.py` tiene la lista cerrada de cada tipo, y los cupos por moneda (`moneda:<id>`) para los moderadores.
+
+## En el panel (lo que ve el equipo)
+
+- La página del juego (`#/j/<juego>/<live|test>/…`) pide `capacidades` UNA vez y arma todo con eso: un botón aparece
+  sólo si el juego lo sabe hacer **y** la cuenta tiene el permiso. Si el juego todavía no sabe algo (EDA sin `echar`),
+  el tablero lo dice en «Lo que se puede hacer aquí» («Este juego todavía no»).
+- **Tablero**: `salud` + `conectados` (se actualiza solo cada 15 s). «Dónde están» agrupa por `donde` y filtra al tocarlo.
+  `detalle` se muestra tal cual como pares nombre/valor. «Aviso a todos» si hay `aviso`.
+- **Personas**: `buscar` agrupado por Eñeños ID; la ficha muestra `campos` como pares, `monedas` con los nombres de
+  `capacidades.monedas`, `personajes` para saltar entre ellos y `movimientos` como «Últimos cambios». Aviso a uno,
+  «Desconectar» (`echar`) y «Dar o quitar» por moneda. Un `id` de texto sirve (`#/j/eda/live/personas/eda-7f30`).
+- **La red → Permisos**: lo asignable sale de `asignables_de[juego]`. Con «moneda» marcada, una casilla de cupo por
+  cada moneda que el juego declara (si el juego no contesta, se escriben los ids a mano). Desmarcar deja los cupos en 0
+  sin borrar lo ya dado.
+- El moderador ve lo que le queda de cada moneda («Le queda: Oro 300 · Cash 500»); el formulario no deja pasarse del
+  cupo ni quitar más de lo que el jugador tiene (y el Coordinador lo vuelve a controlar igual).

@@ -350,13 +350,14 @@ const ACC_TXT = { aprobar: ['aprobó a', 'check', 'verde'], quitar: ['le quitó 
   'gestión · aviso': ['mandó un aviso', 'mega', 'cian'], 'gestión · echar': ['desconectó a un jugador', 'logout', ''], 'gestión · mute': ['cambió el chat de un jugador', 'micoff', 'oro'],
   'gestión · rcoin': ['cambió el Rcoin de un jugador', 'coins', 'oro'], 'gestión · exp': ['cambió la EXP de un jugador', 'sparkle', 'oro'],
   'gestión · item/dar': ['le dio un ítem a un jugador', 'gift', 'rosa'], 'gestión · item/quitar': ['le quitó un ítem a un jugador', 'gift', ''],
-  'gestión · apodo': ['cambió el apodo de un jugador', 'user', 'cian'], 'gestión · gorila': ['cambió las monedas gorila de un jugador', 'coins', 'oro'] };
+  'gestión · apodo': ['cambió el apodo de un jugador', 'user', 'cian'], 'gestión · gorila': ['cambió las monedas gorila de un jugador', 'coins', 'oro'],
+  'gestión · moneda': ['cambió las monedas de un jugador', 'coins', 'oro'] };
 /* ★ fase C: «usuario/101/rcoin» -> «personaje #101 · rcoin» */
 const detGestion = d => esc(String(d || '').replace(/^usuario\/(\d+)\/?/, 'personaje #$1 · ').replace(/ · $/, ''));
 function tlItem(a) {
   const [txt, icono, c] = ACC_TXT[a.accion] || [esc(a.accion), 'history', 'cian'];
   const quien = a.persona ? ` <b>${a.uid ? `<a href="#/persona/${esc(a.uid)}">${esc(a.persona)}</a>` : esc(a.persona)}</b>${a.usuario ? ` <span class="tenue">(${esc(a.usuario)})</span>` : ''}` : '';
-  const det = a.detalle ? (/^gestión/.test(a.accion) ? ` · <span class="tenue">${detGestion(a.detalle)}</span>` : ` · <span class="tenue">«${esc(a.detalle)}»</span>`) : '';
+  const det = a.detalle && a.detalle !== a.accion.replace(/^gestión · /, '') ? (/^gestión/.test(a.accion) ? ` · <span class="tenue">${detGestion(a.detalle)}</span>` : ` · <span class="tenue">«${esc(a.detalle)}»</span>`) : '';
   const env = a.pase && a.juego ? (/-prueba$/.test(a.pase) ? '<span class="etq-env test">TEST</span>' : '') : '';
   return `<li><span class="ic ${c}">${ic(icono, 's14')}</span><div class="txt"><b>${esc(a.quien)}</b> ${txt}${quien}${det}<div class="meta">${a.juego ? etqJuego(a.juego) : '<span class="etq-juego" style="--g:81,216,229">Red</span>'}${env}</div></div><span class="cuando">${fechaTxt(a.cuando)}</span></li>`;
 }
@@ -398,7 +399,7 @@ function vistaRed() {
           <div class="caja-cab"><h3 id="tMods">${ic('shieldok', 's16')}Moderadores y permisos</h3><span class="sub" id="subMods"></span>
             <div class="der"><button type="button" class="btn chico" data-accion="agregar-mod">${ic('plus', 's14')}Agregar</button></div></div>
           <ul class="lista" id="listaMods"></ul>
-          <div class="tenue" style="padding:10px 16px 14px;border-top:1px solid var(--line);font-size:12px">Toque un juego para asignarlo o quitarlo. Cada moderador ve sólo sus juegos, y ahí puede aprobar, quitar y banear por juego. En «Permisos», lo que además puede hacer dentro de cada juego (dar Rcoin, EXP, ítems…) y cuánto.</div>
+          <div class="tenue" style="padding:10px 16px 14px;border-top:1px solid var(--line);font-size:12px">Toque un juego para asignarlo o quitarlo. Cada moderador ve sólo sus juegos, y ahí puede aprobar, quitar y banear por juego. En «Permisos», lo que además puede hacer dentro de cada juego (dar Rcoin, EXP, ítems, monedas…) y cuánto.</div>
         </section>` : `<section class="caja"><div class="caja-cab"><h3>${ic('shieldok', 's16')}Sus permisos</h3></div>
           <div class="caja-cuerpo" style="font-size:13px;color:var(--tx-2);display:flex;flex-direction:column;gap:8px">${tusPermisos()}</div></section>`}
       </div>
@@ -783,9 +784,12 @@ async function vistaJuego(jid, env, tab, sel) {
   const sinEste = mr && mr.ok && mr.d.entornos && mr.d.entornos[env] === false;
   if (mr && mr.ok && mr.d.gestionable && !sinEste && (mr.d.acciones || []).includes('ver')) {
     g = nuevoG(mr.d);
-    const s = await api(`gestion/${encodeURIComponent(jid)}/${env}/salud`);
+    /* ★ contrato: lo que el juego sabe hacer (`capacidades`) se pide UNA vez por página y queda guardado */
+    const [s, cp] = await Promise.all([api(`gestion/${encodeURIComponent(jid)}/${env}/salud`),
+      g.tipo === 'contrato1' ? api(`gestion/${encodeURIComponent(jid)}/${env}/capacidades`) : null]);
     if (S.ruta !== ruta0) return;
-    g.ok = s.status !== 404 && s.status !== 403;
+    g.ok = s.status !== 404 && s.status !== 403 && !(cp && (cp.status === 404 || cp.status === 403));
+    if (cp && cp.ok) { g.cap = cp.d; S.capJuego[`${jid}/${env}`] = cp.d; }
     if (g.ok) { g.salud = s.ok ? s.d : null; g.saludErr = s.ok ? null : errTxt(s); }
   } else if (mr && mr.ok) g = Object.assign(nuevoG(mr.d), { ok: false });
   if (r.status === 401 || (mr && mr.status === 401)) return;
@@ -799,7 +803,7 @@ async function vistaJuego(jid, env, tab, sel) {
   if (!r.ok) S.jc.cErr = (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
   const ts = tabsJc(S.jc);
   S.jc.tab = ts.includes(tab) ? tab : ts[0] || null;
-  S.jc.sel = S.jc.tab === 'personas' && /^\d+$/.test(sel || '') ? sel : null;
+  S.jc.sel = S.jc.tab === 'personas' && selOk(S.jc, sel) ? sel : null;
   pintarJ();
 }
 function cabJuego(j, env, J) {
@@ -1492,9 +1496,21 @@ JC_TABS.resumen = ['Tablero', 'dash'];
 JC_TABS.personas = ['Personas', 'users'];
 const esG = k => G_TABS.includes(k);
 const ASIG_TIP = 'Lo asigna un ADMIN';
-const puedeG = (J, a) => !!(J && J.g && J.g.mios && (J.g.mios.acciones || []).includes(a));
+/* ★ 20-nov · el CONTRATO común (GunBound, EDA y los que vengan, `documentacion/CONTRATO_PANEL.md`): la gestión se arma
+   con lo que el juego DECLARA en `capacidades` (acciones y monedas). Un botón aparece sólo si el juego lo sabe hacer Y
+   la cuenta tiene permiso. Cuando el juego aprende algo nuevo, aparece solo. */
+const esC = J => !!(J && (J.c || (J.g && J.g.mios && J.g.mios.tipo === 'contrato1')));
+const capC = (J, a) => !!(J && J.g && J.g.cap && (J.g.cap.acciones || []).includes(a));
+const puedeG = (J, a) => !!(J && J.g && J.g.mios && (J.g.mios.acciones || []).includes(a) && (!esC(J) || capC(J, a)));
 const gRuta = (J, r) => `gestion/${encodeURIComponent(J.jid)}/${J.env}/${r}`;
-const urlPj = (J, uid) => `#/j/${esc(J.jid)}/${J.env}/personas/${Number(uid)}`;
+const ID_C = /^[A-Za-z0-9_.-]{1,40}$/;
+const selOk = (J, s) => (esC(J) ? ID_C : /^\d+$/).test(String(s || ''));
+const urlPj = (J, uid) => `#/j/${esc(J.jid)}/${J.env}/personas/${esC(J) ? (ID_C.test(String(uid)) ? esc(uid) : '') : Number(uid)}`;
+S.capJuego = {};
+const monedasC = J => (J.g && J.g.cap && Array.isArray(J.g.cap.monedas) ? J.g.cap.monedas : []).filter(m => m && m.id != null);
+const nomMoneda = (J, id) => (monedasC(J).find(m => String(m.id) === String(id)) || {}).nombre || cap(String(id));
+const cuandoTxt = c => (typeof c === 'number' || /^\d{9,11}$/.test(String(c || '')) ? fechaEpoch(c) : fechaTxt(c));
+const valorTxt = v => (typeof v === 'number' ? miles(v) : v === true ? 'Sí' : v === false ? 'No' : v == null || v === '' ? '—' : esc(v));
 const signo = n => (n > 0 ? '+' : n < 0 ? '−' : '') + miles(Math.abs(n));
 const compacto = n => { n = Math.abs(Number(n) || 0); if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.', ',').replace(/,0$/, '') + ' M'; if (n >= 1e4) return Math.round(n / 1e3) + ' k'; return miles(n); };
 const diaCorto = f => { const d = new Date(f + 'T12:00:00'); return `${DIAS_C[d.getDay()].toLowerCase()} ${d.getDate()} ${MESES[d.getMonth()]}`; };
@@ -1511,13 +1527,14 @@ function gBtn(J, accion, { acc, icono, txt, datos = '', cls = 'btn chico', off =
   return `<button type="button" class="${cls}" data-accion="${acc}" ${datos}>${ic(icono, 's14')}${txt}</button>`;
 }
 function nuevoG(mios) {
-  return { mios, ok: false, dias: 14, q: '', res: null, fichas: {}, filtro: '', estado: 'todos', t: 0, verTabla: false };
+  return { mios, tipo: mios.tipo || 'r2beat', cap: null, ok: false, dias: 14, q: '', res: null, fichas: {}, filtro: '', estado: 'todos', t: 0, verTabla: false };
 }
 
 /* ══════════════ el TABLERO ══════════════ */
 let tabReloj = null;
 async function cargarTablero(J, auto) {
   const G = J.g; if (!G || G.cargando) return;
+  if (esC(J)) return cargarTableroC(J);
   G.cargando = true;
   const conAlertas = !auto || !G.alertas;
   const [s, c, sa, mu, al] = await Promise.all([api(gRuta(J, 'salud')), api(gRuta(J, 'conectados')), api(gRuta(J, 'salas')),
@@ -1557,6 +1574,7 @@ function edTablero(J) {
   return `<div id="gTab" role="tabpanel" aria-labelledby="jcTab-resumen">${cuerpoTablero(J)}</div>`;
 }
 function cuerpoTablero(J) {
+  if (esC(J)) return cuerpoTableroC(J);
   const G = J.g, s = G.salud || {}, con = (G.con && G.con.filas) || [], salas = (G.salas && G.salas.salas) || [];
   const p = s.pantallas || {};
   const enCarrera = salas.filter(x => x.jugando).length;
@@ -1591,6 +1609,7 @@ function cuerpoTablero(J) {
     </div>`;
 }
 function filasConectados(J) {
+  if (esC(J)) return filasConectadosC(J);
   const G = J.g;
   if (!G.con) return `<li class="g-nada tenue">${G.t ? 'No se pudo leer la lista de conectados.' : 'Cargando…'}</li>`;
   const q = G.filtro.trim().toLowerCase();
@@ -1633,6 +1652,94 @@ function pintarTablero(J) {
   if (foco) { const f = $('#gFiltro'); f.focus(); try { f.setSelectionRange(foco[0], foco[1]); } catch (e) { /* nada */ } }
   pintarAccJ(); pintarTableroCab(J);
 }
+/* ══════════════ el TABLERO de un juego del contrato ══════════════ */
+async function cargarTableroC(J) {
+  const G = J.g;
+  G.cargando = true;
+  const [s, c, cp] = await Promise.all([api(gRuta(J, 'salud')), api(gRuta(J, 'conectados')), G.cap ? null : api(gRuta(J, 'capacidades'))]);
+  G.cargando = false;
+  if (S.jc !== J) return;
+  G.salud = s.ok ? s.d : null; G.saludErr = s.ok ? null : errTxt(s);
+  G.con = c.ok ? c.d : null;
+  if (cp && cp.ok) { G.cap = cp.d; S.capJuego[`${J.jid}/${J.env}`] = cp.d; }
+  G.t = Date.now();
+  if (J.tab === 'resumen' && !capas.innerHTML) pintarTablero(J);
+  else if (J.tab === 'resumen') pintarTableroCab(J);
+}
+const lugarDe = x => String(x.donde || '').trim() || 'Sin dato';
+function veredictoC(J) {
+  const G = J.g, s = G.salud;
+  if (!G.t) return `<div class="conclusion mirar">${ic('clock', 's20')}<div>Preguntándole al servidor…</div></div>`;
+  if (!s) return `<div class="conclusion raro" role="alert">${ic('alert', 's20')}<div><b>El servidor no contesta.</b><small>${G.saludErr || 'Pruebe en un rato.'} Los jugadores probablemente no pueden entrar.</small></div></div>`;
+  if (s.en_linea === false) return `<div class="conclusion raro" role="alert">${ic('alert', 's20')}<div><b>El servidor contesta, pero dice que está fuera de línea.</b><small>Los jugadores probablemente no pueden entrar.</small></div></div>`;
+  const n = Number(s.jugando) || 0, c = G.con ? (G.con.filas || []).length : null;
+  return `<div class="conclusion ok">${ic('check', 's20')}<div><b>En línea.</b> ${n ? `<b>${miles(n)} ${n === 1 ? 'persona jugando' : 'personas jugando'} ahora.</b>` : 'No hay nadie jugando en este momento.'}${c ? `<small>Toque un nombre para ver su ficha, o un lugar de «Dónde están» para ver quién está ahí.</small>` : ''}</div></div>`;
+}
+function cuerpoTableroC(J) {
+  const G = J.g, s = G.salud || {}, con = (G.con && G.con.filas) || [];
+  const lugares = new Map();
+  con.forEach(x => lugares.set(lugarDe(x), (lugares.get(lugarDe(x)) || 0) + 1));
+  const top = [...lugares.entries()].sort((a, b) => b[1] - a[1]);
+  const largo = con.reduce((m, x) => Math.max(m, Number(x.desde) ? Date.now() / 1000 - Number(x.desde) : 0), 0);
+  const kpi = (icono, k, v, d, cls = '') => `<div class="kpi"><div class="k">${ic(icono, 's14')}${k}</div><div class="v ${cls}">${v}</div><div class="d">${d}</div></div>`;
+  const detalle = Array.isArray(s.detalle) ? s.detalle : [];
+  return `${veredictoC(J)}
+    <div class="kpis g-kpis">
+      ${kpi('activity', 'Jugando ahora', G.salud ? miles(s.jugando || 0) : '—', G.salud ? (s.en_linea === false ? 'fuera de línea' : 'según el servidor') : 'sin datos')}
+      ${kpi('users', 'Conectados', G.con ? miles(con.length) : '—', G.con ? `en ${lugares.size} ${lugares.size === 1 ? 'lugar' : 'lugares'}` : 'sin datos')}
+      ${kpi('door', 'Donde hay más gente', top.length ? esc(top[0][0]) : '—', top.length ? `${top[0][1]} ${top[0][1] === 1 ? 'persona' : 'personas'}` : G.con ? 'nadie conectado' : 'sin datos', 'g-txt')}
+      ${kpi('clock', 'La conexión más larga', largo ? fmtDur(largo / 60) : '—', largo ? 'desde que entró' : 'sin datos')}
+    </div>
+    <div class="g-tab-grid">
+      <section class="caja" aria-labelledby="gTCon">
+        <div class="caja-cab"><h3 id="gTCon">${ic('activity', 's16')}Quién está ahora</h3><span class="sub">${G.con ? `${con.length} ${con.length === 1 ? 'conectado' : 'conectados'}` : ''}</span></div>
+        <div class="caja-cuerpo g-filtros">
+          <label class="campo">${ic('search', 's16')}<span class="sr">Filtrar por apodo o lugar</span><input id="gFiltro" value="${esc(G.filtro)}" placeholder="Filtrar por apodo o lugar…" autocomplete="off" spellcheck="false"></label>
+        </div>
+        <ul class="lista g-con g-con-c" id="gCon">${filasConectadosC(J)}</ul>
+      </section>
+      <div class="g-col-der">
+        <section class="caja" aria-labelledby="gTLug">
+          <div class="caja-cab"><h3 id="gTLug">${ic('door', 's16')}Dónde están</h3><span class="sub">${top.length ? 'toque uno para filtrar' : ''}</span></div>
+          ${top.length ? `<ul class="g-lugares">${top.slice(0, 8).map(([k, n]) => `<li><button type="button" data-accion="g-lugar" data-k="${esc(k)}" aria-pressed="${G.filtro === k}"><span class="g-lug-n">${esc(k)}</span><span class="g-lug-b" aria-hidden="true"><i style="width:${Math.max(4, (100 * n) / top[0][1]).toFixed(1)}%"></i></span><b>${n}</b></button></li>`).join('')}</ul>${top.length > 8 ? `<p class="caja-cuerpo tenue g-nota">y ${top.length - 8} lugares más.</p>` : ''}`
+            : `<p class="caja-cuerpo tenue g-nada">${G.con ? 'No hay nadie conectado.' : G.t ? 'No se pudo leer la lista de conectados.' : 'Cargando…'}</p>`}
+        </section>
+        ${detalle.length ? `<section class="caja" aria-labelledby="gTSrv"><div class="caja-cab"><h3 id="gTSrv">${ic('server', 's16')}El servidor</h3></div>
+          <dl class="g-campos g-campos-srv">${detalle.map(d => `<div><dt>${esc(d.nombre)}</dt><dd>${valorTxt(d.valor)}</dd></div>`).join('')}</dl></section>` : ''}
+        ${capacidadesHtml(J)}
+      </div>
+    </div>`;
+}
+function filasConectadosC(J) {
+  const G = J.g;
+  if (!G.con) return `<li class="g-nada tenue">${G.t ? 'No se pudo leer la lista de conectados.' : 'Cargando…'}</li>`;
+  const q = G.filtro.trim().toLowerCase();
+  const l = (G.con.filas || []).filter(x => !q || String(x.nick || '').toLowerCase().includes(q) || lugarDe(x).toLowerCase().includes(q));
+  if (!l.length) return `<li class="g-nada tenue">${(G.con.filas || []).length ? 'Nadie coincide con el filtro.' : 'No hay nadie conectado.'}</li>`;
+  return l.map(x => {
+    const min = Number(x.desde) ? (Date.now() / 1000 - Number(x.desde)) / 60 : null;
+    const enlace = ID_C.test(String(x.id)) ? `<a href="${urlPj(J, x.id)}">${esc(x.nick || x.id)}</a>` : esc(x.nick || x.id);
+    return `<li><span class="g-pt vivo" aria-hidden="true"></span>${ava(x.nick || '?', 'redondo')}
+      <div class="t"><b>${enlace}</b><span>${esc(lugarDe(x))}${x.enenos_id != null ? ` · Eñeños-ID ${esc(x.enenos_id)}` : ''}</span></div>
+      ${x.ip ? `<span class="g-ip" title="Conexión (sólo la ve un ADMIN)">${esc(x.ip)}</span>` : ''}
+      ${min != null ? `<span class="g-desde" title="Conectado hace ${fmtDur(min)}">${ic('clock', 's14')}${fmtDur(min)}</span>` : ''}</li>`;
+  }).join('');
+}
+/* lo que este juego sabe hacer hoy, y lo que su cuenta puede de eso: se lee de un vistazo */
+const ACC_C = [['ver', 'eye', 'Ver el tablero y las fichas'], ['aviso', 'mega', 'Mandar avisos'], ['echar', 'logout', 'Desconectar a un jugador'], ['moneda', 'coins', 'Dar o quitar monedas']];
+function capacidadesHtml(J) {
+  const G = J.g;
+  if (!G.cap) return `<section class="caja"><div class="caja-cab"><h3>${ic('shieldok', 's16')}Lo que se puede hacer aquí</h3></div><p class="caja-cuerpo tenue g-nada">${G.t ? 'El juego no dijo qué sabe hacer: por ahora, sólo mirar.' : 'Cargando…'}</p></section>`;
+  const ms = monedasC(J);
+  const fila = ([a, icono, txt]) => {
+    const sabe = capC(J, a), mio = (G.mios.acciones || []).includes(a);
+    const extra = a === 'moneda' && sabe && ms.length ? `<small>${ms.map(m => esc(m.nombre || m.id)).join(' · ')}</small>` : '';
+    const estado = !sabe ? `<span class="chip">Este juego todavía no</span>` : mio ? `<span class="chip verde">${ic('check', 's14')}Usted puede</span>` : `<span class="chip" title="${ASIG_TIP}">${ic('lock', 's14')}${ASIG_TIP}</span>`;
+    return `<li class="${sabe ? '' : 'g-cap-no'}">${ic(icono, 's16')}<span class="t"><b>${txt}</b>${extra}</span>${estado}</li>`;
+  };
+  return `<section class="caja" aria-labelledby="gTCap"><div class="caja-cab"><h3 id="gTCap">${ic('shieldok', 's16')}Lo que se puede hacer aquí</h3><span class="sub">lo dice el juego</span></div>
+    <ul class="g-capac">${ACC_C.map(fila).join('')}</ul></section>`;
+}
 /* el tablero se refresca solo cada 15 s mientras se ve (no con la pestaña escondida ni con un diálogo abierto) */
 setInterval(() => {
   const J = S.jc;
@@ -1644,6 +1751,7 @@ document.addEventListener('visibilitychange', () => { const J = S.jc; if (docume
 /* ══════════════ AVISOS (a todos, a una sala, a una persona) ══════════════ */
 function formAviso(J, a, id, nombre) {
   if (!puedeG(J, 'aviso')) return;
+  if (esC(J)) return formAvisoC(J, a, id, nombre);
   const MAX = 120;
   const dest = a === 'todos' ? 'A todos los conectados' : a === 'sala' ? `A la sala «${esc(nombre)}»` : `A ${esc(nombre)}`;
   const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="avTit">
@@ -1671,6 +1779,33 @@ function formAviso(J, a, id, nombre) {
   });
 }
 
+/* el aviso de un juego del contrato: a todos o a uno ({texto, a: "todos"|"uno", id}) */
+function formAvisoC(J, a, id, nombre) {
+  const MAX = 200, jn = esc(juegoCat(J.jid).nombre);
+  const dest = a === 'todos' ? `A todos los conectados en ${jn}` : `A ${esc(nombre)}`;
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="avTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(81,216,229,.12);color:var(--cyan)">${ic('mega', 's20')}</span><div><h2 id="avTit">Mandar un aviso</h2><p>${dest}. Le llega dentro del juego, como aviso del servidor.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:12px">
+      <label class="g-area"><span class="lab">Texto</span><textarea class="area" id="avTxt" maxlength="${MAX}" rows="3" placeholder="Por ejemplo: en 10 minutos reiniciamos el servidor" autofocus></textarea></label>
+      <div class="cuenta-txt"><span id="avErr" style="color:var(--red)"></span><span id="avN">0/${MAX}</span></div>
+      ${a === 'todos' ? '' : `<p class="tenue g-nota">${ic('info', 's14')} Si no está conectado, no le llega.</p>`}
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="avOk">${ic('send', 's16')}Mandar</button></div></div>`);
+  const t = $('#avTxt', pn);
+  t.addEventListener('input', () => { $('#avN', pn).textContent = `${t.value.length}/${MAX}`; $('#avErr', pn).textContent = ''; });
+  $('#avOk', pn).addEventListener('click', async () => {
+    const texto = t.value.trim();
+    if (!texto) { $('#avErr', pn).textContent = 'Escriba el aviso.'; t.focus(); return; }
+    const b = $('#avOk', pn); b.disabled = true;
+    const r = await gPost(J, 'aviso', a === 'todos' ? { texto, a: 'todos' } : { texto, a: 'uno', id });
+    b.disabled = false;
+    if (!r.ok) { $('#avErr', pn).textContent = (r.d && r.d.error) || `Error ${r.status}`; return; }
+    cerrarCapa();
+    const n = Number(r.d.llego_a) || 0;
+    toast({ t: n ? `Aviso enviado: le llegó a ${n} ${n === 1 ? 'persona' : 'personas'}` : 'Aviso enviado, pero no le llegó a nadie', sub: n ? 'Quedó en la auditoría.' : 'Nadie estaba conectado ahí.', tipo: n ? 'ok' : 'info' });
+  });
+}
+
 /* ══════════════ PERSONAS: buscar y agrupar por persona ══════════════ */
 function edPersonas(J) {
   if (J.sel) return `<div id="gPers" role="tabpanel" aria-labelledby="jcTab-personas">${fichaHtml(J)}</div>`;
@@ -1678,7 +1813,7 @@ function edPersonas(J) {
   return `<div id="gPers" role="tabpanel" aria-labelledby="jcTab-personas">
     <section class="caja g-buscar">
       <div class="caja-cuerpo" style="padding-top:16px">
-        <label class="campo g-busq">${ic('search', 's16')}<span class="sr">Buscar</span><input id="gBusq" value="${esc(G.q)}" placeholder="${G.mios.rol === 'admin' ? 'Apodo, Eñeños-ID o usuario…' : 'Apodo o Eñeños-ID…'}" autocomplete="off" spellcheck="false" autofocus></label>
+        <label class="campo g-busq">${ic('search', 's16')}<span class="sr">Buscar</span><input id="gBusq" value="${esc(G.q)}" placeholder="${esC(J) ? 'Apodo, id del juego o Eñeños-ID…' : G.mios.rol === 'admin' ? 'Apodo, Eñeños-ID o usuario…' : 'Apodo o Eñeños-ID…'}" autocomplete="off" spellcheck="false" autofocus></label>
         <p class="tenue g-nota">${ic('info', 's14')} Con el Eñeños-ID (el número) aparecen todos los personajes de esa persona juntos.</p>
       </div>
     </section>
@@ -1692,7 +1827,7 @@ function gruposPersona(filas) {
 function pjChip(J, f, on) {
   return `<a class="g-pj ${on ? 'on' : ''}" href="${urlPj(J, f.uid)}" ${on ? 'aria-current="page"' : ''}>${ava(f.nick || '?', 'redondo')}
     <span class="t"><b>${esc(f.nick || `#${f.uid}`)}${f.conectado ? '<span class="punto vivo" title="Conectado ahora"></span>' : ''}</b>
-    <span>nivel ${Number(f.nivel) || 1} · ${miles(f.rcoin)} Rcoin</span></span>
+    <span>${esC(J) ? esc(f.resumen || '') || `id ${esc(f.uid)}` : `nivel ${Number(f.nivel) || 1} · ${miles(f.rcoin)} Rcoin`}</span></span>
     ${f.baneado ? `<span class="chip rojo">${ic('ban', 's14')}Baneado</span>` : ''}</a>`;
 }
 function resultadosHtml(J) {
@@ -1728,15 +1863,17 @@ async function buscarPersonas(J, q) {
   q = q.trim();
   if (!q || (q.length < 2 && !/^\d+$/.test(q))) { G.res = null; const r = $('#gRes'); if (r) r.innerHTML = resultadosHtml(J); return; }
   const n = ++gBusqN; G.buscando = true;
-  const r = await api(gRuta(J, 'usuarios?q=' + encodeURIComponent(q)));
+  const r = await api(gRuta(J, (esC(J) ? 'buscar?q=' : 'usuarios?q=') + encodeURIComponent(q)));
   if (n !== gBusqN || S.jc !== J) return;
   G.buscando = false;
-  G.res = r.ok ? { filas: r.d.filas || [] } : { error: errTxt(r) };
+  /* ★ contrato: el personaje se llama `id` (número o texto); acá adentro, `uid` para todos */
+  G.res = r.ok ? { filas: (r.d.filas || []).map(f => (esC(J) ? Object.assign({}, f, { uid: f.id }) : f)) } : { error: errTxt(r) };
   const c = $('#gRes'); if (c) c.innerHTML = resultadosHtml(J);
 }
 
 /* ══════════════ la FICHA de un personaje ══════════════ */
 async function cargarFicha(J, uid, solo) {
+  if (esC(J)) return cargarFichaC(J, uid);
   const G = J.g, k = String(uid);
   const pide = [solo === 'historia' ? null : api(gRuta(J, `usuario/${uid}`)), api(gRuta(J, `usuario/${uid}/historia?dias=${G.dias}`))];
   const [f, h] = await Promise.all(pide);
@@ -1752,6 +1889,7 @@ async function cargarFicha(J, uid, solo) {
   if (J.tab === 'personas' && String(J.sel) === k) { repintarFicha(J); pintarAccJ(); }
 }
 function fichaHtml(J) {
+  if (esC(J)) return fichaHtmlC(J);
   const G = J.g, F = G.fichas[String(J.sel)];
   const volver = `<a class="volver" href="#/j/${esc(J.jid)}/${J.env}/personas">${ic('left', 's14')}${G.q.trim() ? 'Volver a la búsqueda' : 'Personas'}</a>`;
   if (!F || (!F.f && !F.err)) return `${volver}<div class="caja g-cargando"><span class="esq" style="height:120px"></span><span class="esq" style="height:240px"></span><span class="tenue">Cargando la ficha…</span></div>`;
@@ -1797,6 +1935,131 @@ function fichaHtml(J) {
         ${equipoHtml(f)}
       </div>
     </div>`;
+}
+/* ══════════════ la FICHA de un personaje, en un juego del contrato ══════════════ */
+async function cargarFichaC(J, uid) {
+  const G = J.g, k = String(uid);
+  const r = await api(gRuta(J, 'ficha/' + encodeURIComponent(k)));
+  if (S.jc !== J) return;
+  const F = G.fichas[k] = G.fichas[k] || {};
+  F.f = r.ok ? Object.assign({}, r.d, { uid: r.d.id != null ? r.d.id : k }) : null; F.err = r.ok ? null : errTxt(r); F.dias = G.dias;
+  if (F.f && !F.pjs) {
+    if (Array.isArray(F.f.personajes) && F.f.personajes.length) F.pjs = F.f.personajes.map(x => ({ uid: x.id, nick: x.nick }));
+    else if (F.f.enenos_id != null) {
+      const b = await api(gRuta(J, 'buscar?q=' + encodeURIComponent(F.f.enenos_id)));
+      if (S.jc !== J) return;
+      F.pjs = b.ok ? (b.d.filas || []).filter(x => x.enenos_id === F.f.enenos_id && x.id != null).map(x => Object.assign({}, x, { uid: x.id })) : [];
+    }
+  }
+  if (J.tab === 'personas' && String(J.sel) === k) { repintarFicha(J); pintarAccJ(); }
+}
+function fichaHtmlC(J) {
+  const G = J.g, F = G.fichas[String(J.sel)];
+  const volver = `<a class="volver" href="#/j/${esc(J.jid)}/${J.env}/personas">${ic('left', 's14')}${G.q.trim() ? 'Volver a la búsqueda' : 'Personas'}</a>`;
+  if (!F || (!F.f && !F.err)) return `${volver}<div class="caja g-cargando"><span class="esq" style="height:120px"></span><span class="esq" style="height:240px"></span><span class="tenue">Cargando la ficha…</span></div>`;
+  if (!F.f) return `${volver}<section class="caja">${vacio('No se puede abrir esta ficha', F.err)}</section>`;
+  const f = F.f, vivo = !!f.conectado, pjs = F.pjs || [], jn = juegoCat(J.jid).nombre;
+  if (f.enenos_id != null) nombresPersonas([f.enenos_id]);
+  const igual = x => String(x.uid) === String(f.uid);
+  const lista = pjs.length ? pjs : [f];
+  const conm = `<nav class="conm g-conm" aria-label="Los personajes de esta persona">
+      ${f.enenos_id != null ? `<a class="conm-persona" href="#/persona/${esc(f.enenos_id)}"><span class="ava redondo g-ava-per" aria-hidden="true">${ic('user', 's16')}</span><span><small>Persona · Eñeños-ID ${esc(f.enenos_id)}</small><b data-eid-nom="${esc(f.enenos_id)}">${esc(S.nomPersona[f.enenos_id] || `Eñeños #${f.enenos_id}`)}</b></span></a>
+      <span class="conm-sep" aria-hidden="true"></span>` : ''}<span class="conm-lab">${lista.length > 1 ? `Sus ${lista.length} personajes:` : 'Su personaje:'}</span>
+      ${lista.map(x => `<a class="conm-pj ${igual(x) ? 'on' : ''}" href="${urlPj(J, x.uid)}" ${igual(x) ? 'aria-current="page"' : ''}><span class="p"></span>${esc(x.nick || x.uid)}</a>`).join('')}</nav>
+    ${f.enenos_id == null ? `<p class="tenue g-nota g-sin-persona">${ic('info', 's14')} Este personaje no está vinculado a un Eñeños-ID: ${jn} no sabe de qué persona es.</p>` : ''}`;
+  const chips = [vivo ? '<span class="chip verde"><span class="punto vivo"></span>Conectado</span>' : '<span class="chip">Desconectado</span>',
+    f.baneado ? `<span class="chip rojo">${ic('ban', 's14')}Baneado</span>` : ''].join('');
+  const ids = [`id en el juego <b>${esc(f.uid)}</b>`, f.enenos_id != null ? `Eñeños-ID <a href="#/persona/${esc(f.enenos_id)}">${esc(f.enenos_id)}</a>` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('');
+  const accs = [capC(J, 'aviso') ? gBtn(J, 'aviso', { acc: 'g-aviso-uno', icono: 'mega', txt: 'Aviso', off: vivo ? '' : 'No está conectado' }) : '',
+    capC(J, 'echar') ? gBtn(J, 'echar', { acc: 'g-echar', icono: 'logout', txt: 'Desconectar', off: vivo ? '' : 'No está conectado' }) : ''].join('');
+  const campos = Array.isArray(f.campos) ? f.campos : [];
+  return `${volver}${conm}
+    <section class="ficha-cab"><div class="dentro">${ava(f.nick || '?', 'g redondo')}
+      <div style="min-width:0;flex:1"><div class="g-sup">PERSONAJE · ${esc(jn)}</div>
+        <h1>${esc(f.nick || f.uid)} ${chips}</h1><div class="ids">${ids}</div></div>
+      ${accs ? `<div class="accs">${accs}</div>` : ''}</div></section>
+    ${f.baneado ? `<div class="aviso-sancion" role="status">${ic('ban', 's20')}<span><b>Baneado</b> en ${esc(jn)}.</span></div>` : ''}
+    <div class="ficha-grid g-ficha-c">
+      <div class="g-col-izq">
+        <section class="caja g-o1" aria-labelledby="gTDat"><div class="caja-cab"><h3 id="gTDat">${ic('user', 's16')}Sus datos</h3><span class="sub">lo que cuenta ${esc(jn)}</span></div>
+          ${campos.length ? `<dl class="g-campos">${campos.map(c => `<div><dt>${esc(c.nombre)}</dt><dd>${valorTxt(c.valor)}</dd></div>`).join('')}</dl>` : `<p class="caja-cuerpo tenue g-nada">${esc(jn)} no mandó datos de este personaje.</p>`}</section>
+        ${movimientosHtml(f)}
+      </div>
+      <div class="g-col-der">${monedasHtml(J, f)}</div>
+    </div>`;
+}
+function movimientosHtml(f) {
+  if (!Array.isArray(f.movimientos)) return '';
+  const ms = f.movimientos.slice(0, 12);
+  const icono = q => (/aviso/i.test(q) ? ['mega', 'cian'] : /desconect|echad/i.test(q) ? ['logout', ''] : /ban/i.test(q) ? ['ban', 'rojo'] : /[+−-]\s*\d/.test(q) ? ['coins', 'oro'] : ['history', 'cian']);
+  return `<section class="caja g-o3" aria-labelledby="gTMov"><div class="caja-cab"><h3 id="gTMov">${ic('history', 's16')}Últimos cambios</h3><span class="sub">del más nuevo al más viejo</span></div>
+    ${ms.length ? `<ul class="tl">${ms.map(m => { const [i, c] = icono(String(m.que || '')); return `<li><span class="ic ${c}">${ic(i, 's14')}</span><div class="txt">${esc(m.que || '')}${m.quien ? `<div class="meta"><span class="tenue">por ${esc(m.quien)}</span></div>` : ''}</div><span class="cuando">${m.cuando != null ? cuandoTxt(m.cuando) : ''}</span></li>`; }).join('')}</ul>`
+      : '<p class="caja-cuerpo tenue g-nada">Sin cambios recientes.</p>'}</section>`;
+}
+/* las monedas: los nombres los da el juego (`capacidades.monedas`); un moderador ve cuánto le queda por dar de cada una */
+function monedasHtml(J, f) {
+  const M = J.g.mios, admin = M.rol === 'admin', cu = M.cupos || {}, tiene = f.monedas && typeof f.monedas === 'object' ? f.monedas : {};
+  const ids = [...monedasC(J).map(m => String(m.id)), ...Object.keys(tiene).filter(k => !monedasC(J).some(m => String(m.id) === k))];
+  const sabe = capC(J, 'moneda'), puede = puedeG(J, 'moneda');
+  if (!ids.length) return '';
+  const fila = id => {
+    const c = cu['moneda:' + id];
+    const sub = !sabe || admin ? '' : !puede ? '' : c && c.cupo ? `<small class="g-cupo">le quedan ${miles(c.queda)} de ${miles(c.cupo)} para dar</small>` : '<small class="g-cupo">sin cupo para dar</small>';
+    const btn = !sabe ? '' : puede ? `<button type="button" class="btn chico" data-accion="g-moneda-c" data-k="${esc(id)}">Dar o quitar</button>`
+      : `<span class="chip g-sin" title="${ASIG_TIP}">${ic('lock', 's14')}<span class="sr">${ASIG_TIP}</span></span>`;
+    return `<li><span class="g-mon-ic" aria-hidden="true">${ic('coins', 's16')}</span><div class="t"><small>${esc(nomMoneda(J, id))}</small><b>${tiene[id] != null ? miles(tiene[id]) : '—'}</b>${sub}</div>${btn}</li>`;
+  };
+  return `<section class="caja g-o2" aria-labelledby="gTMon"><div class="caja-cab"><h3 id="gTMon">${ic('coins', 's16')}Monedas</h3>${sabe && admin ? '<span class="sub">sin cupo (ADMIN)</span>' : ''}</div>
+    <ul class="g-monedas">${ids.map(fila).join('')}</ul>
+    ${!sabe ? `<p class="caja-cuerpo tenue g-nota">${ic('info', 's14')} ${esc(juegoCat(J.jid).nombre)} todavía no permite cambiar monedas desde el Coordinador.</p>`
+      : !puede ? `<p class="caja-cuerpo tenue g-nota">${ic('lock', 's14')} Dar o quitar monedas: lo asigna un ADMIN.</p>` : ''}</section>`;
+}
+function formMonedaC(J, f, mid) {
+  if (!puedeG(J, 'moneda')) return;
+  const nom = nomMoneda(J, mid), admin = J.g.mios.rol === 'admin';
+  const cupo = admin ? null : ((J.g.mios.cupos || {})['moneda:' + mid] || null);
+  const tiene = Number((f.monedas || {})[mid]) || 0, nick = esc(f.nick || f.uid);
+  const darOk = admin || !!(cupo && cupo.queda > 0);
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="moTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(227,187,103,.12);color:var(--gold)">${ic('coins', 's20')}</span><div><h2 id="moTit">${esc(nom)} de ${nick}</h2><p>Hoy tiene <b>${miles(tiene)}</b>.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:14px">
+      <div class="seg" role="group" aria-label="Qué hacer"><button type="button" data-mo="dar" aria-pressed="${darOk}">Dar</button><button type="button" data-mo="quitar" aria-pressed="${!darOk}">Quitar</button></div>
+      <label class="campo" style="max-width:260px"><span class="sr">Cantidad</span><input id="moV" type="number" min="1" max="100000000" step="1" inputmode="numeric" placeholder="0" autofocus><span class="tenue" style="font-size:13px">${esc(nom)}</span></label>
+      <div class="g-resumen" id="moRes" aria-live="polite"></div>
+      ${admin ? `<p class="tenue g-nota">${ic('crown', 's14')} Como ADMIN, no tiene cupo.</p>`
+        : cupo ? `<div class="g-cupo-mini"><div class="g-medidor" role="img" aria-label="Dio ${miles(cupo.dado)} de ${miles(cupo.cupo)}"><i style="width:${cupo.cupo ? Math.min(100, (100 * cupo.dado) / cupo.cupo).toFixed(1) : 0}%"></i></div>
+            <p class="tenue g-nota">${ic('info', 's14')}<span>Su cupo de ${esc(nom)}: le quedan <b>${miles(cupo.queda)}</b> de ${miles(cupo.cupo)}. Quitar no gasta cupo. Más cupo: lo asigna un ADMIN.</span></p></div>`
+        : `<p class="g-alerta">${ic('lock', 's14')}<span>No tiene cupo de ${esc(nom)} para dar: lo asigna un ADMIN. Quitar sí puede.</span></p>`}
+      <span id="moErr" style="color:var(--red);font-size:12.5px"></span>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="moOk" disabled>Confirmar</button></div></div>`);
+  let modo = darOk ? 'dar' : 'quitar';
+  const v = $('#moV', pn), ok = $('#moOk', pn), res = $('#moRes', pn), err = x => { $('#moErr', pn).textContent = x || ''; };
+  const calc = () => {
+    const n = Number(v.value);
+    ok.textContent = 'Confirmar';
+    if (!v.value || !Number.isInteger(n) || n < 1 || n > 100000000) { res.innerHTML = ''; ok.disabled = true; return null; }
+    let no = '';
+    if (modo === 'dar' && !admin && !cupo) no = `No tiene cupo de ${esc(nom)} para dar.`;
+    else if (modo === 'dar' && cupo && n > cupo.queda) no = `Pasa su cupo: le quedan ${miles(cupo.queda)}.`;
+    else if (modo === 'quitar' && n > tiene) no = `Tiene ${miles(tiene)}: no se le puede quitar más que eso.`;
+    if (no) { res.innerHTML = `<span style="color:var(--red)">${no}</span>`; ok.disabled = true; return null; }
+    const fin = modo === 'dar' ? tiene + n : tiene - n;
+    res.innerHTML = `Tiene <b>${miles(tiene)}</b> → quedará en <b>${miles(fin)}</b> <span class="tenue">(${signo(fin - tiene)})</span>`;
+    ok.disabled = false; ok.textContent = `${modo === 'dar' ? 'Dar' : 'Quitar'} ${miles(n)}`;
+    return { n, fin };
+  };
+  $$('[data-mo]', pn).forEach(b => b.addEventListener('click', () => { modo = b.dataset.mo; $$('[data-mo]', pn).forEach(x => x.setAttribute('aria-pressed', x === b)); err(''); calc(); v.focus(); }));
+  v.addEventListener('input', () => { err(''); calc(); });
+  v.addEventListener('keydown', e => { if (e.key === 'Enter' && !ok.disabled) ok.click(); });
+  ok.addEventListener('click', async () => {
+    const c = calc(); if (!c) return;
+    ok.disabled = true;
+    const r = await gPost(J, 'moneda', { id: f.id != null ? f.id : f.uid, moneda: mid, cantidad: modo === 'dar' ? c.n : -c.n });
+    if (!r.ok) { ok.disabled = false; return err((r.d && r.d.error) || `Error ${r.status}`); }
+    cerrarCapa();
+    trasAccion(J, f.uid, r, `${esc(nom)} de ${nick}: ${miles(r.d.antes != null ? r.d.antes : tiene)} → ${miles(r.d.despues != null ? r.d.despues : c.fin)}`);
+  });
 }
 function ritmoExp(F) {
   const ds = ((F.h && F.h.dias) || []).filter(x => x.exp_ganada != null && !x.senal);
@@ -2063,6 +2326,15 @@ function accionFicha(J, a) {
   const f = fichaSel(J); if (!f) return;
   const uid = f.uid, nick = esc(f.nick);
   const k = a.dataset.accion;
+  if (esC(J)) {                                            // ★ contrato: {id, motivo} · {id, moneda, cantidad}
+    if (k === 'g-aviso-uno') return formAviso(J, 'uno', f.id != null ? f.id : uid, f.nick);
+    if (k === 'g-echar' && puedeG(J, 'echar')) return confirmar({ titulo: `¿Desconectar a ${nick}?`, icono: 'logout', ok: 'Desconectar',
+      txt: 'Lo desconecta del juego al instante. Puede volver a entrar cuando quiera.',
+      extra: '<span class="lab">Motivo (opcional, para la auditoría)</span><label class="campo"><span class="sr">Motivo</span><input id="mdExtra" maxlength="200" autocomplete="off" placeholder="Por ejemplo: trabado en una partida"></label>',
+      alAceptar: async m => trasAccion(J, uid, await gPost(J, 'echar', { id: f.id != null ? f.id : uid, motivo: m.trim() }), `${nick} fue desconectado`) });
+    if (k === 'g-moneda-c') return formMonedaC(J, f, a.dataset.k);
+    return;
+  }
   if (k === 'g-aviso-uno') return formAviso(J, 'uid', uid, f.nick);
   if (k === 'g-echar') return confirmar({ titulo: `¿Desconectar a ${nick}?`, icono: 'logout', ok: 'Desconectar',
     txt: 'Lo desconecta del juego al instante. Puede volver a entrar cuando quiera.',
@@ -2234,6 +2506,10 @@ function accG(J) {
     ${puedeG(J, 'aviso') ? `<button type="button" class="btn prim" data-accion="g-aviso" data-a="todos">${ic('mega', 's16')}Aviso a todos</button>` : ''}`;
   const M = J.g.mios, cu = M.cupos;
   if (M.rol === 'admin') return `${sucias}<span class="chip">${ic('crown', 's14')}ADMIN · sin cupo</span>`;
+  if (esC(J)) {
+    const ps = puedeG(J, 'moneda') && cu ? Object.keys(cu).filter(k => k.startsWith('moneda:') && cu[k].cupo).map(k => `${esc(nomMoneda(J, k.slice(7)))} ${miles(cu[k].queda)}`) : [];
+    return `${sucias}<span class="chip ${ps.length ? 'cian' : ''}" title="Lo que todavía puede dar. Lo asigna un ADMIN.">${ic('shieldok', 's14')}${ps.length ? 'Le queda: ' + ps.join(' · ') : 'Moderador'}</span>`;
+  }
   const partes = ['rcoin', 'exp'].filter(k => puedeG(J, k) && cu && cu[k]).map(k => `${k === 'rcoin' ? 'Rcoin' : 'EXP'} ${miles(cu[k].queda)}`);
   return `${sucias}<span class="chip ${partes.length ? 'cian' : ''}" title="Lo que todavía puede dar. Lo asigna un ADMIN.">${ic('shieldok', 's14')}${partes.length ? 'Le queda: ' + partes.join(' · ') : 'Moderador'}</span>`;
 }
@@ -2251,6 +2527,8 @@ function accionG(a) {
     case 'g-recargar': cargarTablero(J); break;
     case 'g-estado': J.g.estado = a.dataset.k; $$('[data-accion="g-estado"]').forEach(b => b.setAttribute('aria-pressed', b === a)); { const l = $('#gCon'); if (l) l.innerHTML = filasConectados(J); } break;
     case 'g-aviso': formAviso(J, a.dataset.a, a.dataset.id, a.dataset.nom || ''); break;
+    case 'g-lugar': { J.g.filtro = J.g.filtro === a.dataset.k ? '' : a.dataset.k; const i = $('#gFiltro'); if (i) i.value = J.g.filtro;
+      $$('[data-accion="g-lugar"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === J.g.filtro)); const l = $('#gCon'); if (l) l.innerHTML = filasConectados(J); break; }
     case 'g-dias': { const n = Number(a.dataset.n); if (n === J.g.dias || !J.sel) break;
       J.g.dias = n; const F = J.g.fichas[String(J.sel)]; if (F) { F.h = null; F.dias = null; }
       repintarFicha(J, `[data-accion="g-dias"][data-n="${n}"]`); cargarFicha(J, J.sel, 'historia'); break; }
@@ -2267,39 +2545,115 @@ function resumenPermisos(m) {
   const nom = id => (P.asignables.find(a => a.id === id) || { nombre: id }).nombre;
   const fs = P.permisos.filter(x => x.uid === m.uid && (m.juegos || []).includes(x.juego) && (x.acciones.length || x.cupo_rcoin || x.cupo_exp));
   if (!fs.length) return (m.juegos || []).some(j => P.gestionables.includes(j)) ? '<div class="g-perm-res tenue">En los juegos: sólo lo de base</div>' : '';
-  return `<div class="g-perm-res">${fs.map(x => `<div>${etqJuego(x.juego)} ${x.acciones.map(a => esc(nom(a))).join(' · ') || 'sólo lo de base'}${x.acciones.includes('rcoin') ? ` <i>· Rcoin dado ${miles(x.dado_rcoin)} de ${miles(x.cupo_rcoin)}</i>` : ''}${x.acciones.includes('exp') ? ` <i>· EXP dada ${miles(x.dado_exp)} de ${miles(x.cupo_exp)}</i>` : ''}</div>`).join('')}</div>`;
+  const mon = x => (x.acciones.includes('moneda') ? Object.entries(x.monedas || {}).filter(([, v]) => v.cupo || v.dado).map(([k, v]) => ` <i>· ${esc(nomMonedaJuego(x.juego, k))} dado ${miles(v.dado)} de ${miles(v.cupo)}</i>`).join('') : '');
+  return `<div class="g-perm-res">${fs.map(x => `<div>${etqJuego(x.juego)} ${x.acciones.map(a => esc(nom(a))).join(' · ') || 'sólo lo de base'}${x.acciones.includes('rcoin') ? ` <i>· Rcoin dado ${miles(x.dado_rcoin)} de ${miles(x.cupo_rcoin)}</i>` : ''}${x.acciones.includes('exp') ? ` <i>· EXP dada ${miles(x.dado_exp)} de ${miles(x.cupo_exp)}</i>` : ''}${mon(x)}</div>`).join('')}</div>`;
+}
+/* ★ contrato: las monedas de un juego (para los cupos) las dice el juego. Se pregunta a PROD, y si no, a TEST */
+const conMonedas = jid => ((S.permisos && S.permisos.asignables_de && S.permisos.asignables_de[jid]) || []).includes('moneda');
+const capGuardada = jid => S.capJuego[`${jid}/live`] || S.capJuego[`${jid}/test`] || null;
+const nomMonedaJuego = (jid, id) => (((capGuardada(jid) || {}).monedas || []).find(m => String(m.id) === String(id)) || {}).nombre || cap(String(id));
+const capPedida = {};
+function capDeJuego(jid) {
+  if (capGuardada(jid)) return Promise.resolve(capGuardada(jid));
+  if (!capPedida[jid]) capPedida[jid] = (async () => {
+    for (const env of ['live', 'test']) {
+      const r = await api(`gestion/${encodeURIComponent(jid)}/${env}/capacidades`);
+      if (r.ok) { S.capJuego[`${jid}/${env}`] = r.d; return r.d; }
+    }
+    return null;
+  })().finally(() => { delete capPedida[jid]; });
+  return capPedida[jid];
 }
 async function cargarPermisos() {
   const r = await api('gestion/permisos');
-  if (r.ok) { S.permisos = r.d; if (S.equipo && $('#listaMods')) pintarMods(S.equipo); }
+  if (!r.ok) return;
+  S.permisos = r.d;
+  if (S.equipo && $('#listaMods')) pintarMods(S.equipo);
+  const js = (r.d.gestionables || []).filter(j => conMonedas(j) && !capGuardada(j));
+  if (js.length) { await Promise.all(js.map(capDeJuego)); if (S.equipo && $('#listaMods')) pintarMods(S.equipo); }
 }
 function formPermisos(i) {
   const m = S.equipoLista[i], P = S.permisos; if (!m || !P) return;
   const js = (m.juegos || []).filter(j => P.gestionables.includes(j));
   const otros = (m.juegos || []).filter(j => !P.gestionables.includes(j));
-  const de = j => P.permisos.find(x => x.uid === m.uid && x.juego === j) || { acciones: [], cupo_rcoin: 0, cupo_exp: 0, dado_rcoin: 0, dado_exp: 0 };
+  const de = j => P.permisos.find(x => x.uid === m.uid && x.juego === j) || { acciones: [], cupo_rcoin: 0, cupo_exp: 0, dado_rcoin: 0, dado_exp: 0, monedas: {} };
+  /* lo que se asigna en CADA juego lo dice el servidor (`asignables_de`): R2Beat lo suyo, los del contrato «moneda» */
+  const asigDe = j => { const ids = (P.asignables_de || {})[j]; return P.asignables.filter(a => (ids ? ids.includes(a.id) : a.cupo !== 'moneda')); };
   const medidor = (dado, cupo) => `<div class="g-medidor" role="img" aria-label="Usó ${miles(dado)} de ${miles(cupo)}"><i style="width:${cupo ? Math.min(100, (100 * dado) / cupo).toFixed(1) : 0}%"></i></div>`;
-  const seccion = j => { const x = de(j), nj = juegoCat(j).nombre;
+  const nombres = (P.gestionables || []).map(j => juegoCat(j).nombre);
+  const base = j => {
+    if (!conMonedas(j)) return 'mirar el tablero y las fichas, mandar avisos, desconectar y sacar el chat';
+    const c = capGuardada(j); if (!c) return 'mirar el tablero y las fichas, y avisar y desconectar si el juego lo permite';
+    const a = c.acciones || [], extra = [a.includes('aviso') ? 'mandar avisos' : '', a.includes('echar') ? 'desconectar' : ''].filter(Boolean);
+    return 'mirar el tablero y las fichas' + (extra.length ? (extra.length > 1 ? ', ' + extra[0] + ' y ' + extra[1] : ' y ' + extra[0]) : '');
+  };
+  const seccion = j => { const x = de(j), nj = juegoCat(j).nombre, as = asigDe(j);
+    const algoDado = x.dado_rcoin || x.dado_exp || Object.values(x.monedas || {}).some(v => v.dado);
     return `<section class="g-perm" data-juego="${esc(j)}"><h3>${etqJuego(j)} ${esc(nj)}</h3>
-      <p class="tenue g-nota">${ic('check', 's14')} Siempre puede: mirar el tablero y las fichas, mandar avisos, desconectar y sacar el chat.</p>
-      <div class="g-perm-acc">${P.asignables.map(a => `<label class="radio"><input type="checkbox" value="${esc(a.id)}" ${x.acciones.includes(a.id) ? 'checked' : ''}><span><b>${esc(a.nombre)}</b>${a.cupo ? `<span>con un cupo de ${a.cupo === 'rcoin' ? 'Rcoin' : 'EXP'} (lo que puede dar en total)</span>` : ''}</span></label>`).join('')}</div>
-      <div class="g-cupos">${['rcoin', 'exp'].map(k => `<div class="g-cupo-f" data-cupo="${k}" ${x.acciones.includes(k) ? '' : 'hidden'}><span class="lab">Cupo de ${k === 'rcoin' ? 'Rcoin' : 'EXP'}</span>
+      <p class="tenue g-nota" data-base>${ic('check', 's14')} Siempre puede: ${base(j)}.</p>
+      ${as.length ? `<div class="g-perm-acc">${as.map(a => `<label class="radio"><input type="checkbox" value="${esc(a.id)}" ${x.acciones.includes(a.id) ? 'checked' : ''}><span><b>${esc(a.nombre)}</b>${a.cupo === 'moneda' ? '<span>con un cupo por moneda (lo que puede dar en total de cada una)</span>' : a.cupo ? `<span>con un cupo de ${a.cupo === 'rcoin' ? 'Rcoin' : 'EXP'} (lo que puede dar en total)</span>` : ''}</span></label>`).join('')}</div>`
+        : `<p class="tenue g-nota">${ic('info', 's14')} En ${esc(nj)} todavía no hay nada más para asignar.</p>`}
+      ${as.some(a => a.id === 'rcoin' || a.id === 'exp') ? `<div class="g-cupos">${['rcoin', 'exp'].filter(k => as.some(a => a.id === k)).map(k => `<div class="g-cupo-f" data-cupo="${k}" ${x.acciones.includes(k) ? '' : 'hidden'}><span class="lab">Cupo de ${k === 'rcoin' ? 'Rcoin' : 'EXP'}</span>
         <label class="campo"><span class="sr">Cupo</span><input type="number" min="0" max="100000000" step="1" inputmode="numeric" value="${x['cupo_' + k]}"></label>
-        ${medidor(x['dado_' + k], x['cupo_' + k])}<small class="tenue">Ya dio <b>${miles(x['dado_' + k])}</b> de ${miles(x['cupo_' + k])}.</small></div>`).join('')}</div>
+        ${medidor(x['dado_' + k], x['cupo_' + k])}<small class="tenue">Ya dio <b>${miles(x['dado_' + k])}</b> de ${miles(x['cupo_' + k])}.</small></div>`).join('')}</div>` : ''}
+      ${as.some(a => a.cupo === 'moneda') ? `<div class="g-cupo-mon" data-cupo="moneda" ${x.acciones.includes('moneda') ? '' : 'hidden'}><span class="lab">Cupo de cada moneda</span>
+        <div class="g-cupos" data-monedas>${monedasPerm(j, x, null)}</div></div>` : ''}
       <div class="g-perm-pie">${x.cambiado ? `<span class="tenue">Cambiado por ${esc(x.quien || '—')} · ${fechaTxt(x.cambiado)}</span>` : '<span class="tenue">Sin cambios todavía.</span>'}
-        ${x.dado_rcoin || x.dado_exp ? `<button type="button" class="btn chico fantasma" data-perm="reiniciar">${ic('refresh', 's14')}Empezar el cupo de cero</button>` : ''}
+        ${algoDado ? `<button type="button" class="btn chico fantasma" data-perm="reiniciar">${ic('refresh', 's14')}Empezar el cupo de cero</button>` : ''}
         <button type="button" class="btn chico prim" data-perm="guardar">Guardar ${esc(nj)}</button></div></section>`; };
+  /* las monedas de un juego del contrato: una casilla por moneda, con lo que ya dio. `vals` = lo escrito (no se pierde al repintar) */
+  const extra = {};
+  function monedasPerm(j, x, vals) {
+    const c = capGuardada(j), ms = c ? (c.monedas || []).map(mm => ({ id: String(mm.id), nombre: mm.nombre || mm.id })) : [];
+    [...Object.keys(x.monedas || {}), ...(extra[j] || [])].forEach(k => { if (!ms.some(mm => mm.id === k)) ms.push({ id: k, nombre: nomMonedaJuego(j, k), suelta: true }); });
+    const estado = c ? '' : estadoCap[j] !== 'falla' ? `<p class="tenue g-nota g-mon-todo">${ic('clock', 's14')} Preguntándole a ${esc(juegoCat(j).nombre)} qué monedas tiene…</p>`
+      : `<div class="g-mon-todo"><p class="g-alerta">${ic('alert', 's14')} No se pudo preguntarle a ${esc(juegoCat(j).nombre)} qué monedas tiene. Escriba el id de cada una tal como la llama el juego (oro, cash…).</p>
+        <div class="g-mon-nueva"><label class="campo"><span class="sr">Id de la moneda</span><input data-mon-nueva maxlength="20" placeholder="oro, cash…" autocomplete="off" spellcheck="false"></label><button type="button" class="btn chico" data-perm="mon-agregar">${ic('plus', 's14')}Agregar</button></div></div>`;
+    return estado + ms.map(mm => { const v = (x.monedas || {})[mm.id] || { cupo: 0, dado: 0 }, val = vals && vals[mm.id] != null ? vals[mm.id] : v.cupo;
+      return `<div class="g-cupo-f" data-mon="${esc(mm.id)}"><span class="lab">${esc(mm.nombre)}${mm.suelta && String(mm.nombre).toLowerCase() !== mm.id ? ` <span class="tenue">· ${esc(mm.id)}</span>` : ''}</span>
+        <label class="campo"><span class="sr">Cupo de ${esc(mm.nombre)}</span><input type="number" min="0" max="100000000" step="1" inputmode="numeric" value="${esc(val)}"></label>
+        ${medidor(v.dado, v.cupo)}<small class="tenue">Ya dio <b>${miles(v.dado)}</b> de ${miles(v.cupo)}.</small></div>`; }).join('');
+  }
+  const estadoCap = {};
   const pn = abrirCapa(`<aside class="cajon g-cajon-perm" role="dialog" aria-modal="true" aria-labelledby="pmTit"><div class="cajon-cab">${ava(m.nombre, 'm redondo')}<div style="min-width:0"><h2 id="pmTit">Permisos de ${esc(m.nombre)}</h2><p>Moderador · Eñeños-ID ${esc(m.uid)}. Lo que puede hacer en cada juego, además de lo de base.</p></div>
     <button type="button" class="btn icono chico fantasma cerrar" data-accion="cerrar-capa" aria-label="Cerrar">${ic('x', 's16')}</button></div>
-    <div class="cajon-cuerpo">${js.length ? js.map(seccion).join('') : vacio('Ningún juego para gestionar', 'Asígnele un juego que ya tenga gestión en el Coordinador (hoy, R2Beat).')}
+    <div class="cajon-cuerpo">${js.length ? js.map(seccion).join('') : vacio('Ningún juego para gestionar', `Asígnele un juego que ya tenga gestión en el Coordinador${nombres.length ? ` (hoy: ${esc(nombres.join(', '))})` : ''}.`)}
       ${otros.length ? `<p class="tenue g-nota">${ic('info', 's14')} ${otros.map(j => esc(juegoCat(j).nombre)).join(', ')}: todavía sin gestión en el Coordinador.</p>` : ''}</div></aside>`);
-  pn.addEventListener('change', e => { if (e.target.type === 'checkbox' && ['rcoin', 'exp'].includes(e.target.value)) { const s = e.target.closest('.g-perm'), c = $(`[data-cupo="${e.target.value}"]`, s); if (c) c.hidden = !e.target.checked; } });
+  const repintarMon = j => {
+    const s = $(`.g-perm[data-juego="${CSS.escape(j)}"]`, pn); if (!s) return;
+    const caja = $('[data-monedas]', s); if (!caja) return;
+    const vals = {}; $$('[data-mon]', caja).forEach(d => { vals[d.dataset.mon] = $('input', d).value; });
+    caja.innerHTML = monedasPerm(j, de(j), vals);
+    const b = $('[data-base]', s); if (b) b.innerHTML = `${ic('check', 's14')} Siempre puede: ${base(j)}.`;
+  };
+  js.filter(j => conMonedas(j) && !capGuardada(j)).forEach(j => {
+    estadoCap[j] = 'cargando'; repintarMon(j);
+    capDeJuego(j).then(c => { estadoCap[j] = c ? 'ok' : 'falla'; if (pn.isConnected) repintarMon(j); });
+  });
+  pn.addEventListener('change', e => { if (e.target.type === 'checkbox') { const s = e.target.closest('.g-perm'), c = $(`[data-cupo="${CSS.escape(e.target.value)}"]`, s); if (c) c.hidden = !e.target.checked; } });
+  pn.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-mon-nueva]')) { e.preventDefault(); const b = $('[data-perm="mon-agregar"]', e.target.closest('.g-perm')); if (b) b.click(); } });
   pn.addEventListener('click', async e => {
     const b = e.target.closest('[data-perm]'); if (!b) return;
     const s = b.closest('.g-perm'), j = s.dataset.juego;
+    if (b.dataset.perm === 'mon-agregar') {
+      const inp = $('[data-mon-nueva]', s), id = inp.value.trim().toLowerCase();
+      if (!/^[a-z0-9_]{1,20}$/.test(id)) { toast({ t: 'Ese id no sirve', sub: 'Sólo letras sin tilde, números y _, hasta 20 (por ejemplo: oro).', tipo: 'err' }); inp.focus(); return; }
+      if ($$('[data-mon]', s).length >= 10) { toast({ t: 'Hasta 10 monedas por juego', tipo: 'err' }); return; }
+      if (!$(`[data-mon="${id}"]`, s)) { extra[j] = [...(extra[j] || []), id]; repintarMon(j); }
+      const n = $(`[data-mon="${id}"] input`, s); if (n) n.focus();
+      return;
+    }
     const acciones = $$('.g-perm-acc input:checked', s).map(c => c.value);
-    const cupo = k => { const c = $(`[data-cupo="${k}"] input`, s); return acciones.includes(k) ? Number(c.value) || 0 : 0; };
+    const cupo = k => { const c = $(`[data-cupo="${k}"] input`, s); return c && acciones.includes(k) ? Number(c.value) || 0 : 0; };
     const cuerpo = { uid: m.uid, juego: j, acciones, cupo_rcoin: cupo('rcoin'), cupo_exp: cupo('exp') };
+    if (conMonedas(j)) {
+      /* sin «moneda» marcada, cada cupo va a 0 pero lo ya dado se guarda (como el Rcoin de R2Beat) */
+      const cm = {}; Object.entries(de(j).monedas || {}).forEach(([k, v]) => { cm[k] = acciones.includes('moneda') ? v.cupo : 0; });
+      $$('[data-mon]', s).forEach(d => { cm[d.dataset.mon] = acciones.includes('moneda') ? Number($('input', d).value) || 0 : 0; });
+      const malo = Object.values(cm).find(v => !Number.isInteger(v) || v < 0 || v > 100000000);
+      if (malo !== undefined) { toast({ t: 'Revise los cupos', sub: 'Cada cupo va de 0 a 100.000.000.', tipo: 'err' }); return; }
+      cuerpo.cupos_monedas = cm;
+    }
     const mandar = async reiniciar => {
       b.disabled = true;
       const r = await api('gestion/permisos', Object.assign(cuerpo, reiniciar ? { reiniciar_dado: true } : {}));
@@ -2322,11 +2676,15 @@ async function pintarMisPermisos() {
   const c = $('#misPermisosG'); if (!c) return;
   const js = (S.sesion.juegos || []);
   const rs = await Promise.all(js.map(j => api('gestion/mios?juego=' + encodeURIComponent(j))));
+  /* ★ contrato: los nombres de las monedas los dice cada juego */
+  await Promise.all(js.filter((j, i) => rs[i].ok && rs[i].d.tipo === 'contrato1' && (rs[i].d.acciones || []).includes('moneda')).map(capDeJuego));
   if (!$('#misPermisosG')) return;
-  const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', gorila: 'monedas gorila', chat: 'leer el chat guardado' };
+  const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', gorila: 'monedas gorila', chat: 'leer el chat guardado', moneda: 'dar o quitar monedas' };
   c.innerHTML = js.map((j, i) => { const r = rs[i]; if (!r.ok || !r.d.gestionable) return '';
-    const ex = r.d.acciones.filter(a => nom[a]), cu = r.d.cupos || {};
-    return `<span>${ic('dash', 's14')} ${esc(juegoCat(j).nombre)}: tablero, fichas, avisos, desconectar y sacar el chat${ex.length ? `; además ${ex.map(a => nom[a] + (cu[a] ? ` (le quedan ${miles(cu[a].queda)} de ${miles(cu[a].cupo)})` : '')).join(', ')}` : ''}.</span>`; }).join('');
+    const ex = r.d.acciones.filter(a => nom[a]), cu = r.d.cupos || {}, contrato = r.d.tipo === 'contrato1';
+    const cupoTxt = a => (a === 'moneda' ? (ms => (ms.length ? ` (le quedan ${ms.join('; ')})` : ' (sin cupo todavía)'))(Object.keys(cu).filter(k => k.startsWith('moneda:') && cu[k].cupo).map(k => `${esc(nomMonedaJuego(j, k.slice(7)))}: ${miles(cu[k].queda)} de ${miles(cu[k].cupo)}`))
+      : cu[a] ? ` (le quedan ${miles(cu[a].queda)} de ${miles(cu[a].cupo)})` : '');
+    return `<span>${ic('dash', 's14')} ${esc(juegoCat(j).nombre)}: ${contrato ? 'tablero, fichas, y avisar y desconectar si el juego lo permite' : 'tablero, fichas, avisos, desconectar y sacar el chat'}${ex.length ? `; además ${ex.map(a => nom[a] + cupoTxt(a)).join(', ')}` : ''}.</span>`; }).join('');
 }
 async function personajesDePersona(p) {
   const c = $('#perPjs'); if (!c) return;
@@ -2334,16 +2692,18 @@ async function personajesDePersona(p) {
   const out = await Promise.all(juegos.map(async j => {
     const m = await api('gestion/mios?juego=' + encodeURIComponent(j.id));
     if (!m.ok || !m.d.gestionable || !m.d.acciones.includes('ver')) return null;
-    const r = await api(`gestion/${encodeURIComponent(j.id)}/live/usuarios?q=${encodeURIComponent(p.uid)}`);
-    if (!r.ok) return { j, error: errTxt(r) };
-    return { j, pjs: (r.d.filas || []).filter(x => x.enenos_id === p.uid && x.uid != null) };
+    const c = m.d.tipo === 'contrato1', env = m.d.entornos && m.d.entornos.live === false && m.d.entornos.test ? 'test' : 'live';
+    const r = await api(`gestion/${encodeURIComponent(j.id)}/${env}/${c ? 'buscar' : 'usuarios'}?q=${encodeURIComponent(p.uid)}`);
+    const J = { jid: j.id, env, c };
+    if (!r.ok) return { j, J, error: errTxt(r) };
+    return { j, J, pjs: (r.d.filas || []).map(x => (c ? Object.assign({}, x, { uid: x.id }) : x)).filter(x => x.enenos_id === p.uid && x.uid != null) };
   }));
   if (!$('#perPjs')) return;
   const hay = out.filter(Boolean);
   if (!hay.length) { c.remove(); return; }
   c.innerHTML = `<div class="titulo-sec"><h2>Sus personajes</h2><span class="tenue">en los juegos que ya se gestionan desde el Coordinador</span></div>
-    ${hay.map(x => `<div class="pj-grupo"><h3>${etqJuego(x.j.id)} ${esc(x.j.nombre)}${x.pjs && x.pjs.length ? `<a class="btn chico fantasma g-ver-en" href="${urlPj({ jid: x.j.id, env: 'live' }, x.pjs[0].uid)}">Ver en ${esc(x.j.nombre)}${ic('arrow', 's14')}</a>` : ''}</h3>${x.error ? `<p class="tenue">${x.error}</p>`
-      : x.pjs.length ? `<div class="g-pjs g-pjs-persona">${x.pjs.map(f => pjChip({ jid: x.j.id, env: 'live' }, f)).join('')}</div>` : '<p class="tenue g-nada">Todavía no tiene personaje en este juego.</p>'}</div>`).join('')}`;
+    ${hay.map(x => `<div class="pj-grupo"><h3>${etqJuego(x.j.id)} ${esc(x.j.nombre)}${x.pjs && x.pjs.length ? `<a class="btn chico fantasma g-ver-en" href="${urlPj(x.J, x.pjs[0].uid)}">Ver en ${esc(x.j.nombre)}${ic('arrow', 's14')}</a>` : ''}</h3>${x.error ? `<p class="tenue">${x.error}</p>`
+      : x.pjs.length ? `<div class="g-pjs g-pjs-persona">${x.pjs.map(f => pjChip(x.J, f)).join('')}</div>` : '<p class="tenue g-nada">Todavía no tiene personaje en este juego.</p>'}</div>`).join('')}`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -2579,7 +2939,7 @@ function go(h, reemplazar, forzar) {
   if (!forzar && hayCambios() && !mismaPagina(h)) { pedirSalir(() => go(h, reemplazar, true)); return; }
   if (!forzar && mismaPagina(h)) {                        // ★ la misma página: cambiar de parte sin perder el borrador
     if (S.jc) {
-      const [t, u] = h.split('/').slice(4), sel = t === 'personas' && /^\d+$/.test(u || '') ? u : null;
+      const [t, u] = h.split('/').slice(4), sel = t === 'personas' && selOk(S.jc, u) ? u : null;
       if (tabsJc(S.jc).includes(t) && (t !== S.jc.tab || (t === 'personas' && sel !== S.jc.sel))) {
         try { if (!reemplazar && location.hash !== h) history.pushState(null, '', h); } catch (err) { /* nada */ }
         S.ruta = h; S.jc.tab = t; S.jc.sel = sel; cerrarCapa(); pintarJ(); window.scrollTo(0, 0);
