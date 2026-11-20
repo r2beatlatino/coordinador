@@ -17,6 +17,8 @@ CONTROL AL REVÉS (⟲):
     quedan en la auditoría; quitar corta la sesión al instante
   · el ESTADO de los servidores sale de un /salud de verdad ⟲ sin fuente no se muestra nada (ni un 0)
   · la página: CSP y sin `..` ⟲ un archivo que existe se sirve
+  · ★ 20-nov: index.html, panel.js y panel.css no traen nada que su CSP bloquee (onclick=, <script> en línea, http,
+    eval) ⟲ cada trampa se caza, y un <script src> o un xmlns de SVG no dan falso positivo
 """
 import contextlib
 import hashlib
@@ -497,6 +499,34 @@ try:
     os.environ["R2_CUENTAS_DUENA"] = "1"
     cod2, _, _ = pedir("GET", "/coordinador/api/estado")
     ok(cod == 404 and cod2 == 200, f"⟲ sin Cuenta Eñeños dueña el panel no existe (404) ({cod} / {cod2})")
+
+    print("· la página cumple su CSP (★ 20-nov fase B: el panel creció; que no se cuele nada que la CSP bloquee)")
+    import re as _re
+
+    def fuera_de_csp(texto):
+        """Lo que la CSP del panel (script-src 'self', img-src 'self' data:, sin inline) rompería o dejaría pasar."""
+        malos = []
+        if _re.search(r"""\son[a-z]+\s*=\s*["'\\]""", texto):
+            malos.append("un manejador en línea (onclick=…)")
+        if _re.search(r"<script(?![^>]*\bsrc=)[^>]*>", texto):
+            malos.append("un <script> en línea")
+        sin_ns = _re.sub(r"xmlns(:\w+)?=['\"]http://www\.w3\.org/[^'\"]*['\"]", "", texto)
+        if _re.search(r"""(?:src|href)\s*=\s*["']\s*(?:https?:)?//|url\(\s*["']?\s*(?:https?:)?//""", sin_ns):
+            malos.append("algo de afuera (src/href/url con http)")
+        if _re.search(r"\beval\s*\(|new Function\s*\(", texto):
+            malos.append("eval / new Function")
+        return malos
+
+    panel = os.path.join(RAIZ, "servidor", "panel")
+    for nombre in ("index.html", "panel.js", "panel.css"):
+        with open(os.path.join(panel, nombre), encoding="utf-8") as f:
+            malos = fuera_de_csp(f.read())
+        ok(not malos, f"{nombre}: nada que la CSP bloquee ({', '.join(malos) or 'limpio'})")
+    for trampa in ('<button onclick="x()">', "`<img src=x onerror='y'>`", "<script>alert(1)</script>",
+                   '<img src="https://afuera.com/a.png">', "background: url(//cdn.afuera/x.png)", "eval('1')"):
+        ok(bool(fuera_de_csp(trampa)), f"⟲ la revisión caza {trampa!r}")
+    ok(not fuera_de_csp('<script src="panel.js"></script><svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+       "⟲ y no confunde un <script src> ni un xmlns de SVG")
 
     print("· salir")
     cod, d, h = pedir("POST", "/coordinador/api/salir", {}, S_JEFA)

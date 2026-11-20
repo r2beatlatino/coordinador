@@ -6,7 +6,9 @@
      #/juegos          las tarjetas de juegos.json, con PROD / TEST
      #/red             personas, invitaciones, lanzamientos, moderadores y permisos, auditoría
      #/persona/<uid>   vínculos, estado y permisos por juego (★ 20-nov: banear en varios juegos, con tiempo y motivo)
-     #/j/…             lo de adentro de cada juego: fases B y C («Próximamente»)
+     #/j/<juego>/<live|test>/<parte>   ★ fase B (20-nov): el contenido dinámico del launcher de ese juego
+                       (asistencia · ruleta · avisos del lobby · lanzamiento). El tablero (fase C) todavía no.
+     #/novedades       ★ fase B: el acordeón de noticias de todos los launchers
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -56,7 +58,7 @@ async function api(ruta, datos) {
   try { r = await fetch('api/' + ruta, op); } catch (e) { return { ok: false, status: 0, d: { error: 'red', texto: 'No hay conexión con el Coordinador.' } }; }
   try { d = await r.json(); } catch (e) { d = {}; }
   if (r.status === 401 && S.sesion && ruta !== 'estado') {
-    S.sesion = null; toast({ t: 'La sesión terminó', sub: 'Vuelva a entrar con Discord o Google.', tipo: 'info' }); go('#/entrar', true);
+    S.sesion = null; S.jc = null; S.nov = null; toast({ t: 'La sesión terminó', sub: 'Vuelva a entrar con Discord o Google.', tipo: 'info' }); go('#/entrar', true, true);
   }
   return { ok: r.ok, status: r.status, d };
 }
@@ -296,7 +298,7 @@ function barraHub(activa) {
   const nav = (id, t) => `<a href="#/${id}" class="${activa === id ? 'on' : ''}" ${activa === id ? 'aria-current="page"' : ''}>${t}</a>`;
   return `<header class="barra">
     <a class="marca-chica" href="#/juegos" aria-label="Coordinador Eñeños, elegir juego"><img src="assets/enenos-team.png" alt=""><span class="coord">COORDINADOR</span></a>
-    <nav class="barra-nav" aria-label="Secciones">${nav('juegos', 'Juegos')}${nav('red', 'La red')}</nav>
+    <nav class="barra-nav" aria-label="Secciones">${nav('juegos', 'Juegos')}${nav('red', 'La red')}<a href="#/novedades" class="pill-nov ${activa === 'novedades' ? 'on' : ''}" ${activa === 'novedades' ? 'aria-current="page"' : ''}>${ic('mega', 's14')}Novedades${novSucio() ? '<span class="pt" title="Hay cambios sin publicar"></span>' : ''}</a></nav>
     <span class="esp"></span>
     <button type="button" class="yo" data-accion="yo" aria-haspopup="true" aria-expanded="false">${ava(S.sesion.nombre, 'm')}<span class="t"><b>${esc(S.sesion.nombre)}</b><span>${esAdmin() ? 'Admin' : 'Moderador'}</span></span>${ic('down', 's14 tenue')}</button>
   </header>`;
@@ -449,7 +451,7 @@ async function pintarLanzamientos() {
       <div style="min-width:0"><b style="font-weight:600">${esc(l.nombre)}</b> <span class="chip mayus" style="margin-left:4px;--g:0">${esc(l.etiqueta)}</span>
         <div class="tenue" style="font-size:12.5px;margin-top:3px">${l.libre ? 'Abierto desde el' : 'Abre el'} ${fechaEpoch(l.desde)} (su hora)${l.pendientes ? ` · ${l.pendientes} por aprobar` : ''}</div></div>
       <div class="reloj">${l.libre ? `<span style="color:var(--green)">Abierto</span>` : `<span data-cuenta="${l.desde * 1000}">--</span><small>para abrir</small>`}</div></div>`).join('')
-    + `<div class="tenue" style="padding:10px 16px 14px;border-top:1px solid var(--line);font-size:12px">${ic('info', 's14')} Antes de la fecha sólo entran el equipo y los aprobados. La fecha se cambia en <code>config/lanzamientos.json</code> (desde el panel, en una fase siguiente).</div>`
+    + `<div class="tenue" style="padding:10px 16px 14px;border-top:1px solid var(--line);font-size:12px">${ic('info', 's14')} Antes de la fecha sólo entran el equipo y los aprobados. La fecha la cambia un Admin en la página de cada juego, en «Lanzamiento».</div>`
     : vacio('Sin lanzamientos', 'Ningún juego suyo tiene una fecha de apertura programada.');
   tic();
 }
@@ -648,47 +650,1062 @@ function levantarBaneo(i) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
-   Lo de adentro de cada juego: fases B y C
+   ★ 20-nov · FASE B — lo de adentro de cada juego: el CONTENIDO DINÁMICO del launcher (#/j/<juego>/<live|test>/<parte>)
+   asistencia · ruleta · tira (avisos del lobby) · lanzamiento. El diseño es el del prototipo aprobado (v5); los
+   modelos son los REALES (servidor/contenido.py → contenido_interno.py del juego). ⛔ Lo que el juego no soporta no
+   se muestra. Cada parte es un BORRADOR hasta «Publicar»; «Descartar» vuelve a lo último que se leyó.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
-function vistaProx(jid, env) {
-  const j = S.catalogo.find(x => x.id === jid);
-  document.body.classList.toggle('test', env === 'test');
-  document.title = `${j ? j.nombre : 'Juego'} · Coordinador Eñeños`;
-  raiz.innerHTML = barraHub('juegos') + `<main class="hub" id="contenido">
-    <a class="volver" href="#/juegos" style="margin-bottom:12px;display:inline-flex">${ic('left', 's14')}Juegos</a>
-    <section class="caja" style="max-width:560px;margin:24px auto">${vacio(`${j ? esc(j.nombre) : 'Este juego'} · ${ENV_TXT[env] || 'PROD'} — próximamente`,
-      'Lo de adentro de cada juego (resumen, conectados, fichas, gráficos y contenido dinámico) llega en la próxima fase del Coordinador.',
-      '<a class="btn chico" href="#/red">Ir a La red</a>')}</section>
-  </main>`;
+const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const DIAS_PL = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
+const DIAS_C = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const ORD_SEM = ['', 'primera', 'segunda', 'tercera', 'cuarta', 'quinta'];
+const JC_TABS = { asistencia: ['Asistencia', 'ticket'], ruleta: ['Ruleta', 'refresh'], tira: ['Avisos del lobby', 'mega'], lanzamiento: ['Lanzamiento', 'rocket'] };
+const miles = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const corto = n => { n = Number(n) || 0; return n >= 1000 ? (n % 1000 ? (n / 1000).toFixed(1).replace('.', ',') : n / 1000) + 'k' : String(n); };
+const clon = x => JSON.parse(JSON.stringify(x));
+/* el borrador se compara SIN las claves internas (`_k`): ésas no viajan */
+const ser = x => JSON.stringify(x, (k, v) => (k && k[0] === '_' ? undefined : v));
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const dis = ro => (ro ? ' disabled' : '');
+const entre = (v, a, b) => Math.max(a, Math.min(b, Math.round(Number(v) || 0)));
+const isoLocal = d => `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}T${dos(d.getHours())}:${dos(d.getMinutes())}`;
+const hoyIso = () => { const d = new Date(); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`; };
+const cambiadoTxt = c => (c && c.cambiado ? `Cambiado por ${esc(c.quien || 'alguien')} · ${haceSeg(c.cambiado)}` : 'Sin cambios: rige lo de fábrica.');
+/* «AAAA-MM-DDTHH:MM» en hora de Perú (UTC−5, sin horario de verano) -> epoch */
+const epochPeru = s => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(s || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] + 5, +m[5]) / 1000 : null; };
+const pct = (p, tot) => { if (!tot) return '0 %'; const x = 100 * p / tot; return (x > 0 && x < 1 ? x.toFixed(2) : x.toFixed(1)).replace('.', ',').replace(/,0+$/, '') + ' %'; };
+const errBox = t => (t ? `<div class="conclusion raro" role="alert">${ic('alert', 's20')}<div>${esc(t)}<small>Corríjalo para poder publicar.</small></div></div>` : '');
+
+/* el arte del launcher (no va al repo: lo sirve /arte/). Sin él, las vistas previas usan colores. */
+const ARTE = { asis: null };
+function probarArte(lista, alTerminar) {
+  let n = lista.length, ok = true;
+  const uno = bien => { ok = ok && bien; if (!--n) alTerminar(ok); };
+  lista.forEach(src => { const im = new Image(); im.addEventListener('load', () => uno(true)); im.addEventListener('error', () => uno(false)); im.src = src; });
 }
+/* un <img data-fallo="…"> que no carga se cambia por su ícono (ver el listener de 'error') */
+const FALLO = {
+  rcoin: c => `<span class="ip svg ${c}" style="--c:227,187,103">${ic('coins')}</span>`,
+  gorila: c => `<span class="ip svg ${c}" style="--c:61,220,132">${ic('coins')}</span>`,
+  npc: c => `<span class="ip svg ${c}" style="--c:81,216,229">${ic('mega')}</span>`,
+};
+const imgRcoin = (c = '') => `<img class="ip ${c}" src="arte/moneda-rcoin.png" alt="" data-fallo="rcoin">`;
+const imgGorila = (c = '') => `<img class="ip ${c}" src="arte/moneda-gorila.png" alt="" data-fallo="gorila">`;
+
+/* ── los premios de la asistencia: {rcoin} · {item, cant} · {item, dias} ── */
+function nomItem(id, nombre) {
+  if (nombre) return nombre;
+  const J = S.jc;
+  return (J && J.nombres[id]) || `Ítem ${id}`;
+}
+function icPremio(p, c = '') {
+  if (!p) return '';
+  if (p.rcoin != null) return imgRcoin(c);
+  const col = hashStr(String(p.item)) % 2 ? '243,38,134' : '179,139,255';
+  return `<span class="ip svg ${c}" style="--c:${col}">${ic(p.dias != null ? 'shirt' : 'gift')}</span>`;
+}
+function premioTxt(p) {
+  if (!p) return '';
+  if (p.rcoin != null) return `${miles(p.rcoin)} Rcoin`;
+  const n = nomItem(p.item, p.nombre);
+  if (p.dias != null) return `${n} · ${p.dias ? p.dias + ' días' : 'permanente'}`;
+  return `${p.cant > 1 ? p.cant + '× ' : ''}${n}`;
+}
+const premioCorto = p => (!p ? '' : p.rcoin != null ? corto(p.rcoin) : p.dias != null ? (p.dias ? p.dias + 'd' : '∞') : '×' + (p.cant || 1));
+
+/* ══════════════ el estado de la página del juego ══════════════ */
+function nuevoJc(d, jid, env) {
+  const J = { jid, env, d, tab: null, borr: {}, orig: {}, err: {}, nombres: {}, filas: {}, mes: null, mesVer: null, dia: null, alcance: null,
+              modoRueda: 'gorila', seq: 0, publicando: false };
+  const s = d.servidor;
+  if (s) {
+    ponerAsis(J, s.asistencia, s.asistencia_mes);
+    J.borr.ruleta = clon(s.ruleta || {});
+    ponerTira(J, s.tira);
+  }
+  if (d.lanzamiento) J.borr.lanzamiento = { desde_peru: d.lanzamiento.desde_peru, etiqueta: d.lanzamiento.etiqueta || '' };
+  Object.keys(J.borr).forEach(k => { J.orig[k] = ser(J.borr[k]); });
+  return J;
+}
+function ponerAsis(J, a, mes) {
+  const A = clon(a || {});
+  A.semana = A.semana || {}; A.semana_mes = A.semana_mes || {}; A.fechas = A.fechas || {};
+  if (A.activa === undefined) A.activa = true;
+  if (A.tardias_mes === undefined) A.tardias_mes = 5;
+  J.borr.asistencia = A;
+  J.mes = mes || null;
+  J.mesVer = mes ? `${mes.anio}-${dos(mes.mes)}` : null;
+  nombresDe(J, mes);
+  if (mes && !mes.dias.some(x => x.fecha === J.dia)) J.dia = ((mes.dias.find(x => x.hoy) || mes.dias[0]) || {}).fecha || null;
+}
+function ponerTira(J, filas) {
+  J.filas = {};
+  (filas || []).forEach(f => { J.filas[f.id] = f; });
+  J.borr.tira = (filas || []).map(f => ({ id: f.id, texto: f.texto, siempre: !!f.siempre, vence: f.siempre ? null : f.vence, activo: !!f.activo, _k: 'f' + f.id }));
+}
+function nombresDe(J, mes) {
+  if (!mes) return;
+  mes.dias.forEach(x => [...(x.premios || []), ...(x.si_no || [])].forEach(p => { if (p.item != null && p.nombre) J.nombres[p.item] = p.nombre; }));
+}
+const tabsJc = J => [...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
+const puedeJc = (J, k) => (k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
+const suciasJc = J => Object.keys(J.borr).filter(k => puedeJc(J, k) && ser(J.borr[k]) !== J.orig[k]);
+const juegoCat = jid => S.catalogo.find(x => x.id === jid) || S.juegos.find(x => x.id === jid) || { id: jid, nombre: jid, color: '' };
+const envTxt = env => ENV_TXT[env] || 'PROD';
+
+/* ══════════════ la página ══════════════ */
+async function vistaJuego(jid, env, tab) {
+  document.body.classList.remove('menu-abierto');
+  document.body.classList.toggle('test', env === 'test');
+  const j = juegoCat(jid);
+  document.title = `${j.nombre} · ${envTxt(env)} · Coordinador Eñeños`;
+  const ruta0 = S.ruta;
+  raiz.innerHTML = barraHub('juegos') + `<main class="hub jc" id="contenido">${cabJuego(j, env)}
+    <div class="caja jc-carga" aria-live="polite"><span class="esq" style="height:14px;width:40%"></span><span class="esq" style="height:180px"></span><span class="tenue">Cargando el contenido del launcher…</span></div></main>`;
+  if (ARTE.asis === null) { ARTE.asis = false; probarArte(['arte/asistencia-ticket_gris.png', 'arte/asistencia-digitos.png'], ok => { ARTE.asis = ok; if (ok && S.jc && S.jc.tab === 'asistencia') pintarPreviaJ(); }); }
+  const [r, jr] = await Promise.all([api(`contenido?juego=${encodeURIComponent(jid)}&entorno=${env}`), S.juegos.length ? null : api('juegos')]);
+  if (S.ruta !== ruta0) return;
+  if (jr && jr.ok) S.juegos = jr.d.juegos || [];
+  if (!r.ok) {
+    if (r.status === 401) return;
+    $('#contenido').innerHTML = `<a class="volver" href="#/juegos" style="margin-bottom:12px;display:inline-flex">${ic('left', 's14')}Juegos</a>
+      <section class="caja" style="max-width:560px;margin:24px auto">${vacio('No se puede abrir este juego', errTxt(r), '<a class="btn chico" href="#/juegos">Volver a los juegos</a>')}</section>`;
+    return;
+  }
+  S.jc = nuevoJc(r.d, jid, env);
+  const ts = tabsJc(S.jc);
+  S.jc.tab = ts.includes(tab) ? tab : ts[0] || null;
+  pintarJ();
+}
+function cabJuego(j, env, J) {
+  const pases = (S.juegos.find(x => x.id === j.id) || {}).pases || {};
+  const envBtn = (e, icono) => {
+    if (e === env) return `<span class="jc-envb on ${e}" aria-current="page">${ic(icono, 's14')}${envTxt(e)}</span>`;
+    if (!pases[e]) return `<span class="jc-envb off" title="${e === 'test' ? 'Todavía no tiene servidor de prueba' : 'Sin servidor'}">${ic(icono, 's14')}${envTxt(e)}</span>`;
+    return `<a class="jc-envb ${e}" href="#/j/${esc(j.id)}/${e}/${esc((J && J.tab) || 'asistencia')}">${ic(icono, 's14')}${envTxt(e)}</a>`;
+  };
+  const mini = okArte(j.arte) ? `<img src="${esc(j.arte)}" style="object-position:${okPos(j.pos)}" alt="">` : j.id === 'r2beat-moderno' ? arte2027() : arteColor(j);
+  return `<a class="volver" href="#/juegos">${ic('left', 's14')}Juegos</a>
+    <section class="jc-cab" style="--g:${okColor(j.color)}">
+      <span class="jc-min" aria-hidden="true">${mini}</span>
+      <div class="jc-t"><span class="jc-sup">Contenido del launcher</span>
+        <h1>${esc(j.nombre)} <span class="pill-env"><span class="punto"></span>${envTxt(env)}</span></h1>
+        <p>${env === 'test' ? 'Servidor de PRUEBA: lo que publique aquí no les llega a los jugadores de PROD.' : 'Lo que ve el jugador en el launcher. Al publicar llega en vivo: no hace falta un launcher nuevo.'}</p></div>
+      <nav class="jc-envs" aria-label="Servidor">${envBtn('live', 'radio')}${envBtn('test', 'flask')}</nav>
+    </section>`;
+}
+function pintarJ(foco) {
+  const J = S.jc, main = $('#contenido'); if (!J || !main) return;
+  const j = juegoCat(J.jid), ts = tabsJc(J);
+  const avisos = [];
+  if (!J.d.puede_editar && J.d.servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('lock', 's20')}<div>Su cuenta puede mirar este juego, pero no cambiar su contenido.</div></div>`);
+  if (!J.d.servidor && J.d.sin_servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('info', 's20')}<div>${esc(J.d.sin_servidor)}${ts.length ? '<small>Por ahora, de este servidor sólo se puede ver el lanzamiento.</small>' : ''}</div></div>`);
+  main.innerHTML = cabJuego(j, J.env, J) + avisos.join('') +
+    (ts.length ? `<div class="jc-barra"><div class="pest jc-pest" role="tablist" aria-label="Contenido del launcher" id="jcTabs"></div><div class="jc-acc" id="jcAcc"></div></div>
+      <div id="jcCuerpo"></div>` : `<section class="caja" style="max-width:560px;margin:8px auto 0">${vacio('Sin contenido dinámico', esc(J.d.sin_servidor || 'Este servidor todavía no tiene contenido dinámico.'), '<a class="btn chico" href="#/juegos">Volver a los juegos</a>')}</section>`) +
+    `<p class="jc-fase">${ic('info', 's14')}<span>El tablero del juego (resumen, conectados y gráficos) llega en la próxima fase del Coordinador.</span></p>`;
+  if (!ts.length) return;
+  const h = `#/j/${J.jid}/${J.env}/${J.tab}`;
+  if (S.ruta !== h) { S.ruta = h; try { history.replaceState(null, '', h); } catch (err) { /* nada */ } }
+  pintarAccJ();
+  pintarCuerpoJ(foco);
+}
+function pintarAccJ() {
+  const J = S.jc, tabs = $('#jcTabs'), acc = $('#jcAcc'); if (!J || !tabs) return;
+  const sucias = suciasJc(J);
+  tabs.innerHTML = tabsJc(J).map(k => `<button type="button" role="tab" id="jcTab-${k}" aria-controls="jcCuerpo" aria-selected="${J.tab === k}" tabindex="${J.tab === k ? 0 : -1}" data-accion="jc-tab" data-k="${k}">${ic(JC_TABS[k][1], 's14')}${JC_TABS[k][0]}${sucias.includes(k) ? '<span class="lc-pt" title="Sin publicar"></span><span class="sr"> (sin publicar)</span>' : ''}</button>`).join('');
+  const alguno = tabsJc(J).some(k => puedeJc(J, k));
+  if (!alguno) { acc.innerHTML = `<span class="chip">${ic('eye', 's14')}Sólo lectura</span>`; return; }
+  const n = sucias.length, env = envTxt(J.env);
+  acc.innerHTML = `<span class="chip ${n ? 'oro' : 'verde'}" role="status">${ic(n ? 'clock' : 'check', 's14')}${n ? `${n} ${n === 1 ? 'parte' : 'partes'} sin publicar` : 'Todo publicado'}</span>
+    <button type="button" class="btn fantasma" data-accion="jc-descartar" ${n && !J.publicando ? '' : 'disabled'}>Descartar</button>
+    <button type="button" class="btn prim" data-accion="jc-publicar" ${n && !J.publicando ? '' : 'disabled'}>${J.publicando ? '<span class="giro-btn" aria-hidden="true"></span>Publicando…' : `${ic('send', 's16')}Publicar<span class="vc-largo"> en ${env}</span>`}</button>`;
+}
+function pintarCuerpoJ(foco) {
+  const J = S.jc, c = $('#jcCuerpo'); if (!J || !c) return;
+  const ed = { asistencia: edAsistencia, ruleta: edRuleta, tira: edTira, lanzamiento: edLanz }[J.tab](J);
+  c.innerHTML = `<div class="lc-grid" role="tabpanel" aria-labelledby="jcTab-${J.tab}"><div class="lc-ed">${ed}</div>
+    <aside class="lc-previa" aria-label="Vista previa"><div class="lc-previa-cab">${ic('eye', 's14')}Así lo ve el jugador <span class="etq-env ${J.env === 'test' ? 'test' : 'live'}">${envTxt(J.env)}</span></div><div id="jcPrevia">${previaJ(J)}</div></aside></div>`;
+  if (foco) { const f = $(foco); if (f) f.focus(); }
+  tic();
+}
+const previaJ = J => ({ asistencia: previaAsis, ruleta: previaRuleta, tira: previaTira, lanzamiento: previaLanz }[J.tab](J));
+function pintarPreviaJ() { const J = S.jc, p = $('#jcPrevia'); if (J && p) { p.innerHTML = previaJ(J); tic(); } }
+function cambioJ() { pintarAccJ(); pintarPreviaJ(); }
+
+/* ══════════════ ASISTENCIA ══════════════ */
+/* «semana_mes 2» -> «semana_mes:2». ⛔ Sólo valores conocidos (va a clases y atributos) */
+const claveOrigen = o => { const m = /^semana_mes (\d|ultima)$/.exec(String(o || '')); return m ? 'semana_mes:' + m[1] : ['fecha', 'semana', 'base'].includes(o) ? o : 'base'; };
+function alcances(x, L) {
+  const pl = DIAS_PL[x.dow], n = Math.floor((x.dia - 1) / 7) + 1;
+  const out = [{ k: 'fecha', t: 'Sólo este día', s: `El ${x.dia} de ${MESES_L[Number(x.fecha.slice(5, 7)) - 1]}` }];
+  if (x.dia > L - 7) out.push({ k: 'semana_mes:ultima', t: `Los ${pl} de la última semana`, s: 'Los últimos 7 días de cada mes' });
+  out.push({ k: `semana_mes:${n}`, t: `Los ${pl} de la ${ORD_SEM[n]} semana`, s: `Días ${7 * n - 6} al ${Math.min(7 * n, 31)} de cada mes` });
+  out.push({ k: 'semana', t: `Todos los ${pl}`, s: 'Todo el mes, si no hay una regla más precisa' });
+  out.push({ k: 'base', t: 'Todos los días', s: 'Los días que no tienen otra regla' });
+  return out;
+}
+function pagaTxt(k, x) {
+  const pl = DIAS_PL[x.dow];
+  if (k === 'fecha') return 'una regla sólo para este día';
+  if (k === 'semana_mes:ultima') return `la regla de los ${pl} de la última semana`;
+  if (k.startsWith('semana_mes:')) return `la regla de los ${pl} de la ${ORD_SEM[Number(k.split(':')[1])] || ''} semana`;
+  if (k === 'semana') return `la regla de los ${pl}`;
+  return 'la regla de todos los días';
+}
+function regla(A, k, x) {
+  if (k === 'base') return A.base;
+  if (k === 'fecha') return A.fechas[x.fecha];
+  if (k === 'semana') return A.semana[String(x.dow)];
+  return (A.semana_mes[k.split(':')[1]] || {})[String(x.dow)];
+}
+function fijarRegla(A, k, x, r) {
+  if (k === 'base') { if (r) A.base = r; return; }
+  let obj, key = String(x.dow);
+  if (k === 'fecha') { obj = A.fechas; key = x.fecha; } else if (k === 'semana') obj = A.semana;
+  else { const n = k.split(':')[1]; obj = A.semana_mes[n] = A.semana_mes[n] || {}; }
+  if (r) obj[key] = r; else delete obj[key];
+  Object.keys(A.semana_mes).forEach(n => { if (!Object.keys(A.semana_mes[n]).length) delete A.semana_mes[n]; });
+}
+function diaSel(J) { return J.mes ? J.mes.dias.find(x => x.fecha === J.dia) || null : null; }
+function alcanceSel(J, x) {
+  const o = claveOrigen(x.origen), ks = alcances(x, J.mes.dias.length).map(a => a.k);
+  return J.alcance && ks.includes(J.alcance) ? J.alcance : ks.includes(o) ? o : 'base';
+}
+function edAsistencia(J) {
+  const A = J.borr.asistencia, ro = !J.d.puede_editar, s = J.d.servidor;
+  return `<section class="caja"><div class="caja-cab"><h3>${ic('ticket', 's16')}Asistencia</h3><span class="sub">${cambiadoTxt((s.cambiado || {}).asistencia)}</span></div>
+    <div class="caja-cuerpo jc-cfg">
+      <label class="lc-check en-linea"><input type="checkbox" data-jc="as-activa" ${A.activa !== false ? 'checked' : ''}${dis(ro)}><span><b>Asistencia activa</b></span></label>
+      <label class="lc-mini">Asistencias tardías por mes <input type="number" class="lc-num" min="0" max="31" inputmode="numeric" data-jc="as-tardias" value="${entre(A.tardias_mes, 0, 31)}"${dis(ro)}></label>
+      ${A.activa === false ? '<p class="jc-nota">Apagada: los jugadores no pueden marcar asistencia.</p>' : ''}
+    </div></section>
+    <section class="caja" id="asCal">${calAsis(J)}</section>
+    <div id="asErr">${errBox(J.err.asistencia)}</div>
+    <section class="caja" id="asDia">${diaAsis(J)}</section>`;
+}
+function calAsis(J) {
+  const M = J.mes;
+  if (!M || !M.dias || !M.dias.length) return `<div class="caja-cuerpo tenue" style="padding-top:16px">El servidor no mandó el calendario de este mes.</div>`;
+  const pri = M.dias[0].dow || 0;
+  const celdas = Array.from({ length: pri }, () => '<span aria-hidden="true"></span>').concat(M.dias.map(x => {
+    const o = claveOrigen(x.origen).split(':')[0], p = (x.premios || [])[0];
+    return `<button type="button" class="lc-dia o-${o} ${x.fecha === J.dia ? 'sel' : ''} ${x.hoy ? 'hoy' : ''}" data-accion="jc-dia" data-f="${esc(x.fecha)}" aria-pressed="${x.fecha === J.dia}" aria-label="${x.dia}${x.hoy ? ', hoy' : ''}: ${esc((x.premios || []).map(premioTxt).join(' + '))}${x.racha ? ', pide racha' : ''}">
+      <span class="n">${x.dia}</span>${icPremio(p, 'chico')}<span class="c">${esc(premioCorto(p))}${x.premios.length > 1 ? `<b>+${x.premios.length - 1}</b>` : ''}</span>${x.racha ? '<span class="lc-racha" aria-hidden="true"></span>' : ''}</button>`;
+  }));
+  return `<div class="caja-cab"><h3>${ic('target', 's16')}<span>${cap(MESES_L[M.mes - 1])} ${M.anio}</span></h3><span class="sub" id="asEst">toque un día para ver qué paga</span>
+      <div class="der"><button type="button" class="btn icono chico" data-accion="jc-mes" data-d="-1" aria-label="Mes anterior">${ic('left', 's14')}</button><button type="button" class="btn icono chico" data-accion="jc-mes" data-d="1" aria-label="Mes siguiente">${ic('right', 's14')}</button></div></div>
+    <div class="caja-cuerpo"><div class="lc-cal">${DIAS_C.map(x => `<span class="cab">${x}</span>`).join('')}${celdas.join('')}</div>
+      <div class="jc-ley"><span><i class="o-fecha"></i>Sólo ese día</span><span><i class="o-semana_mes"></i>Semana del mes</span><span><i class="o-semana"></i>Día de la semana</span><span><i class="o-base"></i>Todos los días</span><span><i class="racha"></i>Pide racha</span></div></div>`;
+}
+function pagaHtml(J, x) {
+  const k = claveOrigen(x.origen);
+  return `<div class="jc-paga-p">${(x.premios || []).map(p => `<span class="jc-prem">${icPremio(p, 'chico')}${esc(premioTxt(p))}</span>`).join('')}</div>
+    <p>${x.titulo ? `<b>«${esc(x.titulo)}»</b> · ` : ''}Lo paga ${pagaTxt(k, x)}.${x.racha && x.si_no ? ` Pide racha: si el jugador no marcó todos los días anteriores del mes, cobra ${esc(x.si_no.map(premioTxt).join(' + '))}.` : ''}</p>`;
+}
+function diaAsis(J) {
+  const x = diaSel(J);
+  if (!x) return `<div class="caja-cuerpo tenue" style="padding-top:16px">Elija un día del calendario.</div>`;
+  const A = J.borr.asistencia, M = J.mes, o = claveOrigen(x.origen), al = alcanceSel(J, x), r = regla(A, al, x), ro = !J.d.puede_editar;
+  const ops = alcances(x, M.dias.length).map(a => {
+    const tiene = !!regla(A, a.k, x);
+    return `<label class="radio ${a.k === al ? 'on' : ''}"><input type="radio" name="asAl" value="${a.k}" data-jc="as-alcance" ${a.k === al ? 'checked' : ''}>
+      <span><b>${a.t}${a.k === o ? ' <span class="chip verde jc-chipc">paga este día</span>' : ''}</b><span>${a.s} · ${tiene ? 'tiene regla' : '<i>sin regla propia</i>'}</span></span></label>`;
+  }).join('');
+  return `<div class="caja-cab"><h3>${ic('gift', 's16')}${cap(DIAS_L[x.dow])} ${x.dia} de ${MESES_L[M.mes - 1]}</h3>${x.hoy ? '<span class="chip cian">hoy</span>' : ''}</div>
+    <div class="caja-cuerpo lc-form">
+      <div class="jc-paga" id="asPaga">${pagaHtml(J, x)}</div>
+      <div><span class="lab" id="lbAl">${ro ? 'Las reglas que tocan este día' : 'Cambiar la regla de'}</span><div class="alcance" role="radiogroup" aria-labelledby="lbAl">${ops}</div></div>
+      ${r ? edRegla(J, r, al) : sinRegla(J, al, x, o)}
+    </div>`;
+}
+function edRegla(J, r, al) {
+  const ro = !J.d.puede_editar, base = al === 'base', n = r.premios.length;
+  return `<div class="jc-regla">
+    <span class="lab">Premios <span class="muy-tenue">(${n} de 6)</span></span>
+    <div class="jc-premios">${r.premios.map((p, i) => filaPremio(p, i, n, ro)).join('')}</div>
+    ${!ro && n < 6 ? `<button type="button" class="btn chico" data-accion="jc-p-agregar">${ic('plus', 's14')}Agregar premio</button>` : ''}
+    <label class="lc-campo"><span class="lab">Título del día · opcional</span><input class="lc-in" maxlength="40" data-jc="as-titulo" value="${esc(r.titulo || '')}" placeholder="Por ejemplo: Miércoles de plata"${dis(ro)}></label>
+    ${base ? '' : `<label class="lc-check"><input type="checkbox" data-jc="as-racha" ${r.racha ? 'checked' : ''}${dis(ro)}><span><b>Sólo con racha</b><span>La cobra quien marcó todos los días anteriores del mes. Si no, paga la regla siguiente.</span></span></label>`}
+    ${base || ro ? '' : `<div><button type="button" class="btn chico peligro" data-accion="jc-regla-quitar">${ic('x', 's14')}Quitar esta regla</button></div>`}
+  </div>`;
+}
+function filaPremio(p, i, n, ro) {
+  const item = p.rcoin == null;
+  let det;
+  if (!item) det = `<label class="jc-unid"><span class="sr">Rcoin del premio ${i + 1}</span>${imgRcoin('chico')}<input type="number" class="lc-in jc-rc" min="1" max="1000000" inputmode="numeric" data-jc="as-p-rcoin" data-i="${i}" value="${Number(p.rcoin) || 0}"${dis(ro)}><span>Rcoin</span></label>`;
+  else {
+    det = `<button type="button" class="jc-item" data-accion="jc-p-buscar" data-i="${i}" aria-haspopup="true" aria-expanded="false" aria-label="${p.item ? `Cambiar el ítem del premio ${i + 1}: ${esc(nomItem(p.item))}` : `Elegir el ítem del premio ${i + 1}`}"${dis(ro)}>${p.item ? icPremio(p, 'chico') : ''}<span>${p.item ? `${esc(nomItem(p.item))} <small>#${Number(p.item)}</small>` : 'Elegir ítem…'}</span>${ro ? '' : ic('search', 's14')}</button>`;
+    /* lo que se gasta va POR CANTIDAD; la ropa, las alas y los sets, POR DÍAS. El servidor lo corrige solo si sabe;
+       si el ítem pide días puntuales (7 / 30…), lo dice en el error y aquí se elige «Días». */
+    if (p.item) det += `<div class="seg jc-forma" role="group" aria-label="Cómo se da el premio ${i + 1}"><button type="button" data-accion="jc-p-forma" data-i="${i}" data-f="cant" aria-pressed="${p.dias == null}"${dis(ro)}>Cantidad</button><button type="button" data-accion="jc-p-forma" data-i="${i}" data-f="dias" aria-pressed="${p.dias != null}"${dis(ro)}>Días</button></div>` + (p.dias != null
+      ? `<label class="jc-unid"><span class="sr">Días que dura el premio ${i + 1}</span><input type="number" class="lc-num" min="0" max="365" inputmode="numeric" data-jc="as-p-dias" data-i="${i}" value="${Number(p.dias) || 0}"${dis(ro)}><span>días</span><small class="muy-tenue">0 = permanente</small></label>`
+      : `<label class="jc-unid"><span class="sr">Cantidad del premio ${i + 1}</span><span aria-hidden="true">×</span><input type="number" class="lc-num" min="1" max="999" inputmode="numeric" data-jc="as-p-cant" data-i="${i}" value="${Number(p.cant) || 1}"${dis(ro)}></label>`);
+  }
+  return `<div class="jc-premio">
+    <div class="seg" role="group" aria-label="Tipo del premio ${i + 1}"><button type="button" data-accion="jc-p-tipo" data-i="${i}" data-t="rcoin" aria-pressed="${!item}"${dis(ro)}>Rcoin</button><button type="button" data-accion="jc-p-tipo" data-i="${i}" data-t="item" aria-pressed="${item}"${dis(ro)}>Ítem</button></div>
+    <div class="jc-premio-d">${det}</div>
+    ${!ro && n > 1 ? `<button type="button" class="btn icono chico fantasma" data-accion="jc-p-quitar" data-i="${i}" aria-label="Quitar el premio ${i + 1}" title="Quitar">${ic('x', 's14')}</button>` : ''}
+  </div>`;
+}
+function sinRegla(J, al, x, o) {
+  const ro = !J.d.puede_editar, a = alcances(x, J.mes.dias.length).find(y => y.k === al);
+  return `<div class="jc-sin">${ic('info', 's16')}<div><b>«${a ? a.t : ''}» no tiene regla propia.</b><span>Este día lo paga ${pagaTxt(o, x)}.</span>
+    ${ro ? '' : `<div class="jc-sin-acc"><button type="button" class="btn chico prim" data-accion="jc-regla-crear">${ic('plus', 's14')}Crear esta regla</button><small>Empieza con los premios que paga hoy; después se cambian.</small></div>`}</div></div>`;
+}
+/* después de la previa: un ítem que el juego da POR DÍAS (ropa) o POR CANTIDAD lo decide el servidor */
+function adoptarForma(A, L) {
+  let cambio = false;
+  const par = (ra, rl) => {
+    if (!ra || !rl) return;
+    (ra.premios || []).forEach((p, i) => {
+      const q = (rl.premios || [])[i];
+      if (!q || p.item == null || Number(p.item) !== Number(q.item)) return;
+      if ('dias' in q && !('dias' in p)) { delete p.cant; p.dias = q.dias; cambio = true; } else if ('cant' in q && !('cant' in p)) { delete p.dias; p.cant = q.cant; cambio = true; }
+    });
+  };
+  par(A.base, L.base);
+  Object.keys(A.semana).forEach(k => par(A.semana[k], (L.semana || {})[k]));
+  Object.keys(A.semana_mes).forEach(n => Object.keys(A.semana_mes[n]).forEach(k => par(A.semana_mes[n][k], ((L.semana_mes || {})[n] || {})[k])));
+  Object.keys(A.fechas).forEach(f => par(A.fechas[f], (L.fechas || {})[f]));
+  return cambio;
+}
+let asisReloj = null;
+function programarPreviaAsis(ms = 450) {
+  clearTimeout(asisReloj);
+  const e = $('#asEst'); if (e) e.textContent = 'actualizando…';
+  asisReloj = setTimeout(previaAsistencia, ms);
+}
+async function previaAsistencia() {
+  const J = S.jc; if (!J || !J.borr.asistencia) return;
+  const n = ++J.seq, mesAntes = J.mesVer;
+  const r = await api('contenido/previa', { juego: J.jid, entorno: J.env, clave: 'asistencia', valor: J.borr.asistencia, mes: J.mesVer });
+  if (S.jc !== J || n !== J.seq) return;
+  let forma = false;
+  if (!r.ok) {
+    J.err.asistencia = (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
+    if (J.mesVer !== (J.mes ? `${J.mes.anio}-${dos(J.mes.mes)}` : null) && J.mes) J.mesVer = `${J.mes.anio}-${dos(J.mes.mes)}`;
+  } else {
+    J.err.asistencia = null;
+    forma = adoptarForma(J.borr.asistencia, r.d.valor || {});
+    J.mes = r.d.mes; J.mesVer = `${r.d.mes.anio}-${dos(r.d.mes.mes)}`;
+    nombresDe(J, r.d.mes);
+    if (!J.mes.dias.some(x => x.fecha === J.dia)) { J.dia = ((J.mes.dias.find(x => x.hoy) || J.mes.dias[0]) || {}).fecha; J.alcance = null; forma = true; }
+  }
+  if (J.tab !== 'asistencia') return;
+  const cal = $('#asCal'); if (cal) cal.innerHTML = calAsis(J);
+  const er = $('#asErr'); if (er) er.innerHTML = errBox(J.err.asistencia);
+  if (forma || mesAntes !== J.mesVer) repintarDia(J);
+  else { const x = diaSel(J), p = $('#asPaga'); if (x && p) p.innerHTML = pagaHtml(J, x); }
+  cambioJ();
+}
+/* repinta la caja del día sin perder el foco del campo donde se estaba escribiendo */
+function repintarDia(J) {
+  const c = $('#asDia'); if (!c) return;
+  const a = document.activeElement, sel = a && c.contains(a) && a.dataset ? (a.dataset.jc ? `[data-jc="${a.dataset.jc}"]${a.dataset.i ? `[data-i="${a.dataset.i}"]` : ''}${a.type === 'radio' ? `[value="${a.value}"]` : ''}` : a.dataset.accion ? `[data-accion="${a.dataset.accion}"]${a.dataset.i ? `[data-i="${a.dataset.i}"]` : ''}${a.dataset.t ? `[data-t="${a.dataset.t}"]` : ''}${a.dataset.f ? `[data-f="${a.dataset.f}"]` : ''}` : null) : null;
+  c.innerHTML = diaAsis(J);
+  if (sel) { const f = c.querySelector(sel); if (f) f.focus(); }
+}
+function reglaActual(J) {
+  const x = diaSel(J); if (!x) return {};
+  const al = alcanceSel(J, x);
+  return { x, al, r: regla(J.borr.asistencia, al, x) };
+}
+function previaAsis(J) {
+  const M = J.mes, A = J.borr.asistencia;
+  if (!M || !M.dias || !M.dias.length) return '<div class="lp-vacia">Sin calendario.</div>';
+  const pri = M.dias[0].dow || 0, arte = ARTE.asis === true;
+  const num = n => (arte ? `<span class="lp-num" aria-hidden="true">${String(n).split('').map(c => `<i style="background-position:${-10 * Number(c)}px 0"></i>`).join('')}</span>` : `<span class="lp-num txt">${n}</span>`);
+  const celdas = Array.from({ length: pri }, () => '<span></span>').concat(M.dias.map(x => {
+    const esp = !!(x.titulo || x.racha), p = (x.premios || [])[0];
+    const pasado = !x.hoy && x.fecha < M.hoy, estado = x.hoy ? (esp ? 'amarillo_vivo' : 'naranja_vivo') : pasado ? 'oscuro' : esp ? 'oliva' : 'gris';
+    return `<div class="lp-dia t-${estado} ${x.hoy ? 'hoy' : ''} ${x.fecha === J.dia ? 'sel' : ''}"${arte ? ` style="background-image:url('arte/asistencia-ticket_${estado}.png')"` : ''} title="${x.dia}: ${esc((x.premios || []).map(premioTxt).join(' + '))}">
+      <div class="lp-cuerpo">${num(x.dia)}${x.racha ? '<span class="lp-fuego" aria-hidden="true"></span>' : ''}</div>
+      <div class="lp-talon">${icPremio(p, 'mini')}<span>${esc(premioCorto(p))}</span></div></div>`;
+  }));
+  const x = diaSel(J);
+  return `<div class="lp-asis ${arte ? 'con-arte' : 'sin-arte'} ${A.activa === false ? 'apagada' : ''}">
+      <div class="lp-cab"><div><b>ASISTENCIA <span>· ${MESES_L[M.mes - 1]} ${M.anio}</span></b>
+        <div class="lp-chips"><span>Tardías <b>${entre(A.tardias_mes, 0, 31)}</b> por mes</span>${A.activa === false ? '<span>Apagada</span>' : ''}</div></div></div>
+      <div class="lp-sem">${DIAS_C.map(d => `<span>${d}</span>`).join('')}</div>
+      <div class="lp-grilla">${celdas.join('')}</div>
+      <div class="lp-pie"><span class="lp-btn">Marcar asistencia tardía</span><span class="lp-btn lleno">Marcar hoy</span></div>
+    </div>
+    ${x ? `<div class="lp-detalle"><small>DÍA ${x.dia}${x.titulo ? ` · ${esc(x.titulo)}` : ''}${x.racha ? ' · PIDE RACHA' : ''}</small>${(x.premios || []).map(p => `<span class="jc-prem">${icPremio(p, 'chico')}${esc(premioTxt(p))}</span>`).join('')}</div>` : ''}
+    <p class="lp-nota">El mes como lo ve un jugador que todavía no marcó ningún día.</p>`;
+}
+
+/* ══════════════ RULETA ══════════════ */
+const pesoTotal = R => (R.casillas || []).reduce((a, c) => a + (Number(c.prob) || 0), 0) + (Number((R.mayor || {}).prob) || 0);
+function edRuleta(J) {
+  const R = J.borr.ruleta, ro = !J.d.puede_editar, s = J.d.servidor, tot = pesoTotal(R), rc = R.precio_rcoin > 0;
+  let kRopa = 0;
+  const filas = (R.casillas || []).map((c, i) => filaCasilla(R, c, i, tot, ro, c.tipo === 'ropa' ? kRopa++ : -1)).join('');
+  const m = R.mayor || {};
+  return `<section class="caja"><div class="caja-cab"><h3>${ic('refresh', 's16')}Ruleta</h3><span class="sub">${cambiadoTxt((s.cambiado || {}).ruleta)}</span></div>
+    <div class="caja-cuerpo lc-form">
+      <label class="lc-check en-linea" style="align-self:flex-start"><input type="checkbox" data-jc="ru-activa" ${R.activa !== false ? 'checked' : ''}${dis(ro)}><span><b>Ruleta abierta</b></span></label>
+      <div class="lc-fila">
+        <label class="lc-campo"><span class="lab">Precio por giro</span><span class="jc-unid">${imgGorila('chico')}<input type="number" class="lc-in" min="1" max="100" inputmode="numeric" data-jc="ru-precio" value="${entre(R.precio, 1, 100)}"${dis(ro)}><span>monedas</span></span></label>
+        <label class="lc-campo"><span class="lab">Sin monedas, el giro cuesta</span><span class="jc-unid">${imgRcoin('chico')}<input type="number" class="lc-in" min="0" max="1000000" inputmode="numeric" data-jc="ru-precio_rcoin" value="${entre(R.precio_rcoin, 0, 1000000)}"${dis(ro)}><span>Rcoin</span></span><small class="jc-hint">0 = sin monedas gorila no se gira</small></label>
+        <label class="lc-campo"><span class="lab">La ropa dura</span><span class="jc-unid"><input type="number" class="lc-in" min="0" max="365" inputmode="numeric" data-jc="ru-dias_ropa" value="${entre(R.dias_ropa, 0, 365)}"${dis(ro)}><span>días</span></span><small class="jc-hint">0 = permanente</small></label>
+      </div>
+    </div></section>
+    ${statsRuleta(s.ruleta_resumen)}
+    <section class="caja"><div class="caja-cab"><h3>${ic('target', 's16')}Casillas <span class="muy-tenue" style="font:500 12.5px var(--sans)">${(R.casillas || []).length} de 16</span></h3>
+      <span class="sub">El <b>peso</b> decide cuánto sale cada una: su porcentaje es el peso sobre el total.</span></div>
+      <div class="jc-cas" role="list">
+        <div class="jc-cas-cab ${rc ? 'con-rc' : ''}" aria-hidden="true"><span>#</span><span>Premio</span><span>Peso</span><span>Sale</span>${rc ? '<span>Modo Rcoin</span>' : ''}<span></span></div>
+        ${filas}
+        <div class="jc-casilla mayor ${rc ? 'con-rc' : ''}" role="listitem"><span class="jc-cn">★</span>
+          <div class="jc-cd"><b>Premio mayor</b><small>${Number(s.ruleta_mayor_total) || 0} premios en la lista (auras, monturas…): se cambian en el juego</small></div>
+          <label class="jc-peso"><span class="sr">Peso del premio mayor</span><input type="number" class="lc-in corto" min="0" max="1000" inputmode="numeric" data-jc="ru-mayor-prob" value="${entre(m.prob, 0, 1000)}"${dis(ro)}></label>
+          <span class="jc-pct" data-pct="mayor">${pct(m.prob, tot)}</span>${rc ? '<span></span>' : ''}<span class="jc-ord"></span></div>
+      </div>
+      <div class="pie-tabla">${ro ? '<span></span>' : `<button type="button" class="btn chico" data-accion="jc-ru-agregar" ${(R.casillas || []).length >= 16 ? 'disabled' : ''}>${ic('plus', 's14')}Agregar casilla</button>`}<span id="ruTot">${totRuleta(R)}</span></div>
+      ${rc ? `<p class="jc-nota" style="margin:0 16px 14px">${ic('info', 's14')} <b>Modo Rcoin:</b> cuando el jugador gira con Rcoin, la casilla marcada se vuelve una prenda simple más (con su mismo peso).</p>` : ''}
+    </section>
+    <section class="caja"><div class="caja-cab"><h3>${ic('crown', 's16')}Premio mayor</h3><span class="sub">${Number(m.prob) > 0 ? `sale ${pct(m.prob, tot)} de las veces, sin contar la suerte` : 'apagado: peso 0'}</span></div>
+      <div class="caja-cuerpo lc-form">
+        <div class="lc-fila">
+          <label class="lc-campo"><span class="lab">El premio mayor dura</span><span class="jc-unid"><input type="number" class="lc-in" min="0" max="365" inputmode="numeric" data-jc="ru-mayor-dias" value="${entre(m.dias, 0, 365)}"${dis(ro)}><span>días</span></span><small class="jc-hint">0 = permanente</small></label>
+          <label class="lc-campo"><span class="lab">La suerte sube desde</span><span class="jc-unid">${imgRcoin('chico')}<input type="number" class="lc-in" min="0" max="10000000" inputmode="numeric" data-jc="ru-mayor-suerte_desde" value="${entre(m.suerte_desde, 0, 10000000)}"${dis(ro)}><span>Rcoin</span></span></label>
+          <label class="lc-campo"><span class="lab">Y sale seguro en</span><span class="jc-unid">${imgRcoin('chico')}<input type="number" class="lc-in" min="0" max="10000000" inputmode="numeric" data-jc="ru-mayor-suerte_tope" value="${entre(m.suerte_tope, 0, 10000000)}"${dis(ro)}><span>Rcoin</span></span><small class="jc-hint">0 = sin suerte creciente</small></label>
+        </div>
+        <p class="jc-nota">${ic('info', 's14')} La <b>suerte creciente</b> cuenta el Rcoin que cada personaje pagó en la ruleta desde su último premio mayor (las monedas gorila no cuentan). Pasado el primer número, su probabilidad sube hasta que el premio sale seguro.</p>
+      </div></section>
+    <div id="ruErr">${errBox(J.err.ruleta)}</div>`;
+}
+function filaCasilla(R, c, i, tot, ro, k) {
+  const rc = R.precio_rcoin > 0, n = R.casillas.length;
+  const montos = Array.isArray(R.rcoin_sin_ropa) && R.rcoin_sin_ropa.length ? R.rcoin_sin_ropa : [0];
+  const tipo = c.tipo === 'rcoin' ? 'rcoin' : c.nivel === 'detallada' ? 'detallada' : 'simple';
+  const det = c.tipo === 'rcoin'
+    ? `<label class="jc-unid"><span class="sr">Rcoin de la casilla ${i + 1}</span>${imgRcoin('chico')}<input type="number" class="lc-in corto" min="1" max="100000" inputmode="numeric" data-jc="ru-monto" data-i="${i}" value="${entre(c.monto, 0, 100000)}"${dis(ro)}><span>Rcoin</span></label>`
+    : `<label class="jc-unid jc-sinropa" title="Lo que paga esta casilla cuando el personaje ya tiene toda la ropa"><span>Sin ropa para darle, paga</span><input type="number" class="lc-in corto" min="1" max="100000" inputmode="numeric" data-jc="ru-sinropa" data-k="${k}" value="${entre(montos[Math.min(k, montos.length - 1)], 0, 100000)}"${dis(ro || k >= 8)} aria-label="Rcoin que paga la casilla ${i + 1} cuando el personaje ya tiene toda la ropa"><span>Rcoin</span></label>`;
+  return `<div class="jc-casilla ${c.tipo} ${rc ? 'con-rc' : ''}" role="listitem">
+    <span class="jc-cn">${i + 1}</span>
+    <div class="jc-cd"><label class="jc-tipo"><span class="sr">Qué da la casilla ${i + 1}</span><select class="sel" data-jc="ru-tipo" data-i="${i}"${dis(ro)}><option value="rcoin" ${tipo === 'rcoin' ? 'selected' : ''}>Rcoin</option><option value="simple" ${tipo === 'simple' ? 'selected' : ''}>Ropa simple</option><option value="detallada" ${tipo === 'detallada' ? 'selected' : ''}>Ropa detallada</option></select></label>${det}</div>
+    <label class="jc-peso"><span class="sr">Peso de la casilla ${i + 1}</span><input type="number" class="lc-in corto" min="0" max="1000" inputmode="numeric" data-jc="ru-prob" data-i="${i}" value="${entre(c.prob, 0, 1000)}"${dis(ro)}></label>
+    <span class="jc-pct" data-pct="${i}">${pct(c.prob, tot)}</span>
+    ${rc ? (c.tipo === 'rcoin' ? `<label class="jc-rcm"><input type="radio" name="ruRc" data-jc="ru-rc" value="${i}" ${R.rcoin_casilla === i ? 'checked' : ''}${dis(ro)}><span class="sr">En el modo Rcoin, la casilla ${i + 1} se vuelve ropa</span><span aria-hidden="true" class="rc-corto">${R.rcoin_casilla === i ? 'ropa' : ''}</span><span aria-hidden="true" class="rc-largo">${R.rcoin_casilla === i ? 'En el modo Rcoin se vuelve ropa' : 'Volverla ropa en el modo Rcoin'}</span></label>` : '<span></span>') : ''}
+    <span class="jc-ord">${ro ? '' : `<button type="button" class="btn icono chico fantasma" data-accion="jc-ru-mover" data-i="${i}" data-d="-1" aria-label="Subir la casilla ${i + 1}" ${i ? '' : 'disabled'}>${ic('up', 's14')}</button><button type="button" class="btn icono chico fantasma" data-accion="jc-ru-mover" data-i="${i}" data-d="1" aria-label="Bajar la casilla ${i + 1}" ${i < n - 1 ? '' : 'disabled'}>${ic('down', 's14')}</button><button type="button" class="btn icono chico fantasma" data-accion="jc-ru-quitar" data-i="${i}" aria-label="Quitar la casilla ${i + 1}" ${n > 2 ? '' : 'disabled'}>${ic('x', 's14')}</button>`}</span>
+  </div>`;
+}
+const totRuleta = R => { const t = pesoTotal(R); return t ? `Peso total: <b class="num">${miles(t)}</b>` : '<b style="color:var(--red)">Todas las casillas tienen peso 0</b>'; };
+function statsRuleta(rs) {
+  rs = rs || {};
+  const t = rs.total || {}, d = rs.ultimas_24h || {}, ropa = rs.ropa || {};
+  const it = [['Giros', 'giros'], ['Monedas gorila gastadas', 'monedas'], ['Rcoin cobrado por giros', 'rcoin_cobrado'], ['Rcoin entregado en premios', 'rcoin'], ['Prendas entregadas', 'prendas']];
+  return `<section class="jc-stats" aria-label="La ruleta en números">${it.map(([n, k]) => `<div><span>${n}</span><b class="num">${miles(t[k])}</b><small>${miles(d[k])} en las últimas 24 h</small></div>`).join('')}</section>
+    ${ropa.chico != null ? `<p class="jc-nota" style="margin:-4px 2px 14px">${ic('shirt', 's14')} Ropa en la ruleta: <b>${miles(ropa.chico)}</b> prendas para chico y <b>${miles(ropa.chica)}</b> para chica.</p>` : ''}`;
+}
+function actualizarPcts(J) {
+  const R = J.borr.ruleta, tot = pesoTotal(R);
+  $$('[data-pct]').forEach(el => { const k = el.dataset.pct; el.textContent = pct(k === 'mayor' ? (R.mayor || {}).prob : (R.casillas[Number(k)] || {}).prob, tot); });
+  const t = $('#ruTot'); if (t) t.innerHTML = totRuleta(R);
+}
+/* la rueda como la arma el juego (ruleta.rueda): casillas IGUALES; en el modo Rcoin la marcada es una prenda más; el mayor al final */
+function ruedaDe(R, modo) {
+  const cas = (R.casillas || []).map(c => Object.assign({}, c));
+  if (modo === 'rcoin' && R.precio_rcoin > 0 && cas[R.rcoin_casilla] && cas[R.rcoin_casilla].tipo === 'rcoin') cas[R.rcoin_casilla] = { tipo: 'ropa', nivel: 'simple', prob: cas[R.rcoin_casilla].prob, extra: true };
+  if (Number((R.mayor || {}).prob) > 0) cas.push({ tipo: 'mayor', prob: Number(R.mayor.prob) });
+  return cas;
+}
+function previaRuleta(J) {
+  const R = J.borr.ruleta, modo = R.precio_rcoin > 0 ? J.modoRueda : 'gorila', cas = ruedaDe(R, modo), n = cas.length || 1;
+  const W = 300, c0 = W / 2, rr = 136, paso = 360 / n, tot = cas.reduce((a, c) => a + (Number(c.prob) || 0), 0);
+  const rad = g => (g - 90) * Math.PI / 180, pt = (g, r) => `${(c0 + r * Math.cos(rad(g))).toFixed(1)} ${(c0 + r * Math.sin(rad(g))).toFixed(1)}`;
+  const fs = n <= 8 ? 1 : n <= 12 ? .8 : .66;
+  let segs = '', txt = '';
+  cas.forEach((c, i) => {
+    const a0 = i * paso - paso / 2, a1 = a0 + paso;
+    const col = c.tipo === 'mayor' ? '#a8740f' : c.tipo === 'ropa' ? (c.nivel === 'detallada' ? '#7a2d6b' : '#5c2a63') : (i % 2 ? '#2b1f45' : '#3a2a5c');
+    segs += `<path d="M${c0} ${c0}L${pt(a0, rr)}A${rr} ${rr} 0 0 1 ${pt(a1, rr)}Z" fill="${col}" stroke="rgba(255,215,106,.55)" stroke-width="2"/>`;
+    const g = `transform="rotate(${(i * paso).toFixed(2)} ${c0} ${c0})"`;
+    if (c.tipo === 'rcoin') txt += `<g ${g}><text x="${c0}" y="${c0 - rr + 30 * fs}" class="lp-r-monto" style="font-size:${20 * fs}px">${esc(corto(c.monto))}</text><image href="arte/moneda-rcoin.png" x="${c0 - 9 * fs}" y="${c0 - rr + 36 * fs}" width="${18 * fs}" height="${18 * fs}"/></g>`;
+    else txt += `<g ${g}><use href="#i-${c.tipo === 'mayor' ? 'crown' : 'shirt'}" x="${c0 - 12 * fs}" y="${c0 - rr + 12 * fs}" width="${24 * fs}" height="${24 * fs}" fill="none" stroke="${c.tipo === 'mayor' ? '#fff1a8' : '#ff9ccb'}" stroke-width="1.6"/><text x="${c0}" y="${c0 - rr + 50 * fs}" class="lp-r-ropa ${c.tipo === 'mayor' ? 'mayor' : ''}" style="font-size:${(c.tipo === 'mayor' ? 9 : 10.5) * fs}px">${c.tipo === 'mayor' ? '★ MAYOR' : c.nivel === 'detallada' ? '★ ROPA' : 'ROPA'}</text></g>`;
+  });
+  const etiqueta = c => (c.tipo === 'mayor' ? '★ Premio mayor' : c.tipo === 'ropa' ? (c.extra ? 'Ropa simple (modo Rcoin)' : c.nivel === 'detallada' ? 'Ropa detallada' : 'Ropa simple') : `${miles(c.monto)} Rcoin`);
+  return `<div class="lp-ruleta ${R.activa === false ? 'cerrada' : ''}">
+      <div class="lp-r-titulo">RULETA <span>${modo === 'rcoin' ? `${imgRcoin('mini')} ${miles(R.precio_rcoin)} / giro` : `${imgGorila('mini')} ${entre(R.precio, 1, 100)} / giro`}</span></div>
+      ${R.precio_rcoin > 0 ? `<div class="seg lp-r-modo" role="group" aria-label="Ver la rueda"><button type="button" data-accion="jc-ru-modo" data-m="gorila" aria-pressed="${modo === 'gorila'}">Con monedas gorila</button><button type="button" data-accion="jc-ru-modo" data-m="rcoin" aria-pressed="${modo === 'rcoin'}">Con Rcoin</button></div>` : ''}
+      <svg viewBox="0 0 ${W} ${W + 8}" class="lp-rueda" role="img" aria-label="La rueda con ${cas.length} casillas"><circle cx="${c0}" cy="${c0}" r="${rr + 5}" fill="#ffd76a"/>${segs}${txt}
+        <circle cx="${c0}" cy="${c0}" r="27" fill="#0b0e14" stroke="#e3bb67" stroke-width="3"/><text x="${c0}" y="${c0 + 4}" text-anchor="middle" class="lp-r-girar">GIRAR</text>
+        <path d="M${c0 - 10} 2 L${c0 + 10} 2 L${c0} 22 Z" fill="#fff" stroke="#0b0e14" stroke-width="1.5"/></svg>
+      ${R.activa === false ? '<div class="lp-r-cerrada">Cerrada por ahora</div>' : ''}
+      <ul class="lp-r-ley">${cas.map((c, i) => `<li><i style="background:${c.tipo === 'mayor' ? '#a8740f' : c.tipo === 'ropa' ? (c.nivel === 'detallada' ? '#7a2d6b' : '#5c2a63') : (i % 2 ? '#2b1f45' : '#3a2a5c')}"></i>${etiqueta(c)}<b class="num">${pct(c.prob, tot)}</b></li>`).join('')}</ul>
+    </div>
+    <p class="lp-nota">Las casillas se ven del mismo tamaño; lo que sale lo decide el peso. Cada casilla de ropa muestra la próxima prenda que ese personaje todavía no tiene.</p>`;
+}
+let ruReloj = null;
+function programarPreviaRuleta() {
+  clearTimeout(ruReloj);
+  ruReloj = setTimeout(async () => {
+    const J = S.jc; if (!J || !J.borr.ruleta) return;
+    const local = errRuleta(J.borr.ruleta);
+    if (local) { J.err.ruleta = local; } else {
+      const n = ++J.seq;
+      const r = await api('contenido/previa', { juego: J.jid, entorno: J.env, clave: 'ruleta', valor: J.borr.ruleta });
+      if (S.jc !== J || n !== J.seq) return;
+      J.err.ruleta = r.ok ? null : (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
+    }
+    const e = $('#ruErr'); if (e) e.innerHTML = errBox(J.err.ruleta);
+  }, 500);
+}
+function errRuleta(R) {
+  const cs = R.casillas || [];
+  if (cs.length < 2 || cs.length > 16) return 'La ruleta necesita entre 2 y 16 casillas.';
+  if (!cs.reduce((a, c) => a + (Number(c.prob) || 0), 0)) return 'Todas las casillas tienen peso 0: alguna tiene que poder salir.';
+  if (R.precio_rcoin > 0 && (cs[R.rcoin_casilla] || {}).tipo !== 'rcoin') return 'En el modo Rcoin, la casilla que se vuelve ropa tiene que ser una de Rcoin.';
+  const m = R.mayor || {};
+  if (m.suerte_tope && m.suerte_tope <= m.suerte_desde) return 'Premio mayor: «sale seguro en» tiene que ser más que «la suerte sube desde» (o 0).';
+  return null;
+}
+
+/* ══════════════ TIRA (los avisos del lobby) ══════════════ */
+/* como el juego la dibuja: en ASCII (sin tildes ni ñ) — aproximado; lo exacto lo da el servidor (`se_ve`) */
+const aAscii = t => String(t || '').replace(/[·•]/g, '-').replace(/[«»“”]/g, '"').replace(/[‘’]/g, "'").replace(/[—–]/g, '-')
+  .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
+function seVe(J, f) { const o = f.id != null ? J.filas[f.id] : null; return o && o.texto === f.texto ? o.se_ve : aAscii(f.texto); }
+const vencida = f => !f.siempre && (!f.vence || f.vence <= Date.now() / 1000);
+const enTira = f => f.activo && !vencida(f) && String(f.texto || '').trim();
+function edTira(J) {
+  const L = J.borr.tira, s = J.d.servidor, ro = !J.d.puede_editar, max = Number(s.tira_texto_max) || 300;
+  return `<section class="caja"><div class="caja-cab"><h3>${ic('mega', 's16')}Avisos del lobby</h3><span class="sub">${L.length ? `${L.length} ${L.length === 1 ? 'aviso' : 'avisos'} · la tira que pasa arriba en el lobby del juego` : 'la tira que pasa arriba en el lobby del juego'}</span></div>
+      <div class="caja-cuerpo"><p class="jc-cambiado" style="margin:0 0 12px">${(s.cambiado || {}).tira ? cambiadoTxt(s.cambiado.tira) : ''}</p><div id="tiMedidor">${medidorTira(J)}</div></div>
+      ${L.length ? `<ol class="jc-tiras">${L.map((f, i) => filaTira(J, f, i, ro, max)).join('')}</ol>` : `<div style="border-top:1px solid var(--line)">${vacio('Sin avisos', 'La tira del lobby no muestra nada. Agregue uno para anunciar un evento o un mantenimiento.')}</div>`}
+      ${ro ? '' : `<div class="pie-tabla"><button type="button" class="btn chico" data-accion="jc-ti-agregar" ${L.length >= 50 ? 'disabled' : ''}>${ic('plus', 's14')}Agregar aviso</button><span>Hasta 50 avisos · ${max} letras cada uno</span></div>`}
+    </section>`;
+}
+function estadoTira(f) { return !f.activo ? ['Pausado', ''] : vencida(f) ? ['Venció', 'rojo'] : !String(f.texto || '').trim() ? ['Vacío', 'oro'] : ['Se ve', 'verde']; }
+function filaTira(J, f, i, ro, max) {
+  const o = f.id != null ? J.filas[f.id] : null, [t, c] = estadoTira(f), sv = seVe(J, f);
+  return `<li class="jc-tira ${f.activo ? '' : 'off'} ${vencida(f) && f.activo ? 'venc' : ''}" data-fila="${i}">
+    <div class="jc-tira-cab"><span class="chip ${c}" data-ti-est="${i}">${t}</span>${o ? `<span class="muy-tenue jc-quien">${esc(o.quien || '')}${o.creado ? ` · ${haceSeg(o.creado)}` : ''}</span>` : '<span class="chip cian">nuevo</span>'}
+      <span class="esp"></span>
+      <label class="lc-check en-linea"><input type="checkbox" data-jc="ti-activo" data-i="${i}" ${f.activo ? 'checked' : ''}${dis(ro)}><span><b>Activo</b></span></label>
+      ${ro ? '' : `<button type="button" class="btn icono chico fantasma" data-accion="jc-ti-quitar" data-i="${i}" aria-label="Quitar el aviso ${i + 1}" title="Quitar">${ic('x', 's14')}</button>`}</div>
+    <label class="lc-campo"><span class="sr">Texto del aviso ${i + 1}</span><textarea class="area jc-ti-txt" rows="2" maxlength="${max}" data-jc="ti-texto" data-i="${i}" placeholder="Por ejemplo: Evento de Halloween esta noche a las 21:00"${dis(ro)}>${esc(f.texto)}</textarea></label>
+    <div class="cuenta-txt"><span data-ti-ascii="${i}">${sv && sv !== String(f.texto || '').replace(/\s+/g, ' ').trim() ? `En el juego se ve: «${esc(sv)}»` : ''}</span><span data-ti-cuenta="${i}">${String(f.texto || '').length}/${max}</span></div>
+    <div class="jc-vence"><div class="seg" role="group" aria-label="Hasta cuándo se ve el aviso ${i + 1}"><button type="button" data-accion="jc-ti-siempre" data-i="${i}" data-v="1" aria-pressed="${f.siempre}"${dis(ro)}>Siempre</button><button type="button" data-accion="jc-ti-siempre" data-i="${i}" data-v="0" aria-pressed="${!f.siempre}"${dis(ro)}>Hasta una fecha</button></div>
+      ${f.siempre ? '' : `<label class="jc-unid"><span>Vence</span><input type="datetime-local" class="lc-in" data-jc="ti-vence" data-i="${i}" value="${f.vence ? isoLocal(new Date(f.vence * 1000)) : ''}"${dis(ro)}><small class="muy-tenue">su hora</small></label>`}</div>
+  </li>`;
+}
+function medidorTira(J) {
+  const s = J.d.servidor, totMax = Number(s.tira_total_max) || 1800;
+  const vis = J.borr.tira.filter(enTira), n = vis.reduce((a, f) => a + seVe(J, f).length + 9, 0), p = Math.min(100, Math.round(100 * n / totMax));
+  return `<div class="jc-medidor ${n > totMax ? 'pasa' : ''}"><div class="medidor"><i style="width:${p}%"></i></div>
+    <span><b class="num">${miles(n)}</b> de ${miles(totMax)} letras en la tira (${vis.length} ${vis.length === 1 ? 'aviso se ve' : 'avisos se ven'}, con sus espacios)</span></div>
+    ${n > totMax ? `<p class="jc-nota" style="color:var(--gold)">${ic('alert', 's14')} Pasa del máximo de la tira. Conviene acortar o pausar algún aviso.</p>` : ''}`;
+}
+function previaTira(J) {
+  const vis = J.borr.tira.filter(enTira).map(f => seVe(J, f));
+  const txt = vis.join(' '.repeat(9)), seg = Math.max(12, Math.round(txt.length * 0.14));
+  return `<div class="lp-lobby"><div class="lp-lobby-cab"><span>LOBBY</span><i></i><i></i><i></i></div>
+      <div class="tira-previa jc-tira-prev">${vis.length ? `<span style="animation-duration:${seg}s;animation-delay:-${Math.round(seg * .3)}s">${esc(txt)}</span>` : '<em>La tira está vacía.</em>'}</div>
+      <div class="lp-lobby-salas" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>
+    <p class="lp-nota">${vis.length ? `Pasan ${vis.length} ${vis.length === 1 ? 'aviso' : 'avisos'}, uno detrás del otro, sin tildes (el juego dibuja sólo ASCII).` : 'Los avisos pausados o vencidos no se ven.'}</p>`;
+}
+function errTira(J) {
+  const max = Number(J.d.servidor.tira_texto_max) || 300;
+  if (J.borr.tira.length > 50) return 'Hasta 50 avisos.';
+  for (let i = 0; i < J.borr.tira.length; i++) {
+    const f = J.borr.tira[i];
+    if (!aAscii(f.texto)) return `El aviso ${i + 1} está vacío (o sólo tiene letras que el juego no dibuja).`;
+    if (f.texto.length > max) return `El aviso ${i + 1} pasa de ${max} letras.`;
+    if (!f.siempre && !f.vence) return `Al aviso ${i + 1} le falta la fecha de vencimiento.`;
+    if (vencida(f)) return `El aviso ${i + 1} ya venció: póngale «Siempre», otra fecha, o quítelo.`;
+  }
+  return null;
+}
+function refrescarFilaTira(J, i) {
+  const f = J.borr.tira[i]; if (!f) return;
+  const [t, c] = estadoTira(f), e = $(`[data-ti-est="${i}"]`);
+  if (e) { e.className = 'chip ' + c; e.textContent = t; }
+  const li = $(`[data-fila="${i}"]`); if (li) { li.classList.toggle('off', !f.activo); li.classList.toggle('venc', vencida(f) && f.activo); }
+  const max = Number(J.d.servidor.tira_texto_max) || 300, sv = seVe(J, f);
+  const a = $(`[data-ti-ascii="${i}"]`); if (a) a.textContent = sv && sv !== String(f.texto || '').replace(/\s+/g, ' ').trim() ? `En el juego se ve: «${sv}»` : '';
+  const k = $(`[data-ti-cuenta="${i}"]`); if (k) k.textContent = `${f.texto.length}/${max}`;
+  const m = $('#tiMedidor'); if (m) m.innerHTML = medidorTira(J);
+}
+
+/* ══════════════ LANZAMIENTO ══════════════ */
+function edLanz(J) {
+  const L = J.borr.lanzamiento, d = J.d.lanzamiento, ro = !J.d.es_admin, t = epochPeru(L.desde_peru);
+  return `<section class="caja"><div class="caja-cab"><h3>${ic('rocket', 's16')}Lanzamiento</h3><span class="sub">${d.libre ? 'Ya abrió para todos.' : 'Hasta la fecha sólo entran el equipo y los aprobados.'}</span></div>
+    <div class="caja-cuerpo lc-form">
+      ${ro ? `<p class="jc-nota">${ic('lock', 's14')} La fecha de apertura la cambia un Admin.</p>` : ''}
+      <div class="lc-fila">
+        <label class="lc-campo"><span class="lab">Abre para todos el (hora de Perú)</span><input type="datetime-local" class="lc-in" data-jc="lz-desde" value="${esc(L.desde_peru)}"${dis(ro)}>
+          <small class="jc-hint" id="lzSu">${t ? `En su hora: ${fechaEpoch(t)}` : 'Falta el día y la hora.'}</small></label>
+        <div class="lc-campo"><span class="lab" id="lbEtq">Etiqueta</span><div class="seg" role="group" aria-labelledby="lbEtq">${['BETA', 'ALPHA', ''].map(e => `<button type="button" data-accion="jc-lz-etq" data-v="${e}" aria-pressed="${L.etiqueta === e}"${dis(ro)}>${e || 'Ninguna'}</button>`).join('')}</div></div>
+      </div>
+      <div class="conclusion ok" style="margin:0">${ic('mail', 's20')}<div>Las invitaciones anticipadas se aprueban en La red.<small><a href="#/red">Ir a La red</a></small></div></div>
+    </div></section>`;
+}
+function previaLanz(J) {
+  const L = J.borr.lanzamiento, t = epochPeru(L.desde_peru), j = juegoCat(J.jid), abierto = t && t * 1000 <= Date.now();
+  return `<div class="lp-lz"><span class="lp-lz-pill">${esc(L.etiqueta)}</span><span class="lp-lz-txt">${esc(j.nombre)} ${abierto ? 'ya abrió' : 'abre el'} ${t ? fechaEpoch(t) : '—'}</span>
+      ${t && !abierto ? `<span class="lp-lz-cuenta num" data-cuenta="${t * 1000}">--</span>` : ''}</div>
+    <div class="lp-lz-jugar ${abierto ? 'abierto' : ''}">${abierto ? `<span>${ic('play', 's16')} JUGAR</span><small>Abierto para toda cuenta activa.</small>` : `<span>${ic('lock', 's16')} PRÓXIMAMENTE</span><small>El botón de jugar se libera solo en la fecha.</small>`}</div>
+    <p class="lp-nota">La fecha se muestra en la hora de quien mira.</p>`;
+}
+
+/* ══════════════ publicar y descartar ══════════════ */
+function errLocal(J, k) {
+  if (k === 'tira') return errTira(J);
+  if (k === 'ruleta') return errRuleta(J.borr.ruleta) || J.err.ruleta || null;
+  if (k === 'asistencia') return J.err.asistencia || null;
+  if (k === 'lanzamiento') return epochPeru(J.borr.lanzamiento.desde_peru) ? null : 'Falta el día y la hora de apertura.';
+  return null;
+}
+function publicarJ() {
+  const J = S.jc; if (!J || J.publicando) return;
+  const partes = suciasJc(J), env = envTxt(J.env), j = juegoCat(J.jid);
+  if (!partes.length) return;
+  for (const k of partes) {
+    const e = errLocal(J, k);
+    if (e) { J.err[k] = e; if (J.tab !== k) { J.tab = k; pintarJ(); } else pintarCuerpoJ(); toast({ t: `${JC_TABS[k][0]}: falta corregir algo`, sub: esc(e), tipo: 'err' }); return; }
+  }
+  confirmar({ titulo: `¿Publicar en ${env}?`, icono: 'send', peligro: false, ok: `Publicar en ${env}`,
+    txt: `Llega en vivo a ${J.env === 'test' ? 'el servidor de prueba' : 'los launchers de los jugadores'} de <b>${esc(j.nombre)}</b>.`,
+    extra: `<span class="lab">Se publica</span><ul class="lc-cambios">${partes.map(k => `<li>${ic(JC_TABS[k][1], 's14')}${JC_TABS[k][0]}</li>`).join('')}</ul>`,
+    alAceptar: async () => {
+      J.publicando = true; pintarAccJ();
+      const hechas = [];
+      for (const k of partes) {
+        const valor = k === 'tira' ? JSON.parse(ser(J.borr.tira)).map(f => (f.siempre ? Object.assign(f, { vence: null }) : f)) : JSON.parse(ser(J.borr[k]));
+        const r = await api('contenido', { juego: J.jid, entorno: J.env, clave: k, valor });
+        if (S.jc !== J) return;
+        if (!r.ok) {
+          J.publicando = false; J.err[k] = (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
+          J.tab = k; pintarJ();
+          toast({ t: `No se pudo publicar: ${JC_TABS[k][0].toLowerCase()}`, sub: errTxt(r) + (hechas.length ? ` · Sí se publicó: ${hechas.join(', ').toLowerCase()}.` : ''), tipo: 'err', ms: 9000 });
+          return;
+        }
+        refrescarClave(J, k, r.d);
+        hechas.push(JC_TABS[k][0]);
+      }
+      J.publicando = false;
+      pintarJ();
+      toast({ t: `Publicado en ${env} · ${esc(j.nombre)}`, sub: `${esc(hechas.join(', '))}. Quedó en la auditoría.`, tipo: J.env === 'test' ? 'test' : 'ok' });
+    } });
+}
+function refrescarClave(J, k, d) {
+  J.err[k] = null;
+  if (k === 'lanzamiento') {
+    J.d.lanzamiento = d.lanzamiento || J.d.lanzamiento;
+    J.borr.lanzamiento = { desde_peru: J.d.lanzamiento.desde_peru, etiqueta: J.d.lanzamiento.etiqueta || '' };
+  } else {
+    const s = J.d.servidor;
+    ['cambiado', 'ruleta_resumen', 'ruleta_mayor_total', 'tira_texto_max', 'tira_total_max'].forEach(x => { if (d[x] !== undefined) s[x] = d[x]; });
+    if (k === 'asistencia') { s.asistencia = d.asistencia; s.asistencia_mes = d.asistencia_mes; ponerAsis(J, d.asistencia, d.asistencia_mes); J.alcance = null; }
+    if (k === 'ruleta') { s.ruleta = d.ruleta; J.borr.ruleta = clon(d.ruleta); }
+    if (k === 'tira') { s.tira = d.tira; ponerTira(J, d.tira); }
+  }
+  J.orig[k] = ser(J.borr[k]);
+}
+function descartarJ() {
+  const J = S.jc; if (!J) return;
+  confirmar({ titulo: '¿Descartar los cambios?', icono: 'refresh', ok: 'Descartar', txt: 'Todo vuelve a lo que está publicado ahora. Lo que cambió aquí se pierde.',
+    alAceptar: () => {
+      const s = J.d.servidor;
+      suciasJc(J).forEach(k => {
+        J.err[k] = null;
+        if (k === 'asistencia') { ponerAsis(J, s.asistencia, s.asistencia_mes); J.alcance = null; } else if (k === 'tira') ponerTira(J, s.tira);
+        else J.borr[k] = JSON.parse(J.orig[k]);
+      });
+      if (s && !suciasJc(J).includes('asistencia') && J.mesVer !== `${s.asistencia_mes.anio}-${dos(s.asistencia_mes.mes)}`) ponerAsis(J, J.borr.asistencia, s.asistencia_mes);
+      pintarJ();
+      toast({ t: 'Cambios descartados', tipo: 'info' });
+    } });
+}
+
+/* ══════════════ los clics y los cambios del editor ══════════════ */
+function accionJc(a) {
+  const J = S.jc; if (!J) return;
+  const i = Number(a.dataset.i), k = a.dataset.accion;
+  if (k === 'jc-tab') { if (J.tab !== a.dataset.k) { J.tab = a.dataset.k; pintarJ(`#jcTab-${J.tab}`); } return; }
+  if (k === 'jc-publicar') return publicarJ();
+  if (k === 'jc-descartar') return descartarJ();
+  if (k === 'jc-dia') { J.dia = a.dataset.f; J.alcance = null; $$('.lc-dia').forEach(b => { const on = b.dataset.f === J.dia; b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on); }); repintarDia(J); pintarPreviaJ(); return; }
+  if (k === 'jc-mes') { const [y, m] = J.mesVer.split('-').map(Number), d = new Date(y, m - 1 + Number(a.dataset.d), 1); J.mesVer = `${d.getFullYear()}-${dos(d.getMonth() + 1)}`; programarPreviaAsis(0); return; }
+  if (k === 'jc-ru-modo') { J.modoRueda = a.dataset.m; pintarPreviaJ(); return; }
+  if (!puedeJc(J, J.tab)) return;
+  const A = J.borr.asistencia, R = J.borr.ruleta, T = J.borr.tira;
+  switch (k) {
+    case 'jc-p-tipo': { const { r } = reglaActual(J); if (!r) return; r.premios[i] = a.dataset.t === 'rcoin' ? { rcoin: 1000 } : { item: 0, cant: 1 }; repintarDia(J); if (a.dataset.t === 'item') abrirBuscarItem($(`[data-accion="jc-p-buscar"][data-i="${i}"]`), i); else programarPreviaAsis(); break; }
+    case 'jc-p-agregar': { const { r } = reglaActual(J); if (!r || r.premios.length >= 6) return; r.premios.push({ rcoin: 1000 }); repintarDia(J); const f = $(`[data-jc="as-p-rcoin"][data-i="${r.premios.length - 1}"]`); if (f) f.focus(); programarPreviaAsis(); break; }
+    case 'jc-p-quitar': { const { r } = reglaActual(J); if (!r || r.premios.length < 2) return; r.premios.splice(i, 1); repintarDia(J); programarPreviaAsis(); break; }
+    case 'jc-p-buscar': abrirBuscarItem(a, i); return;
+    case 'jc-p-forma': { const { r } = reglaActual(J); const p = r && r.premios[i]; if (!p || p.item == null) return;
+      if (a.dataset.f === 'dias') { if (p.dias == null) { delete p.cant; p.dias = 30; } } else if (p.cant == null) { delete p.dias; p.cant = 1; }
+      repintarDia(J); programarPreviaAsis(0); break; }
+    case 'jc-regla-crear': { const { x, al } = reglaActual(J); if (!x) return; fijarRegla(A, al, x, { premios: (x.premios || []).map(p => { const q = Object.assign({}, p); delete q.nombre; return q; }) }); repintarDia(J); programarPreviaAsis(0); break; }
+    case 'jc-regla-quitar': { const { x, al } = reglaActual(J); if (!x || al === 'base') return; fijarRegla(A, al, x, null); J.alcance = null; repintarDia(J); programarPreviaAsis(0); break; }
+    case 'jc-ru-agregar': if (R.casillas.length < 16) { R.casillas.push({ tipo: 'rcoin', monto: 100, prob: 0 }); pintarCuerpoJ(`[data-jc="ru-prob"][data-i="${R.casillas.length - 1}"]`); programarPreviaRuleta(); } break;
+    case 'jc-ru-quitar': if (R.casillas.length > 2) {
+      R.casillas.splice(i, 1);
+      if (R.rcoin_casilla === i) { const p = R.casillas.findIndex(c => c.tipo === 'rcoin'); R.rcoin_casilla = p < 0 ? 0 : p; } else if (R.rcoin_casilla > i) R.rcoin_casilla--;
+      pintarCuerpoJ(); programarPreviaRuleta();
+    } break;
+    case 'jc-ru-mover': { const d = i + Number(a.dataset.d); if (d < 0 || d >= R.casillas.length) return; [R.casillas[i], R.casillas[d]] = [R.casillas[d], R.casillas[i]];
+      if (R.rcoin_casilla === i) R.rcoin_casilla = d; else if (R.rcoin_casilla === d) R.rcoin_casilla = i;
+      pintarCuerpoJ(`[data-accion="jc-ru-mover"][data-i="${d}"][data-d="${a.dataset.d}"]`); programarPreviaRuleta(); break; }
+    case 'jc-ti-agregar': if (T.length < 50) { T.push({ id: null, texto: '', siempre: true, vence: null, activo: true, _k: 'n' + Date.now() }); pintarCuerpoJ(`[data-jc="ti-texto"][data-i="${T.length - 1}"]`); } break;
+    case 'jc-ti-quitar': T.splice(i, 1); pintarCuerpoJ(); break;
+    case 'jc-ti-siempre': { const f = T[i]; if (!f) return; f.siempre = a.dataset.v === '1'; if (f.siempre) f.vence = null; else if (!f.vence) f.vence = Math.floor(Date.now() / 1000 / 3600 + 24 * 7) * 3600;
+      pintarCuerpoJ(`[data-accion="jc-ti-siempre"][data-i="${i}"][data-v="${a.dataset.v}"]`); break; }
+    case 'jc-lz-etq': J.borr.lanzamiento.etiqueta = a.dataset.v; $$('[data-accion="jc-lz-etq"]').forEach(b => b.setAttribute('aria-pressed', b === a)); break;
+    default: return;
+  }
+  cambioJ();
+}
+function cambioJc(el, final) {
+  const J = S.jc; if (!J) return;
+  const k = el.dataset.jc, i = Number(el.dataset.i), v = el.type === 'checkbox' ? el.checked : el.value;
+  if (k === 'as-alcance') { J.alcance = v; repintarDia(J); return; }
+  if (!puedeJc(J, J.tab)) return;
+  const A = J.borr.asistencia, R = J.borr.ruleta, T = J.borr.tira;
+  const num = (a, b) => { if (v === '' && !final) return null; const n = entre(v, a, b); if (final && String(n) !== String(el.value)) el.value = n; return n; };
+  switch (k) {
+    case 'as-activa': A.activa = v; pintarCuerpoJ('[data-jc="as-activa"]'); break;
+    case 'as-tardias': { const n = num(0, 31); if (n === null) return; A.tardias_mes = n; break; }
+    case 'as-titulo': { const { r } = reglaActual(J); if (!r) return; if (String(v).trim()) r.titulo = v; else delete r.titulo; programarPreviaAsis(); break; }
+    case 'as-racha': { const { r } = reglaActual(J); if (!r) return; if (v) r.racha = true; else delete r.racha; programarPreviaAsis(); break; }
+    case 'as-p-rcoin': case 'as-p-cant': case 'as-p-dias': {
+      const { r } = reglaActual(J); if (!r || !r.premios[i]) return;
+      const campo = k.slice(5), n = num(campo === 'rcoin' ? 1 : campo === 'cant' ? 1 : 0, campo === 'rcoin' ? 1000000 : campo === 'cant' ? 999 : 365);
+      if (n === null) return; r.premios[i][campo] = n; programarPreviaAsis(); break; }
+    case 'ru-activa': R.activa = v; pintarCuerpoJ('[data-jc="ru-activa"]'); programarPreviaRuleta(); break;
+    case 'ru-precio': { const n = num(1, 100); if (n === null) return; R.precio = n; programarPreviaRuleta(); break; }
+    case 'ru-precio_rcoin': { const n = num(0, 1000000); if (n === null) return; const antes = R.precio_rcoin > 0; R.precio_rcoin = n;
+      if (n > 0 && (R.casillas[R.rcoin_casilla] || {}).tipo !== 'rcoin') { const p = R.casillas.findIndex(c => c.tipo === 'rcoin'); if (p >= 0) R.rcoin_casilla = p; }
+      if (antes !== n > 0) pintarCuerpoJ('[data-jc="ru-precio_rcoin"]'); programarPreviaRuleta(); break; }
+    case 'ru-dias_ropa': { const n = num(0, 365); if (n === null) return; R.dias_ropa = n; programarPreviaRuleta(); break; }
+    case 'ru-monto': { const n = num(1, 100000); if (n === null) return; R.casillas[i].monto = n; programarPreviaRuleta(); break; }
+    case 'ru-tipo': { const c = R.casillas[i]; if (!c) return;
+      R.casillas[i] = v === 'rcoin' ? { tipo: 'rcoin', monto: c.tipo === 'rcoin' ? c.monto : 100, prob: c.prob } : { tipo: 'ropa', nivel: v === 'detallada' ? 'detallada' : 'simple', prob: c.prob };
+      if (R.precio_rcoin > 0 && (R.casillas[R.rcoin_casilla] || {}).tipo !== 'rcoin') { const q = R.casillas.findIndex(x => x.tipo === 'rcoin'); if (q >= 0) R.rcoin_casilla = q; }
+      pintarCuerpoJ(`[data-jc="ru-tipo"][data-i="${i}"]`); programarPreviaRuleta(); break; }
+    case 'ru-prob': { const n = num(0, 1000); if (n === null) return; R.casillas[i].prob = n; actualizarPcts(J); programarPreviaRuleta(); break; }
+    case 'ru-mayor-prob': case 'ru-mayor-dias': case 'ru-mayor-suerte_desde': case 'ru-mayor-suerte_tope': {
+      const campo = k.slice(9), n = num(0, campo === 'prob' ? 1000 : campo === 'dias' ? 365 : 10000000); if (n === null) return;
+      R.mayor = R.mayor || {}; R.mayor[campo] = n; if (campo === 'prob') actualizarPcts(J); programarPreviaRuleta(); break; }
+    case 'ru-sinropa': { const n = num(1, 100000), kk = Number(el.dataset.k); if (n === null || kk >= 8) return;
+      const m = Array.isArray(R.rcoin_sin_ropa) && R.rcoin_sin_ropa.length ? R.rcoin_sin_ropa : [n];
+      while (m.length <= kk) m.push(m[m.length - 1]);
+      m[kk] = n; R.rcoin_sin_ropa = m; programarPreviaRuleta(); break; }
+    case 'ru-rc': R.rcoin_casilla = Number(v); pintarCuerpoJ(`[data-jc="ru-rc"][value="${v}"]`); programarPreviaRuleta(); break;
+    case 'ti-texto': T[i].texto = v; refrescarFilaTira(J, i); break;
+    case 'ti-activo': T[i].activo = v; refrescarFilaTira(J, i); break;
+    case 'ti-vence': { const t = v ? Math.floor(new Date(v).getTime() / 1000) : null; T[i].vence = Number.isFinite(t) ? t : null; refrescarFilaTira(J, i); break; }
+    case 'lz-desde': { J.borr.lanzamiento.desde_peru = v; const t = epochPeru(v), s = $('#lzSu'); if (s) s.textContent = t ? `En su hora: ${fechaEpoch(t)}` : 'Falta el día y la hora.'; break; }
+    default: return;
+  }
+  cambioJ();
+}
+/* buscar un ítem para un premio (por número o por nombre, en el catálogo del juego) */
+let busqReloj = null;
+function abrirBuscarItem(ancla, i) {
+  if (!ancla) return;
+  abrirPop(ancla, `<div class="jc-buscar"><label class="campo">${ic('search', 's16')}<span class="sr">Buscar ítem</span><input id="jcBusq" placeholder="Número o nombre del ítem" autocomplete="off" spellcheck="false"></label>
+    <div id="jcBusRes" class="jc-bus-res" aria-live="polite"><p>Escriba el número o parte del nombre.</p></div></div>`, 320);
+  pop._i = i;
+  pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Buscar ítem');
+  const inp = $('#jcBusq'); if (inp) inp.focus();
+}
+async function buscarItem(q) {
+  const J = S.jc, res = $('#jcBusRes'); if (!J || !res) return;
+  q = q.trim();
+  if (!q) { res.innerHTML = '<p>Escriba el número o parte del nombre.</p>'; return; }
+  res.innerHTML = '<p>Buscando…</p>';
+  const r = await api(`contenido/items?juego=${encodeURIComponent(J.jid)}&entorno=${J.env}&q=${encodeURIComponent(q)}`);
+  if (!$('#jcBusRes') || $('#jcBusq').value.trim() !== q) return;
+  if (!r.ok) { res.innerHTML = `<p>${errTxt(r)}</p>`; return; }
+  const its = r.d.items || [];
+  its.forEach(x => { J.nombres[x.item] = x.nombre; });
+  res.innerHTML = its.length ? its.map(x => `<button type="button" data-accion="jc-item-elegir" data-item="${Number(x.item)}"><span class="ip svg chico" style="--c:${hashStr(String(x.item)) % 2 ? '243,38,134' : '179,139,255'}">${ic('gift')}</span><span>${esc(x.nombre)}</span><small>#${Number(x.item)}</small></button>`).join('')
+    : `<p>Ningún ítem coincide con «${esc(q)}».</p>`;
+}
+function elegirItem(id) {
+  const J = S.jc, i = pop ? pop._i : null; cerrarPop();
+  const { r } = reglaActual(J); if (!r || i == null || !r.premios[i]) return;
+  const p = r.premios[i], antes = p.dias != null ? { dias: p.dias } : { cant: p.cant || 1 };
+  r.premios[i] = Object.assign({ item: Number(id) }, antes);
+  repintarDia(J);
+  const b = $(`[data-accion="jc-p-buscar"][data-i="${i}"]`); if (b) b.focus();
+  programarPreviaAsis(0);
+  cambioJ();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   ★ 20-nov · NOVEDADES (#/novedades): el acordeón de noticias de TODOS los launchers. Una lista para toda la red.
+   Las GENERALES se abren hacia abajo; las de cada juego (parches, ropa…), hacia la izquierda. Cada uno edita sólo
+   las de sus juegos (`editable`); al publicar se mandan SÓLO ésas: el servidor conserva las demás.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+const ETQ_NOV = { noticia: 'Noticia', parche: 'Parche', ropa: 'Ropa', evento: 'Evento', mantenimiento: 'Mantenimiento', fuera_de_servicio: 'Fuera de servicio', launcher: 'Launcher' };
+const etqNov = e => ETQ_NOV[e] || esc(e);
+const fechaNov = f => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f || ''); return m ? `${Number(m[3])} ${MESES[Number(m[2]) - 1]} ${m[1]}` : ''; };
+const ordenNov = l => l.slice().sort((a, b) => (Number(!!b.fijada) - Number(!!a.fijada)) || String(b.fecha || '').localeCompare(String(a.fecha || '')));
+const serNov = l => ser(l.filter(n => n.editable).map(n => Object.assign({}, n, { editable: undefined })));
+const novSucio = () => !!(S.nov && S.nov.lista && serNov(S.nov.lista) !== S.nov.orig);
+const httpsOk = u => /^https:\/\/[^\s"'<>]{4,400}$/.test(u || '');
+function nuevoNov(d, juegoSel) {
+  const lista = (d.noticias || []).map((n, i) => Object.assign({}, n, { juego: n.juego || 'r2beat', activo: n.activo !== false, _k: 'n' + i }));
+  const js = (d.juegos || []).filter(j => j.id !== 'general');
+  const juego = js.some(j => j.id === juegoSel) ? juegoSel : ((js.find(j => j.editable) || js[0]) || {}).id || null;
+  return { d, lista, orig: serNov(lista), juego, publicando: false };
+}
+async function vistaNovedades() {
+  document.body.classList.remove('test', 'menu-abierto');
+  document.title = 'Novedades · Coordinador Eñeños';
+  raiz.innerHTML = barraHub('novedades') + `<main class="hub nov" id="contenido"><div class="caja jc-carga" aria-live="polite"><span class="esq" style="height:14px;width:40%"></span><span class="esq" style="height:180px"></span><span class="tenue">Cargando las novedades…</span></div></main>`;
+  const r = await api('novedades');
+  if (S.ruta !== '#/novedades') return;
+  if (!r.ok) { if (r.status !== 401) $('#contenido').innerHTML = `<section class="caja" style="max-width:560px;margin:24px auto">${vacio('No se pudieron leer las novedades', errTxt(r))}</section>`; return; }
+  S.nov = nuevoNov(r.d);
+  pintarNov();
+}
+const juegoNov = id => (S.nov.d.juegos || []).find(j => j.id === id) || { id, nombre: id, editable: false, color: '81,216,229' };
+function portadaNov(id, c = '') {
+  const jn = juegoNov(id), cat = jn.juego ? juegoCat(jn.juego) : null;
+  if (cat && okArte(cat.arte)) return `<img class="${c}" src="${esc(cat.arte)}" style="object-position:${okPos(cat.pos)}" alt="">`;
+  return `<span class="nov-color ${c}" style="--g:${okColor(jn.color)}">${ic(id === 'general' ? 'mega' : 'sparkle', 's20')}</span>`;
+}
+function pintarNov() {
+  const N = S.nov, d = N.d, main = $('#contenido'); if (!N || !main) return;
+  const gen = juegoNov('general'), js = (d.juegos || []).filter(j => j.id !== 'general'), edita = (d.juegos || []).some(j => j.editable);
+  const total = N.lista.length, max = Number(d.noticias_max) || 60, lleno = total >= max;
+  const generales = ordenNov(N.lista.filter(n => n.juego === 'general'));
+  const sel = juegoNov(N.juego), deJ = ordenNov(N.lista.filter(n => n.juego === N.juego));
+  const nuevaBtn = (jid, txt, cls = 'nov-agregar') => juegoNov(jid).editable ? `<button type="button" class="${cls}" data-accion="nov-nueva" data-juego="${esc(jid)}" ${lleno ? `disabled title="Ya hay ${max} novedades: quite alguna"` : ''}>${ic('plus', 's14')}${txt}</button>` : '';
+  main.innerHTML = `<section class="saludo nov-cab"><div><span class="rayas" aria-hidden="true"><i></i><i></i><i></i></span><h1>Novedades del launcher</h1>
+      <p>Las noticias de <b>todos</b> los launchers de Eñeños. Lo que publique aquí llega en vivo, sin launcher nuevo.</p>
+      <p class="jc-cambiado">${d.sin_servidor ? '' : `${cambiadoTxt(d.cambiado)} · ${total} de ${max} novedades`}</p></div>
+      <div class="der lc-acc" id="novAcc"></div></section>
+    ${d.sin_servidor ? `<section class="caja">${vacio('Las novedades no están disponibles', esc(d.sin_servidor))}</section>` : `
+    ${edita ? '' : `<div class="conclusion mirar jc-aviso">${ic('lock', 's20')}<div>Su cuenta puede mirar las novedades, pero no cambiarlas.<small>Un moderador edita las de sus juegos; las generales, un Admin.</small></div></div>`}
+    <div class="nov-grid">
+      <section class="caja nov-col" aria-labelledby="tGen">
+        <div class="caja-cab"><h3 id="tGen">${ic('down', 's16')}Noticias generales</h3></div>
+        <p class="nov-sub">En el launcher se abren <b>hacia abajo</b>. Son para avisos de servicio: mantenimiento, fuera de servicio y el launcher.</p>
+        <div class="nov-maqueta abajo"><div class="nov-acord" aria-hidden="true"><img src="arte/noticias-npc.png" alt="" data-fallo="npc"><b>Noticias</b>${generales.some(n => n.activo) ? '<span class="nov-nuevo"></span>' : ''}${ic('down', 's16')}</div>
+          <div class="nov-lista">${generales.length ? generales.map(n => itemNov(n)).join('') : '<p class="tenue nov-nada">Sin noticias generales.</p>'}</div>
+          ${gen.editable ? nuevaBtn('general', 'Nueva noticia general') : `<p class="tenue nov-lock">${ic('lock', 's14')} Las noticias generales las cambia un Admin.</p>`}</div>
+      </section>
+      <section class="caja nov-col" aria-labelledby="tPar">
+        <div class="caja-cab"><h3 id="tPar">${ic('left', 's16')}Cada juego</h3></div>
+        <p class="nov-sub">En el launcher, el acordeón de cada juego se abre <b>hacia la izquierda</b>: parches, ropa, eventos de ese juego.</p>
+        <div class="nov-maqueta izq">
+          <div class="nov-juegos" role="tablist" aria-label="Juego">${js.map(j => `<button type="button" role="tab" class="nov-jtab" style="--g:${okColor(j.color)}" data-accion="nov-juego" data-j="${esc(j.id)}" aria-selected="${j.id === N.juego}">${portadaNov(j.id, 'nov-jimg')}<span>${esc(j.nombre)}</span><span class="n">${N.lista.filter(n => n.juego === j.id).length}</span>${j.editable ? '' : ic('lock', 's14 tenue')}</button>`).join('') || '<p class="tenue">Ningún juego suyo sale en las noticias.</p>'}</div>
+          ${N.juego ? `<div class="nov-cajitas">${deJ.map(n => cajitaNov(n)).join('')}${nuevaBtn(N.juego, `Nueva de ${esc(sel.nombre)}`, 'nov-cajita libre')}</div>
+          ${deJ.length || sel.editable ? '' : '<p class="tenue nov-nada">Todavía nada para este juego.</p>'}
+          ${sel.editable ? '' : `<p class="tenue nov-lock">${ic('lock', 's14')} Las de ${esc(sel.nombre)} las cambia un Admin o quien tiene ese juego asignado.</p>`}` : ''}
+          <p class="tenue nov-orden">${ic('info', 's14')} Aquí se ordenan como en el panel: las fijadas primero, después las más nuevas.</p>
+        </div>
+      </section>
+    </div>`}`;
+  pintarAccNov();
+}
+function rapNov(n) {
+  if (!n.editable) return `<span class="nov-lock-ic" title="Sólo lectura">${ic('lock', 's14')}</span>`;
+  return `<span class="nov-rap"><button type="button" class="btn icono chico fantasma ${n.fijada ? 'on' : ''}" data-accion="nov-fijar" data-k="${n._k}" aria-pressed="${!!n.fijada}" aria-label="${n.fijada ? 'Desfijar' : 'Fijar'} «${esc(n.titulo)}»" title="${n.fijada ? 'Fijada: toque para desfijar' : 'Fijar arriba'}">${ic('pin', 's14')}</button><button type="button" class="btn icono chico fantasma" data-accion="nov-ver" data-k="${n._k}" aria-pressed="${!n.activo}" aria-label="${n.activo ? 'Ocultar' : 'Mostrar'} «${esc(n.titulo)}»" title="${n.activo ? 'Visible: toque para ocultar' : 'Oculta: toque para mostrar'}">${ic(n.activo ? 'eye' : 'eyeoff', 's14')}</button></span>`;
+}
+const metaNov = n => `<span class="nov-meta"><span class="chip mayus">${etqNov(n.etiqueta)}</span>${n.fijada ? `<span class="nov-pin" title="Fijada">${ic('pin', 's14')}</span>` : ''}${n.fecha ? `<span class="muy-tenue">${fechaNov(n.fecha)}</span>` : ''}${n.activo ? '' : '<span class="chip">Oculta</span>'}</span>`;
+function itemNov(n) {
+  return `<div class="nov-item ${n.activo ? '' : 'oculta'} ${n.editable ? '' : 'bloq'}"><button type="button" class="nov-abrir" data-accion="nov-abrir" data-k="${n._k}" aria-label="${n.editable ? 'Editar' : 'Ver'} «${esc(n.titulo)}»">
+      ${portadaNov(n.juego, 'nov-ic')}<span class="t">${metaNov(n)}<b>${esc(n.titulo)}</b></span></button>${rapNov(n)}</div>`;
+}
+function cajitaNov(n) {
+  return `<div class="nov-cajita ${n.activo ? '' : 'oculta'} ${n.editable ? '' : 'bloq'}"><button type="button" class="nov-abrir" data-accion="nov-abrir" data-k="${n._k}" aria-label="${n.editable ? 'Editar' : 'Ver'} «${esc(n.titulo)}»">
+      <span class="nov-portada">${portadaNov(n.juego)}</span>${metaNov(n)}<b>${esc(n.titulo)}</b></button>${rapNov(n)}</div>`;
+}
+function pintarAccNov() {
+  const N = S.nov, acc = $('#novAcc'); if (!N || !acc) return;
+  const pt = $('.pill-nov'); if (pt) { const p = $('.pt', pt), s = novSucio(); if (s && !p) pt.insertAdjacentHTML('beforeend', '<span class="pt" title="Hay cambios sin publicar"></span>'); if (!s && p) p.remove(); }
+  if (N.d.sin_servidor || !(N.d.juegos || []).some(j => j.editable)) { acc.innerHTML = ''; return; }
+  const n = novSucio();
+  acc.innerHTML = `<span class="chip ${n ? 'oro' : 'verde'}" role="status">${ic(n ? 'clock' : 'check', 's14')}${n ? 'Cambios sin publicar' : 'Todo publicado'}</span>
+    <button type="button" class="btn fantasma" data-accion="nov-descartar" ${n && !N.publicando ? '' : 'disabled'}>Descartar</button>
+    <button type="button" class="btn prim" data-accion="nov-publicar" ${n && !N.publicando ? '' : 'disabled'}>${N.publicando ? '<span class="giro-btn" aria-hidden="true"></span>Publicando…' : `${ic('send', 's16')}Publicar`}</button>`;
+}
+/* el texto del popup: se ESCAPA todo y recién después se arma el formato simple (# título · ## subtítulo · - lista · **negrita**) */
+function formatoNov(t) {
+  const out = []; let ul = false, par = [];
+  const cerrarPar = () => { if (par.length) { out.push(`<p>${par.join('<br>')}</p>`); par = []; } };
+  const cerrarUl = () => { if (ul) { out.push('</ul>'); ul = false; } };
+  const linea = s => esc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  for (const crudo of String(t || '').split(/\r?\n/)) {
+    const r = crudo.trimEnd(); let m;
+    if (!r.trim()) { cerrarPar(); cerrarUl(); continue; }
+    if ((m = r.match(/^##\s+(.*)/))) { cerrarPar(); cerrarUl(); out.push(`<h4>${linea(m[1])}</h4>`); } else if ((m = r.match(/^#\s+(.*)/))) { cerrarPar(); cerrarUl(); out.push(`<h3>${linea(m[1])}</h3>`); } else if ((m = r.match(/^\s*[-•]\s+(.*)/))) { cerrarPar(); if (!ul) { out.push('<ul>'); ul = true; } out.push(`<li>${linea(m[1])}</li>`); } else { cerrarUl(); par.push(linea(r)); }
+  }
+  cerrarPar(); cerrarUl();
+  return out.join('');
+}
+function opcionesEtq(n) {
+  const d = S.nov.d, gen = n.juego === 'general';
+  const lista = gen ? (d.etiquetas_general || []) : (d.etiquetas || Object.keys(ETQ_NOV));
+  return lista.map(e => `<option value="${esc(e)}" ${n.etiqueta === e ? 'selected' : ''}>${etqNov(e)}</option>`).join('');
+}
+function editarNov(k, juegoNuevo) {
+  const N = S.nov, d = N.d, orig = k ? N.lista.find(x => x._k === k) : null;
+  if (k && !orig) return;
+  const etqs = juegoNuevo === 'general' ? (d.etiquetas_general || []) : (d.etiquetas || []);
+  const n = orig ? Object.assign({}, orig) : { juego: juegoNuevo, titulo: '', texto: '', imagen: '', etiqueta: juegoNuevo === 'general' ? (etqs[0] || 'mantenimiento') : (etqs.includes('parche') ? 'parche' : etqs[0] || 'noticia'),
+    fecha: hoyIso(), fijada: false, activo: true, editable: true, _k: 'x' + Date.now().toString(36) };
+  const ro = !n.editable, max = Number(d.texto_max) || 4000;
+  const juegosEd = (d.juegos || []).filter(j => j.editable || j.id === n.juego);
+  const pn = abrirCapa(`<aside class="cajon ancho" role="dialog" aria-modal="true" aria-labelledby="nTit">
+    <div class="cajon-cab"><div style="min-width:0"><h2 id="nTit">${orig ? (ro ? 'Novedad' : 'Editar novedad') : 'Nueva novedad'}</h2><p>${ro ? (n.juego === 'general' ? 'Las noticias generales las cambia un Admin.' : 'Sólo la cambia un Admin o quien tiene ese juego asignado.') : 'Los cambios quedan listos para publicar con «Publicar».'}</p></div>
+      <button type="button" class="btn icono chico fantasma cerrar" data-accion="cerrar-capa" aria-label="Cerrar">${ic('x', 's16')}</button></div>
+    <div class="cajon-cuerpo nov-ed">
+      <div class="lc-fila">
+        <label class="lc-campo"><span class="lab">Dónde aparece</span><select class="sel" data-n="juego"${dis(ro)}>${juegosEd.map(j => `<option value="${esc(j.id)}" ${n.juego === j.id ? 'selected' : ''}>${j.id === 'general' ? 'General (todos los launchers)' : esc(j.nombre)}</option>`).join('')}</select></label>
+        <label class="lc-campo"><span class="lab">Etiqueta</span><select class="sel" data-n="etiqueta" id="nEtq"${dis(ro)}>${opcionesEtq(n)}</select></label>
+        <label class="lc-campo"><span class="lab">Fecha</span><input type="date" class="lc-in" data-n="fecha" value="${esc(n.fecha || '')}"${dis(ro)}></label>
+      </div>
+      <label class="lc-campo"><span class="lab">Título <span class="muy-tenue" id="nCuT"></span></span><input class="lc-in" maxlength="80" data-n="titulo" value="${esc(n.titulo)}" placeholder="Por ejemplo: Parche r187"${ro ? ' disabled' : ' autofocus'}></label>
+      <label class="lc-campo"><span class="lab">Imagen · opcional</span><input class="lc-in" data-n="imagen" value="${esc(n.imagen || '')}" placeholder="https://…" inputmode="url" spellcheck="false"${dis(ro)}><span class="lc-error" id="nErrImg"></span></label>
+      <label class="lc-campo"><span class="lab">Texto</span><textarea class="area" data-n="texto" maxlength="${max}" style="min-height:150px"${dis(ro)}>${esc(n.texto || '')}</textarea>
+        <span class="cuenta-txt"><span># título · ## subtítulo · - lista · **negrita**</span><span id="nCuX"></span></span></label>
+      <div class="lc-fila">
+        <label class="lc-check"><input type="checkbox" data-n="fijada" ${n.fijada ? 'checked' : ''}${dis(ro)}><span><b>Fijada</b><span>Aparece primero, aunque haya otras más nuevas.</span></span></label>
+        <label class="lc-check"><input type="checkbox" data-n="activo" ${n.activo ? 'checked' : ''}${dis(ro)}><span><b>Visible</b><span>Si la oculta, el launcher no la muestra.</span></span></label>
+      </div>
+      <div><span class="lab">Vista previa del popup</span><div id="nPrevia"></div></div>
+    </div>
+    <div class="cajon-pie">${orig && !ro ? `<span class="izq"><button type="button" class="btn chico peligro" id="nQuitar">${ic('x', 's14')}Quitar</button></span>` : '<span class="izq"></span>'}
+      <button type="button" class="btn" data-accion="cerrar-capa">${ro ? 'Cerrar' : 'Cancelar'}</button>${ro ? '' : `<button type="button" class="btn prim" id="nOk">${orig ? 'Aplicar' : 'Agregar'}</button>`}</div></aside>`);
+  const malo = () => {
+    if (!String(n.titulo || '').trim()) return 'Falta el título.';
+    if (n.imagen && !httpsOk(n.imagen)) return 'La imagen tiene que ser una dirección que empiece con https://';
+    if (String(n.texto || '').length > max) return `El texto pasa de ${max} letras.`;
+    if (n.juego === 'general' && !(d.etiquetas_general || []).includes(n.etiqueta)) return 'Esa etiqueta no va en lo general.';
+    return null;
+  };
+  const previa = () => {
+    const host = (() => { try { return new URL(n.imagen).host; } catch (e) { return ''; } })();
+    $('#nPrevia', pn).innerHTML = `<div class="nv-pop"><div class="nv-img">${portadaNov(n.juego, 'nv-fondo')}${n.imagen && httpsOk(n.imagen) ? `<span class="nv-img-nota">${ic('eye', 's14')}En el launcher va la imagen de ${esc(host)}</span>` : ''}</div>
+      <div class="nv-cuerpo">${metaNov(n)}${n.juego !== 'general' ? `<span class="muy-tenue" style="font-size:12px">${esc(juegoNov(n.juego).nombre)}</span>` : ''}
+      <h2>${esc(n.titulo || 'Título de la novedad')}</h2><div class="nv-texto">${formatoNov(n.texto) || '<p class="tenue">El texto aparece aquí.</p>'}</div></div></div>`;
+    $('#nCuT', pn).textContent = `${String(n.titulo || '').length}/80`;
+    $('#nCuX', pn).textContent = `${String(n.texto || '').length}/${max}`;
+    const err = n.imagen && !httpsOk(n.imagen);
+    $('#nErrImg', pn).textContent = err ? 'Sólo direcciones que empiecen con https://' : '';
+    pn.querySelector('[data-n="imagen"]').classList.toggle('mal', !!err);
+  };
+  pn.addEventListener('input', e => {
+    const c = e.target.dataset.n; if (!c || ro) return;
+    n[c] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (c === 'juego') { const ok = (n.juego === 'general' ? d.etiquetas_general : d.etiquetas) || []; if (!ok.includes(n.etiqueta)) n.etiqueta = n.juego === 'general' ? ok[0] : (ok.includes('parche') ? 'parche' : ok[0]); $('#nEtq', pn).innerHTML = opcionesEtq(n); }
+    previa();
+  });
+  previa();
+  const ok = $('#nOk', pn);
+  if (ok) ok.addEventListener('click', () => {
+    const e = malo(); if (e) { toast({ t: 'Falta corregir algo', sub: esc(e), tipo: 'err' }); return; }
+    n.titulo = n.titulo.trim();
+    if (orig) N.lista[N.lista.indexOf(orig)] = n; else N.lista.unshift(n);
+    if (n.juego !== 'general') N.juego = n.juego;
+    cerrarCapa(); pintarNov();
+    toast({ t: orig ? 'Cambio listo' : 'Novedad agregada', sub: 'Se ve en los launchers cuando toque «Publicar».', tipo: 'info' });
+  });
+  const q = $('#nQuitar', pn);
+  if (q) q.addEventListener('click', () => confirmar({ titulo: '¿Quitar esta novedad?', ok: 'Quitar', icono: 'x', txt: `«${esc(orig.titulo)}» deja de verse en los launchers cuando publique.`,
+    alAceptar: () => { N.lista.splice(N.lista.indexOf(orig), 1); pintarNov(); } }));
+}
+function publicarNov() {
+  const N = S.nov; if (!N || N.publicando || !novSucio()) return;
+  const mias = N.lista.filter(n => n.editable);
+  confirmar({ titulo: '¿Publicar las novedades?', icono: 'send', peligro: false, ok: 'Publicar',
+    txt: 'Llegan en vivo a los launchers de toda la red. Las novedades de juegos que no son suyos quedan como están.',
+    alAceptar: async () => {
+      N.publicando = true; pintarAccNov();
+      const r = await api('novedades', { noticias: mias.map(n => { const x = JSON.parse(ser(n)); delete x.editable; return x; }), base: N.d.base });
+      if (S.nov !== N) return;
+      N.publicando = false;
+      if (r.ok && !r.d.sin_servidor) { S.nov = nuevoNov(r.d, N.juego); pintarNov(); toast({ t: 'Novedades publicadas', sub: 'Los launchers ya las muestran. Quedó en la auditoría.' }); return; }
+      if (r.status === 409) {
+        toast({ t: 'Alguien publicó mientras usted editaba', sub: errTxt(r), tipo: 'err', ms: 10000 });
+        const r2 = await api('novedades');
+        if (S.nov === N && r2.ok) { S.nov = nuevoNov(r2.d, N.juego); pintarNov(); }
+        return;
+      }
+      pintarAccNov();
+      toast({ t: 'No se pudieron publicar', sub: r.d && r.d.sin_servidor ? esc(r.d.sin_servidor) : errTxt(r), tipo: 'err', ms: 9000 });
+    } });
+}
+function accionNov(a) {
+  const N = S.nov; if (!N) return;
+  const k = a.dataset.k, n = k ? N.lista.find(x => x._k === k) : null;
+  switch (a.dataset.accion) {
+    case 'nov-juego': N.juego = a.dataset.j; pintarNov(); { const t = $(`[data-accion="nov-juego"][data-j="${a.dataset.j}"]`); if (t) t.focus(); } break;
+    case 'nov-abrir': editarNov(k); break;
+    case 'nov-nueva': editarNov(null, a.dataset.juego); break;
+    case 'nov-fijar': if (n && n.editable) { n.fijada = !n.fijada; pintarNov(); const b = $(`[data-accion="nov-fijar"][data-k="${k}"]`); if (b) b.focus(); } break;
+    case 'nov-ver': if (n && n.editable) { n.activo = !n.activo; pintarNov(); const b = $(`[data-accion="nov-ver"][data-k="${k}"]`); if (b) b.focus(); } break;
+    case 'nov-publicar': publicarNov(); break;
+    case 'nov-descartar': confirmar({ titulo: '¿Descartar los cambios?', icono: 'refresh', ok: 'Descartar', txt: 'Las novedades vuelven a lo que está publicado ahora.',
+      alAceptar: () => { S.nov = nuevoNov(N.d, N.juego); pintarNov(); toast({ t: 'Cambios descartados', tipo: 'info' }); } }); break;
+  }
+}
+
+/* ══════════════ salir con cambios sin publicar ══════════════ */
+const hayCambios = () => !!((S.jc && suciasJc(S.jc).length) || novSucio());
+function mismaPagina(h) {
+  if (S.jc) { const b = `#/j/${S.jc.jid}/${S.jc.env}`; return h === b || h.startsWith(b + '/'); }
+  if (S.nov) return h === '#/novedades';
+  return false;
+}
+function pedirSalir(seguir) {
+  confirmar({ titulo: '¿Salir sin publicar?', icono: 'alert', ok: 'Salir y descartar', txt: 'Hay cambios sin publicar en esta página. Si sale ahora, se pierden.',
+    alAceptar: () => { S.jc = null; S.nov = null; seguir(); } });
+}
+window.addEventListener('beforeunload', e => { if (hayCambios()) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    Navegación, clics y reloj
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
-function go(h, reemplazar) {
+function go(h, reemplazar, forzar) {
+  if (!forzar && hayCambios() && !mismaPagina(h)) { pedirSalir(() => go(h, reemplazar, true)); return; }
+  if (!forzar && mismaPagina(h)) {                        // ★ la misma página: cambiar de parte sin perder el borrador
+    if (S.jc) { const t = h.split('/')[4]; if (tabsJc(S.jc).includes(t) && t !== S.jc.tab) { S.jc.tab = t; pintarJ(); } }
+    return;
+  }
   S.ruta = h;
   try { if (reemplazar) history.replaceState(null, '', h); else if (location.hash !== h) history.pushState(null, '', h); } catch (err) { /* nada */ }
   ruta();
 }
 function ruta() {
   cerrarCapa(); cerrarPop();
+  S.jc = null; S.nov = null;
   const h = S.ruta.replace(/^#\/?/, '').split('/');
   window.scrollTo(0, 0);
   if (!S.sesion) { vistaLogin(); return; }
   if (h[0] === 'entrar' || !h[0]) { go('#/juegos', true); return; }
-  if (h[0] === 'j') vistaProx(h[1], h[2] === 'test' ? 'test' : 'live');
+  if (h[0] === 'j' && h[1]) vistaJuego(h[1], h[2] === 'test' ? 'test' : 'live', h[3]);
+  else if (h[0] === 'novedades') vistaNovedades();
   else if (h[0] === 'persona' && /^\d+$/.test(h[1] || '')) vistaPersona(h[1]);
   else if (h[0] === 'red') vistaRed();
   else { if (h[0] !== 'juegos') { S.ruta = '#/juegos'; try { history.replaceState(null, '', '#/juegos'); } catch (err) { /* nada */ } } vistaJuegos(); }
 }
 async function salir() {
   await api('salir', {});
-  S.sesion = null; S.errorLogin = null; document.body.className = '';
-  go('#/entrar', true);
+  S.sesion = null; S.errorLogin = null; S.jc = null; S.nov = null; document.body.className = '';
+  go('#/entrar', true, true);
   toast({ t: 'Sesión cerrada', tipo: 'info' });
 }
 let buscarReloj = null;
-document.addEventListener('input', e => { if (e.target.id === 'qCuenta') { clearTimeout(buscarReloj); const v = e.target.value; buscarReloj = setTimeout(() => pintarCuentas(v), 250); } });
+document.addEventListener('input', e => {
+  if (e.target.id === 'qCuenta') { clearTimeout(buscarReloj); const v = e.target.value; buscarReloj = setTimeout(() => pintarCuentas(v), 250); return; }
+  if (e.target.id === 'jcBusq') { clearTimeout(busqReloj); const v = e.target.value; busqReloj = setTimeout(() => buscarItem(v), 250); return; }
+  if (e.target.dataset && e.target.dataset.jc && e.target.type !== 'radio' && e.target.type !== 'checkbox' && e.target.tagName !== 'SELECT') cambioJc(e.target, false);
+});
+/* los que terminan con «change»: casillas, radios, listas, fechas; y los números se ajustan a su rango al salir del campo */
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.jc) cambioJc(e.target, true); });
 document.addEventListener('click', async e => {
   if (pop && !pop.contains(e.target) && !(pop._ancla && pop._ancla.contains(e.target))) cerrarPop();
   const prov = e.target.closest('[data-prov]'); if (prov) { if (!prov.disabled) entrarCon(prov.dataset.prov); return; }
@@ -698,7 +1715,7 @@ document.addEventListener('click', async e => {
   const a = e.target.closest('[data-accion]'); if (!a) return;
   switch (a.dataset.accion) {
     case 'cerrar-capa': cerrarCapa(); break;
-    case 'salir': cerrarPop(); salir(); break;
+    case 'salir': cerrarPop(); if (hayCambios()) pedirSalir(salir); else salir(); break;
     case 'lg-otra': S.errorLogin = null; $('#lgRes').innerHTML = ''; { const b = $('.lg-prov:not(:disabled)'); if (b) b.focus(); } break;
     case 'lg-copiar': { const t = a.dataset.txt; const ok = () => toast({ t: 'Copiado', sub: esc(t), tipo: 'info' }); try { navigator.clipboard.writeText(t).then(ok, ok); } catch (err) { ok(); } break; }
     case 'carrusel-mover': { const fila = a.closest('.gc-carrusel').querySelector('.gc-fila'), g = fila.querySelector('.gc'); fila.scrollBy({ left: Number(a.dataset.dir) * ((g ? g.offsetWidth : 240) + 18), behavior: 'smooth' }); break; }
@@ -722,14 +1739,23 @@ document.addEventListener('click', async e => {
     case 'persona-accion': accionPersona(a.dataset.acc, a.dataset.pase); break;
     case 'banear-varios': formBaneo(''); break;
     case 'ban-levantar': levantarBaneo(Number(a.dataset.i)); break;
+    case 'jc-item-elegir': elegirItem(a.dataset.item); break;
+    default:
+      if (a.dataset.accion.startsWith('jc-')) accionJc(a);
+      else if (a.dataset.accion.startsWith('nov-')) accionNov(a);
   }
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if (pop) { const an = pop._ancla; cerrarPop(); if (an) an.focus(); } else if (capas.innerHTML) cerrarCapa(); return; }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('li[role="link"]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Enter' && e.target.id === 'mdExtra') { const b = $('#mdOk'); if (b) b.click(); return; }
+  if (e.key === 'Enter' && e.target.id === 'jcBusq') { e.preventDefault(); const b = $('#jcBusRes button'); if (b) b.click(); return; }
+  if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && e.target.matches('[role="tab"][data-accion="jc-tab"], [role="tab"][data-accion="nov-juego"]')) {
+    const ts = $$(`[role="tab"][data-accion="${e.target.dataset.accion}"]`), k = ts.indexOf(e.target), sig = ts[(k + (e.key === 'ArrowRight' ? 1 : ts.length - 1)) % ts.length];
+    if (sig) { e.preventDefault(); sig.click(); } return;
+  }
   if (e.key === 'Tab' && capas.innerHTML) {
-    const f = $$('button:not(:disabled), a[href], input:not(:disabled)', capas.children[1]).filter(x => x.offsetParent !== null);
+    const f = $$('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)', capas.children[1]).filter(x => x.offsetParent !== null);
     if (!f.length) return;
     if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
     else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
@@ -737,7 +1763,11 @@ document.addEventListener('keydown', e => {
 });
 ['mouseover', 'focusin'].forEach(ev => document.addEventListener(ev, e => { const c = e.target.closest && e.target.closest('[data-fx-id]'); if (c && $('.fx')) setFx(c.dataset.fxId); }));
 /* sin arte en el servidor (o un archivo que no carga): la tarjeta queda con su color, sin ícono roto */
-document.addEventListener('error', e => { const t = e.target; if (t && t.tagName === 'IMG' && t.closest('.gc-arte, .lanz .ic')) t.style.visibility = 'hidden'; }, true);
+document.addEventListener('error', e => {
+  const t = e.target; if (!t || t.tagName !== 'IMG') return;
+  if (t.dataset.fallo && FALLO[t.dataset.fallo]) { t.outerHTML = FALLO[t.dataset.fallo](t.className.replace(/\bip\b/, '').trim()); return; }   // ★ fase B: el ícono de siempre
+  if (t.closest('.gc-arte, .lanz .ic, .jc-min, .nov-jtab, .nov-portada, .nov-item, .nv-img')) t.style.visibility = 'hidden';
+}, true);
 let carruselReloj = null;
 window.addEventListener('resize', () => { if (pop) cerrarPop(); ajustarGrilla(); clearTimeout(carruselReloj); carruselReloj = setTimeout(montarCarruseles, 150); });
 
@@ -748,7 +1778,13 @@ function tic() {
 setInterval(tic, 1000);
 /* «Elegir juego» se refresca solo cada 30 s (estado y jugando ahora) */
 setInterval(() => { if (S.sesion && S.ruta === '#/juegos' && !capas.innerHTML && document.visibilityState === 'visible') vistaJuegos(true); }, 30000);
-const alVolver = () => { if (location.hash && location.hash !== S.ruta) { S.ruta = location.hash; ruta(); } };
+const alVolver = () => {
+  if (!location.hash || location.hash === S.ruta) return;
+  const destino = location.hash;
+  if (mismaPagina(destino)) { go(destino, true); return; }
+  if (hayCambios()) { try { history.pushState(null, '', S.ruta); } catch (err) { /* nada */ } pedirSalir(() => go(destino, false, true)); return; }
+  S.ruta = destino; ruta();
+};
 window.addEventListener('hashchange', alVolver);
 window.addEventListener('popstate', alVolver);
 

@@ -175,6 +175,11 @@ juego. En el repo sólo van el logo de Eñeños Team y las fuentes (OFL / Apache
    `R2_PANEL_SALUD=…` (ver §4). No hace falta tocar Google ni Discord: la vuelta sigue siendo la de auth.
 5. **El arte**: copiar los 5 archivos del prototipo (`assets/`) al volumen `cuentas_datos` en `panel_arte/`
    (dueño uid 10013).
+   ★ 20-nov (contenido del launcher + Novedades): las vistas previas usan, si están, estos archivos de la MISMA carpeta
+   (nombres planos; salen de `_trabajo/coordinador/prototipo/assets/` del repo del 2013, `asistencia/X` → `asistencia-X`):
+   `asistencia-parque.webp` · `asistencia-digitos.png` · `asistencia-ticket_gris.png` · `asistencia-ticket_oliva.png` ·
+   `asistencia-ticket_oscuro.png` · `asistencia-ticket_naranja_vivo.png` · `asistencia-ticket_amarillo_vivo.png` ·
+   `moneda-rcoin.png` · `moneda-gorila.png` · `noticias-npc.png`. Sin ellos, todo cae a colores e íconos (no se rompe).
 6. **Los roles**: que cada admin/moderador tenga Discord o Google **vinculado** desde el launcher (si no, ve «no
    vinculada»); revisar `moderadores.txt` y, si hace falta, asignar juegos desde el panel.
 7. `docker compose up -d cuentas web` (recrea los dos; `cuentas` no corta partidas de nadie: los pases ya dados siguen
@@ -185,8 +190,9 @@ juego. En el repo sólo van el logo de Eñeños Team y las fuentes (OFL / Apache
 - **Fase B — adentro de cada juego (PROD/TEST)**: resumen, conectados, salas, fichas de jugador y sus personajes,
   sanciones dentro del juego (mute / echar / ban con tiempo), alertas, gráficos. Pide que cada juego exponga su API
   interna según su `enenos.json` (`capacidades`) — hoy GunBound sólo tiene `/salud`.
-- **Fase C — contenido**: el contenido dinámico del launcher (asistencia, ruleta, avisos), cambiar la fecha de un
-  lanzamiento desde el panel (hoy: `config/lanzamientos.json` a mano), Novedades, cupones, tira, avisos a todos.
+- **Contenido** ✅ 20-nov en local (rama `fase-b`): en la página de cada juego (`#/j/<juego>/<live|test>/<parte>`)
+  asistencia, ruleta, avisos del lobby (la tira) y la fecha del lanzamiento, cada uno con su vista previa y «Publicar»;
+  y la pastilla **Novedades** (`#/novedades`). Faltan: cupones y avisos a todos.
 - **Fase D — la red entera**: suspender / reactivar una cuenta en toda la red desde el panel (hoy por consola), la
   auditoría completa con filtros, el botón «Generar backup» (sólo admin, ítem 3 de PENDIENTES), «Conectar un juego»,
   la paleta Ctrl+K y las notificaciones.

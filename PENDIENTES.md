@@ -38,6 +38,6 @@
   - [ ] Benja confirma: el moderador con juegos asignados puede **banear por juego** en esos juegos (el del formato viejo sigue sin banear)
   - [ ] publicar la fase A (⛔ cuando Benja lo pida): DNS `coordinador`, rearmar `cuentas` y `web`, `.env` (`R2_PANEL_URL`, `WEB_COORDINADOR_NOMBRE`, `R2_PANEL_SALUD`), el arte en `/datos/panel_arte/` — los pasos en PANEL_COORDINADOR.md §5
   - [ ] fase B: adentro de cada juego (resumen, conectados, fichas, sanciones) — pide la API interna de cada juego
-  - [ ] fase C: contenido dinámico del launcher, fecha de lanzamientos desde el panel, novedades
+  - [x] contenido dinámico del launcher (asistencia, ruleta, avisos del lobby), fecha de lanzamientos desde el panel y Novedades: servidor + panel en local (rama `fase-b`, sin push) — 20-nov. Al publicar: el arte de las vistas previas en `panel_arte/` (lista en PANEL_COORDINADOR.md §5)
   - [ ] fase D: suspender en toda la red, auditoría completa, «Generar backup», conectar un juego
 - [ ] **4 · `RECONSTRUIR.md` completo + el simulacro** (levantar todo en una máquina vacía sólo con los repos y el respaldo) — espera al panel nuevo
