@@ -86,7 +86,7 @@ try:
               "const k=c.createPublicKey({key:{kty:'OKP',crv:'Ed25519',x},format:'jwk'});"
               "console.log(c.verify(null,Buffer.from(m,'hex'),k,Buffer.from(f,'hex')))")
         def en_node(f):
-            r = subprocess.run([nodo, "-e", js, pt._b64u(ed.publica(sem)), msg.hex(), f.hex()],
+            r = subprocess.run([nodo, "-e", js, "--", pt._b64u(ed.publica(sem)), msg.hex(), f.hex()],
                                capture_output=True, text=True, timeout=30)
             return r.stdout.strip()
         ok(en_node(firma) == "true", "Node (otra implementación) acepta nuestra firma")
@@ -172,7 +172,7 @@ try:
         js = ("const c=require('crypto');const [x,p]=process.argv.slice(1);const [a,b,f]=p.split('.');"
               "const k=c.createPublicKey({key:{kty:'OKP',crv:'Ed25519',x},format:'jwk'});"
               "console.log(c.verify(null,Buffer.from(a+'.'+b),k,Buffer.from(f,'base64url')))")
-        r = subprocess.run([nodo, "-e", js, jw["x"], pase], capture_output=True, text=True, timeout=30)
+        r = subprocess.run([nodo, "-e", js, "--", jw["x"], pase], capture_output=True, text=True, timeout=30)
         ok(r.stdout.strip() == "true", "Node comprueba el pase con la JWKS (como lo haría el server de EDA)")
 
     print("5 · baneos")
