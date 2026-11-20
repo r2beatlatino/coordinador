@@ -21,9 +21,21 @@ LAS RUTAS (Bearer = la sesión de /entrar)
     POST /social/apodo    {apodo}
     POST /social/pedir    {quien}   apodo o Eñeños ID (si el otro ya me había pedido, quedan amigos)
     POST /social/responder {uid, aceptar}  ·  POST /social/quitar {uid}  (amigo o pedido)
-    POST /social/enviar   {para, texto}    sólo a amigos; 1–500 caracteres; freno 10 cada 10 s
-    POST /social/chat     {con}            los mensajes con esa persona (los de los últimos 2 días), y los marca leídos
-⛔ Los mensajes de más de 2 días se BORRAN (cada vez que alguien escribe, y una vez por minuto en el latido).
+    POST /social/enviar   {para, texto}    sólo a amigos; 1–500 caracteres (ver LOS GUARDIAS)
+    POST /social/chat     {con}            los últimos 100 mensajes con esa persona, y los marca leídos
+
+★ 20-nov — LOS GUARDIAS DEL CHAT (Benja: «quita el aviso "se borrará en 2 días"; pon guards para que no manden miles
+  de mensajes cortos o largos, prueba tipos de ataque: que el chat de amigos no sirva para llenar el disco ni para
+  hacer muchísimo spam; un guard de 1 GB: si pasa ese límite, se van borrando los mensajes más viejos de todos»):
+    · YA NO se borra a los 2 días. El chat entero tiene un TOPE (`R2_CHAT_TOPE_MB`, de fábrica 1024 = 1 GB, contado
+      como texto en bytes + lo que ocupa cada fila): al pasarlo se borran los MÁS VIEJOS de todos hasta el 95 %.
+      (SQLite reusa las páginas libres: el archivo deja de crecer cerca del tope.)
+    · Por persona: 10 cada 10 s · 40 por minuto · 2.000 y 300 KB por día · el MISMO texto a la misma persona 3 veces
+      en 2 min · 300 sin leer de una misma persona a otra (hasta que lea).
+    · Para todos juntos (muchas cuentas a la vez): 60 mensajes por segundo.
+    · La forma: ≤ 500 letras y ≤ 2.000 bytes (500 emojis «gordos» no entran enteros), ≤ 12 líneas, sin caracteres de
+      control ni invisibles, y como mucho 2 tildes/marcas encima de cada letra (el «zalgo»).
+    · Pedidos de amistad: 30 por hora por persona.
 """
 import json
 import os
@@ -35,13 +47,32 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-CHAT_VIDA = 2 * 86400
 TEXTO_MAX = 500
+TEXTO_BYTES_MAX = 2000      # ★ 20-nov los guardias (ver arriba)
+LINEAS_MAX = 12
+MARCAS_MAX = 2              # tildes/marcas combinadas seguidas sobre una letra (el «zalgo» trae decenas)
+FILA_BYTES = 64             # lo que ocupa una fila además de su texto (ids, fechas, índices), para contar el tope
+FRENO_MIN = (40, 60.0)      # 40 por minuto por persona
+DIA_MSG, DIA_BYTES = 2000, 300_000
+SIN_LEER_MAX = 300
+REPETIDO = (3, 120.0)       # el mismo texto, a la misma persona, 3 veces en 2 min
+GLOBAL_SEG = 60             # entre todos, por segundo
+FRENO_PEDIR = (30, 3600.0)  # pedidos de amistad por hora
 AMIGOS_MAX = 300
 VIDA_LAUNCHER = 75          # sin latido en 75 s = desconectado (el launcher late cada 20 s aunque esté minimizado)
 VIDA_JUEGO = 20             # lo que contó el juego vale 20 s (lo pide cada 5)
 CADA_JUEGO = 5
 FRENO_MSG = (10, 10.0)      # 10 mensajes cada 10 s por persona
+
+
+def tope_bytes():
+    """El tope del chat entero, en bytes (`R2_CHAT_TOPE_MB`, de fábrica 1024 = 1 GB). Se lee en cada uso."""
+    v = (os.environ.get("R2_CHAT_TOPE_MB") or "").strip()
+    try:
+        mb = float(v) if v else 1024.0
+    except ValueError:
+        mb = 1024.0
+    return int(max(0.01, mb) * 1024 * 1024)
 ESPERA_MAX = 25            # ★ 18-nov: la «espera larga» de mensajes (social.esperar) dura como mucho 25 s
 VISTO_CADA = 300            # ★ 18-nov: «visto por última vez» se GUARDA en cuentas.visto, como mucho cada 5 min por persona
 #   (Benja: «la marca debe ser la última vez que estuvieron conectados al launcher NUEVO, o al juego: se desconectó
@@ -75,6 +106,7 @@ CREATE TABLE IF NOT EXISTS mensajes (
 CREATE INDEX IF NOT EXISTS mensajes_para ON mensajes (para, id);
 CREATE INDEX IF NOT EXISTS mensajes_de ON mensajes (de, id);
 CREATE INDEX IF NOT EXISTS mensajes_cuando ON mensajes (cuando);
+CREATE INDEX IF NOT EXISTS mensajes_de_cuando ON mensajes (de, cuando);
 """
 
 
@@ -99,7 +131,11 @@ _latidos = {}               # uid -> {"t", "juego"}
 _en_juego = {}              # eid -> {"t", "juego", ...lo que contó el juego}
 _lecturas = {}              # ★ 19-nov: juego -> cuándo contestó su presencia por última vez (el panel del Coordinador)
 _hilo = {"vivo": False, "purga": 0.0}
-_freno = {}                 # uid -> [t, ...]
+_freno = {}                 # uid -> [t, ...] (el último minuto)
+_freno_pedir = {}           # ★ 20-nov uid -> [t, ...] (la última hora)
+_repes = {}                 # ★ 20-nov (uid, para) -> [(texto, t), ...]
+_global = []                # ★ 20-nov [t, ...] del último segundo, de todos
+_tam = {"bytes": None}      # ★ 20-nov lo que ocupa el chat entero (se cuenta una vez al arrancar y se lleva al día)
 _visto_escrito = {}         # uid -> cuándo se guardó su `visto` por última vez
 _aviso = threading.Condition()   # ★ 18-nov: `enviar` despierta a quien espera (social.esperar)
 _buzon = {}                 # uid -> id del último mensaje que le llegó (desde que arrancó el proceso)
@@ -306,11 +342,38 @@ def _sesion(P, token, ahora):
     return int(uid)
 
 
-def _purgar(c, ahora):
-    if ahora - _hilo["purga"] < 60:            # (una vez por minuto alcanza)
-        return
-    _hilo["purga"] = ahora
-    c.execute("DELETE FROM mensajes WHERE cuando < ?", (int(ahora - CHAT_VIDA),))
+def _tamano(c):
+    if _tam["bytes"] is None:
+        _tam["bytes"] = int(c.execute("SELECT COALESCE(SUM(length(CAST(texto AS BLOB))), 0) + COUNT(*) * ? "
+                                      "FROM mensajes", (FILA_BYTES,)).fetchone()[0])
+    return _tam["bytes"]
+
+
+def _recortar(P, c):
+    """★ 20-nov: si el chat pasa el tope, se borran los MÁS VIEJOS de todos hasta el 95 %. -> cuántos se borraron.
+    ⚠ Llamar con `P._escribir` tomado."""
+    tope = tope_bytes()
+    if _tamano(c) <= tope:
+        return 0
+    meta, borrados = int(tope * 0.95), 0
+    while _tam["bytes"] > meta:
+        filas = c.execute("SELECT id, length(CAST(texto AS BLOB)) n FROM mensajes ORDER BY id LIMIT 2000").fetchall()
+        if not filas:
+            _tam["bytes"] = 0
+            break
+        hasta, libera, n = None, 0, 0
+        for r in filas:
+            hasta, libera, n = r["id"], libera + int(r["n"] or 0) + FILA_BYTES, n + 1
+            if _tam["bytes"] - libera <= meta:
+                break
+        c.execute("DELETE FROM mensajes WHERE id <= ?", (hasta,))
+        _tam["bytes"] -= libera
+        borrados += n
+    try:
+        P._log(f"💬 chat: pasó el tope de {tope / 1048576:.1f} MB — se borraron los {borrados} mensajes más viejos")
+    except Exception:                                              # noqa: BLE001
+        pass
+    return borrados
 
 
 # ── las rutas ──────────────────────────────────────────────────────────────────────────────────
@@ -326,9 +389,6 @@ def estado(P, token, desde=0, juego=None, ahora=None):
     with _lock:
         _latidos[uid] = {"t": ahora, "juego": juego}
     c = P._cuentas()
-    with P._escribir:
-        _purgar(c, ahora)
-        c.commit()
     anotar_visto(P, [uid], ahora)
     filas = c.execute("""SELECT a, b, estado, de FROM amistades WHERE a = ? OR b = ?""", (uid, uid)).fetchall()
     otros = {(r["b"] if r["a"] == uid else r["a"]): r for r in filas}
@@ -497,6 +557,13 @@ def pedir(P, token, quien, ahora=None):
     otro = int(r["uid"])
     if otro == uid:
         return 400, {"error": "No puede agregarse a usted mismo."}
+    with _lock:                                                        # ★ 20-nov: 30 pedidos por hora
+        v = [x for x in _freno_pedir.get(uid, []) if ahora - x < FRENO_PEDIR[1]]
+        if len(v) >= FRENO_PEDIR[0]:
+            return 429, {"error": "Envió muchos pedidos de amistad. Pruebe más tarde."}
+        if len(_freno_pedir) > 50_000:
+            _freno_pedir.clear()
+        _freno_pedir[uid] = v + [ahora]
     a, b = _par(uid, otro)
     with P._escribir:
         f = c.execute("SELECT estado, de FROM amistades WHERE a = ? AND b = ?", (a, b)).fetchone()
@@ -564,10 +631,26 @@ def _son_amigos(c, x, y):
 
 
 def limpiar_texto(t):
-    t = unicodedata.normalize("NFC", str(t or ""))
+    t = unicodedata.normalize("NFC", str(t or "")[:TEXTO_MAX * 8])         # (lo de más ni se mira)
     t = "".join(ch for ch in t if ch in "\n\t" or unicodedata.category(ch)[0] != "C")   # sin caracteres de control
-    t = re.sub(r"\n{3,}", "\n\n", t).strip()
-    return t[:TEXTO_MAX]
+    # ★ 20-nov: el «zalgo» (decenas de tildes encima de una letra) — como mucho MARCAS_MAX seguidas
+    out, marcas = [], 0
+    for ch in t:
+        if unicodedata.category(ch).startswith("M"):
+            marcas += 1
+            if marcas > MARCAS_MAX:
+                continue
+        else:
+            marcas = 0
+        out.append(ch)
+    t = re.sub(r"\n{3,}", "\n\n", "".join(out)).strip()
+    lineas = t.split("\n")
+    if len(lineas) > LINEAS_MAX:                                        # ★ 20-nov: ≤ 12 líneas (el resto, juntas)
+        t = "\n".join(lineas[:LINEAS_MAX - 1] + [" ".join(lineas[LINEAS_MAX - 1:])])
+    t = t[:TEXTO_MAX]
+    while len(t.encode("utf-8")) > TEXTO_BYTES_MAX:                   # ★ 20-nov: ≤ 2.000 bytes
+        t = t[:-1]
+    return t.strip()
 
 
 def enviar(P, token, para, texto, ahora=None):
@@ -582,19 +665,39 @@ def enviar(P, token, para, texto, ahora=None):
     t = limpiar_texto(texto)
     if not t:
         return 400, {"error": "El mensaje está vacío."}
-    with _lock:
-        v = [x for x in _freno.get(uid, []) if ahora - x < FRENO_MSG[1]]
-        if len(v) >= FRENO_MSG[0]:
-            return 429, {"error": "Está escribiendo muy rápido. Espere un momento."}
-        if len(_freno) > 50_000:
-            _freno.clear()
-        _freno[uid] = v + [ahora]
     c = P._cuentas()
     if not _son_amigos(c, uid, para):
         return 403, {"error": "Sólo se puede escribir a los amigos."}
+    with _lock:
+        v = [x for x in _freno.get(uid, []) if ahora - x < FRENO_MIN[1]]
+        if sum(1 for x in v if ahora - x < FRENO_MSG[1]) >= FRENO_MSG[0] or len(v) >= FRENO_MIN[0]:
+            return 429, {"error": "Está escribiendo muy rápido. Espere un momento."}
+        g = [x for x in _global if ahora - x < 1.0]
+        if len(g) >= GLOBAL_SEG:                                       # ★ 20-nov: muchas cuentas a la vez
+            return 503, {"error": "El chat está muy ocupado. Pruebe en unos segundos."}
+        clave, rep_ = (uid, para), [(x, tt) for x, tt in _repes.get((uid, para), []) if ahora - tt < REPETIDO[1]]
+        if sum(1 for x, _ in rep_ if x == t) >= REPETIDO[0] - 1:
+            return 429, {"error": "Ya envió ese mismo mensaje varias veces. Escriba otra cosa o espere un poco."}
+    hoy = c.execute("SELECT COUNT(*), COALESCE(SUM(length(CAST(texto AS BLOB))), 0) FROM mensajes WHERE de = ? AND cuando >= ?",
+                    (uid, int(ahora - 86400))).fetchone()
+    if hoy[0] >= DIA_MSG or hoy[1] + len(t.encode("utf-8")) > DIA_BYTES:
+        return 429, {"error": "Llegó al máximo de mensajes de hoy. Mañana puede seguir escribiendo."}
+    sin_leer = c.execute("SELECT COUNT(*) FROM mensajes WHERE para = ? AND de = ? AND leido = 0", (para, uid)).fetchone()[0]
+    if sin_leer >= SIN_LEER_MAX:
+        return 429, {"error": "Esa persona tiene muchos mensajes suyos sin leer. Espere a que los lea."}
+    with _lock:
+        if len(_freno) > 50_000:
+            _freno.clear()
+        if len(_repes) > 50_000:
+            _repes.clear()
+        _freno[uid] = v + [ahora]
+        _repes[clave] = (rep_ + [(t, ahora)])[-REPETIDO[0]:]
+        _global[:] = g + [ahora]
     with P._escribir:
+        antes = _tamano(c)                     # (ANTES de insertar: si es la 1.ª cuenta, no cuenta dos veces este)
         cur = c.execute("INSERT INTO mensajes (de, para, texto, cuando) VALUES (?, ?, ?, ?)", (uid, para, t, int(ahora)))
-        c.execute("DELETE FROM mensajes WHERE cuando < ?", (int(ahora - CHAT_VIDA),))
+        _tam["bytes"] = antes + len(t.encode("utf-8")) + FILA_BYTES
+        _recortar(P, c)
         c.commit()
     _avisar(para, cur.lastrowid)
     return 200, {"ok": True, "mensaje": {"id": cur.lastrowid, "de": uid, "para": para, "texto": t, "cuando": int(ahora)}}
@@ -667,8 +770,8 @@ def chat(P, token, con, ahora=None):
         return 403, {"error": "Sólo se puede ver el chat con los amigos."}
     filas = [dict(r) for r in c.execute(
         """SELECT id, de, para, texto, cuando FROM mensajes
-           WHERE ((de = ? AND para = ?) OR (de = ? AND para = ?)) AND cuando >= ?
-           ORDER BY id DESC LIMIT 100""", (uid, con, con, uid, int(ahora - CHAT_VIDA)))]
+           WHERE ((de = ? AND para = ?) OR (de = ? AND para = ?))
+           ORDER BY id DESC LIMIT 100""", (uid, con, con, uid))]
     with P._escribir:
         c.execute("UPDATE mensajes SET leido = 1 WHERE para = ? AND de = ? AND leido = 0", (uid, con))
         c.commit()
