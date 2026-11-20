@@ -32,6 +32,11 @@
 	handle @cuentas_interno {
 		respond 404
 	}
+	# ★ 19-nov: el panel del Coordinador vive SÓLO en su nombre (el bloque de abajo), no colgado de este dominio.
+	@coordinador_fuera path /cuentas/coordinador /cuentas/coordinador/*
+	handle @coordinador_fuera {
+		respond 404
+	}
 	@cuentas path /cuentas /cuentas/*
 	handle @cuentas {
 		reverse_proxy {$WEB_CUENTAS_DESTINO:cuentas:48195}
@@ -114,7 +119,7 @@
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 {$WEB_AUTH_NOMBRE:http://auth.localhost} {
 	encode zstd gzip
-	@interno path /interno /interno/* /cuentas/interno /cuentas/interno/*
+	@interno path /interno /interno/* /cuentas/interno /cuentas/interno/* /cuentas/coordinador /cuentas/coordinador/*
 	handle @interno {
 		respond 404
 	}
@@ -128,4 +133,22 @@
 		try_files {path} {path}.html {path}/index.html
 		file_server
 	}
+}
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+#  ★ 19-nov: coordinador.eñeños.link — el PANEL del Coordinador (servidor/coordinador.py,
+#    documentacion/PANEL_COORDINADOR.md). Todo va a Cuenta Eñeños con el prefijo /coordinador:
+#    `/` -> /coordinador/ (la página), `/entrar?ticket=…` -> /coordinador/entrar, `/api/…` -> /coordinador/api/….
+#    El ingreso con Discord/Google vuelve por auth (la vuelta ya registrada) y de ahí, con un ticket, acá.
+#    ⛔ Lo interno de Cuenta Eñeños no se alcanza desde acá: todo lo que entra queda DENTRO de /coordinador.
+#    Sin WEB_COORDINADOR_NOMBRE queda en `http://coordinador.localhost` (local).
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+{$WEB_COORDINADOR_NOMBRE:http://coordinador.localhost} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	rewrite * /coordinador{path}
+	reverse_proxy {$WEB_CUENTAS_DESTINO:cuentas:48195}
 }

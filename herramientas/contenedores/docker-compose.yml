@@ -62,6 +62,11 @@ services:
       # La dirección pública de Cuenta Eñeños (para el enlace del panel en el aviso de Discord). Vacía = la que trae
       #   `servidor/lanzamientos.py` por omisión.
       R2_CUENTAS_URL_PUBLICA: ${R2_CUENTAS_URL_PUBLICA:-}
+      # ★ 19-nov: el panel del Coordinador. R2_PANEL_URL = la lista blanca de a dónde vuelve el ingreso (vacía = nadie
+      #   entra); R2_PANEL_SALUD = el /salud de cada servidor por la red de adentro. El arte de los juegos va en el
+      #   volumen, en /datos/panel_arte/ (documentacion/PANEL_COORDINADOR.md).
+      R2_PANEL_URL: ${R2_PANEL_URL:-}
+      R2_PANEL_SALUD: ${R2_PANEL_SALUD:-}
     volumes:
       - cuentas_datos:/datos
       # ⚠ ETAPA 0 y migración inicial: lee `datos.db` de R2Beat en etapa 0, o una sola vez al importar a `cuentas.db`
@@ -192,6 +197,8 @@ services:
       WEB_NOMBRE: ${WEB_NOMBRE:-:80}
       # ★ 16-nov: el nombre de «auth» (Google/Discord y las páginas de la marca). Vacío = sólo local.
       WEB_AUTH_NOMBRE: ${WEB_AUTH_NOMBRE:-http://auth.localhost}
+      # ★ 19-nov: el nombre del PANEL del Coordinador (todo va a `cuentas`, bajo /coordinador). Vacío = sólo local.
+      WEB_COORDINADOR_NOMBRE: ${WEB_COORDINADOR_NOMBRE:-http://coordinador.localhost}
       WEB_JUEGO_DESTINO: ${WEB_JUEGO_DESTINO:-r2beat2013:48190}
       WEB_CUENTAS_DESTINO: ${WEB_CUENTAS_DESTINO:-cuentas:48195}
       WEB_PARCHES_DESTINO: ${WEB_PARCHES_DESTINO:-parches:8080}

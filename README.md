@@ -13,10 +13,10 @@ Cada juego tiene **su propio repo** (los hijos). Este repo los cita; no los copi
 
 | dónde | qué |
 |---|---|
-| `servidor/` | **las cuentas** (Cuenta Eñeños, «el portero»): `portero.py` (registro, login, el pase firmado Ed25519 y el panel chico `/cuentas/admin`), `vinculos.py` (Google y Discord), `social.py` (amigos, estado y chat), `lanzamientos.py` (cuándo abre cada juego e invitaciones anticipadas), `firma_ed25519.py` |
+| `servidor/` | **las cuentas** (Cuenta Eñeños, «el portero»): `portero.py` (registro, login, el pase firmado Ed25519 y el panel chico `/cuentas/admin`), `vinculos.py` (Google y Discord), `social.py` (amigos, estado y chat), `lanzamientos.py` (cuándo abre cada juego e invitaciones anticipadas), `firma_ed25519.py`, y **el panel del Coordinador** (`coordinador.py` + `panel/`, fase A: ver `documentacion/PANEL_COORDINADOR.md`) |
 | `herramientas/contenedores/` | **la casa**: `docker-compose.yml`, los Dockerfile de `cuentas`, `parches` y `puerta`, el `Caddyfile` y `auth/` (las páginas de auth), `parches/` (el servidor de parches del launcher), `puerta/` (el repartidor del 48004), `mudanza.py`, `publicar_imagenes.sh`, `actualizar_prueba.sh` y `usa/` (los scripts del VPS de USA) |
 | `pruebas/` | las pruebas de todo lo anterior: `python pruebas/correr_todas.py` |
-| `documentacion/` | `PORTERO_CUENTAS.md`, `TOPOLOGIA_CONTENEDORES.md` (la guía larga de la casa) y `MUDANZA_ENSAYO_A_USA.md` |
+| `documentacion/` | `PORTERO_CUENTAS.md`, `PANEL_COORDINADOR.md` (el panel: cómo se entra, roles, rutas, cómo se publica), `TOPOLOGIA_CONTENEDORES.md` (la guía larga de la casa) y `MUDANZA_ENSAYO_A_USA.md` |
 
 Las imágenes de cada juego (`r2beat2013`, `web`, EDA, GunBound) se arman **en el repo de ese juego**: la cabecera de
 `herramientas/contenedores/docker-compose.yml` dice de dónde sale cada una.

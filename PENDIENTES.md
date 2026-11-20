@@ -33,5 +33,11 @@
 
 ## Pendientes (esperan otra cosa)
 
-- [ ] **5 · El panel nuevo** — el prototipo está en la PC de Benja; falta que él lo moldee
+- [ ] **5 · El panel nuevo** — el prototipo lo aprobó Benja (19-nov); se hace real por fases. Guía: `documentacion/PANEL_COORDINADOR.md`
+  - [x] **fase A** en local (rama `panel-fase-a`, sin push): ENTRAR sólo con Discord/Google vinculado a un Eñeños-ID con rol (ticket de un uso, 60 s) · ELEGIR JUEGO (de `juegos.json`) · LA RED (personas, invitaciones, lanzamientos, moderadores con juegos asignados, auditoría); `pruebas/probar_coordinador.py` 104 ✔ — 19-nov
+  - [ ] Benja confirma: el moderador con juegos asignados puede **banear por juego** en esos juegos (el del formato viejo sigue sin banear)
+  - [ ] publicar la fase A (⛔ cuando Benja lo pida): DNS `coordinador`, rearmar `cuentas` y `web`, `.env` (`R2_PANEL_URL`, `WEB_COORDINADOR_NOMBRE`, `R2_PANEL_SALUD`), el arte en `/datos/panel_arte/` — los pasos en PANEL_COORDINADOR.md §5
+  - [ ] fase B: adentro de cada juego (resumen, conectados, fichas, sanciones) — pide la API interna de cada juego
+  - [ ] fase C: contenido dinámico del launcher, fecha de lanzamientos desde el panel, novedades
+  - [ ] fase D: suspender en toda la red, auditoría completa, «Generar backup», conectar un juego
 - [ ] **4 · `RECONSTRUIR.md` completo + el simulacro** (levantar todo en una máquina vacía sólo con los repos y el respaldo) — espera al panel nuevo

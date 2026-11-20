@@ -120,6 +120,8 @@ recomendación» = **sin banear**.
 - Todo lo que hacen queda en la auditoría con SU login. Sacarlo del archivo le corta la sesión al instante (se mira en
   cada pedido, como `admin.txt`).
 - Prueba: `probar_portero.py` §11 (con sus controles al revés y los controles del ADMIN).
+- ★ **19-nov · juegos asignados** (`10000231 gunbound,eda`; sin lista = como antes). Con lista, el moderador sólo ve y
+  toca esos juegos y ahí también banea por juego. Lo maneja el panel del Coordinador: **`PANEL_COORDINADOR.md`**.
 
 ## 8 · El launcher — ✅ hecho en local (11-nov), SIN COMPILAR, NO en prod
 
