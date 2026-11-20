@@ -118,7 +118,7 @@ async function cargar() {
 
 async function buscar() {
   const q = $('inBuscar').value.trim();
-  if (q.length < 2) return aviso('Escribí al menos 2 letras.', true);
+  if (q.length < 2) return aviso('Escriba al menos 2 letras.', true);
   $('btnBuscar').disabled = true;
   const [st, d] = await api('GET', '/buscar?juego=' + JUEGO + '&q=' + encodeURIComponent(q));
   $('btnBuscar').disabled = false;

@@ -610,7 +610,7 @@ def manifiesto(token, juego):
     """-> (código, datos). Sólo a una sesión viva, con la cuenta en regla y APROBADA para ese juego."""
     uid = sesion_de(token)
     if not uid:
-        return 401, {"error": "Tenés que iniciar sesión."}
+        return 401, {"error": "Tienes que iniciar sesión."}
     juegos = _juegos()
     if juego not in juegos:
         return 404, {"error": "Ese juego no existe."}
@@ -672,7 +672,7 @@ def _validar(usuario, clave_txt, hash_upper, ip, ahora, prefijo=""):
     usuario = str(usuario or "").strip()[:32]
     claves = [f"{prefijo}ip:{ip}", f"{prefijo}u:{usuario.lower()}"]
     if _frenado(claves, ahora):
-        return (429, {"error": "Demasiados intentos. Esperá unos minutos."}), None
+        return (429, {"error": "Demasiados intentos. Espera unos minutos."}), None
     if hash_upper is not None:
         dado = str(hash_upper).strip().upper()
     elif clave_txt is not None:
@@ -688,7 +688,7 @@ def _validar(usuario, clave_txt, hash_upper, ip, ahora, prefijo=""):
         if est != "activa":
             _anotar_fallo(claves, ahora)
             if est == "fusionada":
-                return (403, {"error": "Esta cuenta se unió a otra: entrá con aquélla."}), None
+                return (403, {"error": "Esta cuenta se unió a otra: entra con aquélla."}), None
             return (403, {"error": "Esta cuenta está suspendida."}), None
         return None, int(r["uid"])
     guardado = str(r["pass_hash"] or "").upper() if r else ""
@@ -697,7 +697,7 @@ def _validar(usuario, clave_txt, hash_upper, ip, ahora, prefijo=""):
         if r and guardado.startswith("BANNED:") and hmac.compare_digest(guardado[7:], dado):
             return (403, {"error": "Esta cuenta está suspendida."}), None
         if r and guardado.startswith("FUSIONADA:") and hmac.compare_digest(guardado[10:], dado):
-            return (403, {"error": "Esta cuenta se unió a otra: entrá con aquélla."}), None
+            return (403, {"error": "Esta cuenta se unió a otra: entra con aquélla."}), None
         return (401, {"error": "Usuario o contraseña incorrectos."}), None
     return None, int(r["uid"])
 
@@ -740,7 +740,7 @@ def registrar(usuario, clave_txt=None, hash_upper=None, ip="", ahora=None):
     ahora = time.time() if ahora is None else ahora
     claves_ip = [f"reg-ip:{ip}"]
     if _frenado(claves_ip, ahora):
-        return 429, {"error": "Demasiados intentos. Esperá unos minutos."}
+        return 429, {"error": "Demasiados intentos. Espera unos minutos."}
     u = _usuario_valido(usuario)
     if not u:
         _anotar_fallo(claves_ip, ahora)
@@ -774,10 +774,10 @@ def cambiar_clave(token, clave_actual=None, clave_nueva=None, actual_sha256_uppe
     ahora = time.time() if ahora is None else ahora
     uid = sesion_de(token, ahora)
     if not uid:
-        return 401, {"error": "Tenés que iniciar sesión."}
+        return 401, {"error": "Tienes que iniciar sesión."}
     claves = [f"cc-ip:{ip}", f"cc-u:{uid}"]
     if _frenado(claves, ahora):
-        return 429, {"error": "Demasiados intentos. Esperá unos minutos."}
+        return 429, {"error": "Demasiados intentos. Espera unos minutos."}
     r = _cuentas().execute("SELECT uid, usuario, clave, estado FROM cuentas WHERE uid = ?", (int(uid),)).fetchone()
     if not r or r["estado"] != "activa":
         salir(token)
@@ -944,7 +944,7 @@ def interno_comprobar_clave(uid, pass_sha256_upper, ficha_dada="", ahora=None):
     ahora = time.time() if ahora is None else ahora
     claves = [f"comprobar:u:{uid_i}"]
     if _frenado(claves, ahora):
-        return 429, {"error": "Demasiados intentos. Esperá unos minutos."}
+        return 429, {"error": "Demasiados intentos. Espera unos minutos."}
     dado = _hash_de_entrada(None, pass_sha256_upper)
     r = _cuentas().execute("SELECT clave, estado FROM cuentas WHERE uid = ?", (uid_i,)).fetchone() if uid_i > 0 else None
     if not r or not dado or str(r["estado"] or "") != "activa" or not verificar_hash(dado, r["clave"]):
@@ -1003,7 +1003,7 @@ def salir(token):
 def pedir_pase(token, juego, ip="", ahora=None):
     uid = sesion_de(token, ahora)
     if not uid:
-        return 401, {"error": "Tenés que iniciar sesión."}
+        return 401, {"error": "Tienes que iniciar sesión."}
     juegos = _juegos()
     if juego not in juegos:
         return 404, {"error": "Ese juego no existe."}
@@ -1337,7 +1337,7 @@ def admin_buscar(q, juego="eda", rol="admin"):
     ⛔ A un MODERADOR no se le muestran las cuentas con rol: buscando por login podría descubrir el del ADMIN."""
     q = str(q or "").strip()[:32]
     if len(q) < 2:
-        return 400, {"error": "Escribí al menos 2 letras."}
+        return 400, {"error": "Escriba al menos 2 letras."}
     patron = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     if es_duena():
         uids = [r[0] for r in _cuentas().execute(
@@ -1521,7 +1521,7 @@ def admin_accion(uid_admin, accion, uid, juego="eda", detalle="", duracion=None)
         return 200, {"ok": True, "cuenta": _ficha(int(uid), juego)}
     rol = rol_de(uid_admin)
     if rol is None:
-        return 401, {"error": "Tenés que entrar con una cuenta ADMIN o MODERADOR."}
+        return 401, {"error": "Tiene que entrar con una cuenta ADMIN o MODERADOR."}
     if rol != "admin":
         asignados = juegos_de_moderador(uid_admin)
         if asignados is None and accion not in ACCIONES_MODERADOR:
@@ -1634,7 +1634,7 @@ class _Manejador(BaseHTTPRequestHandler):
                                 extra=self._SEGURIDAD)
         uid = admin_de(self._cookie_admin())
         if not uid:
-            return self._mandar(401, {"error": "Tenés que entrar con una cuenta ADMIN."})
+            return self._mandar(401, {"error": "Tiene que entrar con una cuenta ADMIN."})
         rol = rol_de(uid) or "moderador"
         q = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).items()}
         if p == ["admin", "invitaciones"]:                            # ★ 18-nov: todas las pendientes
@@ -1677,7 +1677,7 @@ class _Manejador(BaseHTTPRequestHandler):
             return self._mandar(200, {"ok": True}, extra=(self._poner_cookie("", 0),))
         uid = admin_de(self._cookie_admin())
         if not uid:
-            return self._mandar(401, {"error": "Tenés que entrar con una cuenta ADMIN."})
+            return self._mandar(401, {"error": "Tiene que entrar con una cuenta ADMIN."})
         if p == ["admin", "invitacion"]:                              # ★ 18-nov: aprobar / rechazar (por POST, con X-R2)
             return self._mandar(*LZ.decidir(sys.modules[__name__], uid, d.get("id"), str(d.get("accion") or "")))
         if len(p) == 2 and p[1] in ("aprobar", "quitar", "banear", "desbanear"):
@@ -1717,7 +1717,7 @@ class _Manejador(BaseHTTPRequestHandler):
             if p == ["yo"]:
                 uid = sesion_de(self._token())
                 if not uid:
-                    return self._mandar(401, {"error": "Tenés que iniciar sesión."})
+                    return self._mandar(401, {"error": "Tienes que iniciar sesión."})
                 return self._mandar(200, {"uid": uid, "juegos": juegos_de(uid)})
             if len(p) == 2 and p[0] == "manifiesto":
                 return self._mandar(*manifiesto(self._token(), p[1]))

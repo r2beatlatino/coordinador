@@ -280,7 +280,7 @@ try:
     ok(pedir("POST", "/cuentas/entrar", {"usuario": "baneada", "clave": "mala"})[0] == 401,
        "⟲ cuenta baneada con clave mala da 401 (no revela que está baneada)")
     c_fus, d_fus = pedir("POST", "/cuentas/entrar", {"usuario": "fusion", "clave": claves_iniciales["fusion"]})
-    ok(c_fus == 403 and d_fus.get("error") == "Esta cuenta se unió a otra: entrá con aquélla.",
+    ok(c_fus == 403 and d_fus.get("error") == "Esta cuenta se unió a otra: entra con aquélla.",
        "cuenta fusionada importada no entra (403 con el mensaje de fusión)")
     ok(pedir("POST", "/cuentas/entrar", {"usuario": "fusion", "clave": "mala"})[0] == 401,
        "⟲ cuenta fusionada con clave mala da 401")

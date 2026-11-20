@@ -347,7 +347,7 @@ const ACC_TXT = { aprobar: ['aprobó a', 'check', 'verde'], quitar: ['le quitó 
   'entrar al Coordinador': ['entró al Coordinador', 'logout', 'verde'], 'entrar al panel': ['entró al panel chico', 'logout', 'verde'],
   'equipo: agregar moderador': ['sumó al equipo a', 'shieldok', 'rosa'], 'equipo: juegos del moderador': ['cambió los juegos de', 'shieldok', 'rosa'],
   'equipo: quitar moderador': ['sacó del equipo a', 'shieldok', 'rosa'], 'equipo: permisos del moderador': ['cambió los permisos de', 'shieldok', 'rosa'],
-  'gestión · aviso': ['mandó un aviso', 'mega', 'cian'], 'gestión · echar': ['echó a un jugador', 'logout', ''], 'gestión · mute': ['cambió el chat de un jugador', 'micoff', 'oro'],
+  'gestión · aviso': ['mandó un aviso', 'mega', 'cian'], 'gestión · echar': ['desconectó a un jugador', 'logout', ''], 'gestión · mute': ['cambió el chat de un jugador', 'micoff', 'oro'],
   'gestión · rcoin': ['cambió el Rcoin de un jugador', 'coins', 'oro'], 'gestión · exp': ['cambió la EXP de un jugador', 'sparkle', 'oro'],
   'gestión · item/dar': ['le dio un ítem a un jugador', 'gift', 'rosa'], 'gestión · item/quitar': ['le quitó un ítem a un jugador', 'gift', ''],
   'gestión · apodo': ['cambió el apodo de un jugador', 'user', 'cian'], 'gestión · gorila': ['cambió las monedas gorila de un jugador', 'coins', 'oro'] };
@@ -1772,7 +1772,7 @@ function fichaHtml(J) {
     vivo ? `ahora ${dondeTxt(Object.assign({ estado: '' }, f.conectado))}` : ''].filter(Boolean).map(x => `<span>${x}</span>`).join('');
   const base = [
     gBtn(J, 'aviso', { acc: 'g-aviso-uno', icono: 'mega', txt: 'Aviso', off: vivo ? '' : 'No está conectado' }),
-    gBtn(J, 'echar', { acc: 'g-echar', icono: 'logout', txt: 'Echar', off: vivo ? '' : 'No está conectado' }),
+    gBtn(J, 'echar', { acc: 'g-echar', icono: 'logout', txt: 'Desconectar', off: vivo ? '' : 'No está conectado' }),
     f.mute ? gBtn(J, 'mute', { acc: 'g-desmute', icono: 'check', txt: 'Devolverle el chat' }) : gBtn(J, 'mute', { acc: 'g-mute', icono: 'micoff', txt: 'Sacarle el chat' }),
   ].join('');
   const banners = [
@@ -1863,7 +1863,7 @@ function conexionesHtml(J, f) {
       ${otros.length ? `<div class="g-misma"><span class="lab">Comparten su IP</span><div class="chips">${otros.map(o => `<a class="chip oro" href="${urlPj(J, o.uid)}">${ic('users', 's14')}${esc(o.nick)}</a>`).join('')}</div></div>` : ''}</div></section>`;
 }
 const AUD_TXT = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'le dio un ítem', 'item/quitar': 'le quitó un ítem', apodo: 'cambió el apodo', gorila: 'monedas gorila', 'gorila/canje': 'canjeó monedas gorila',
-  echar: 'lo echó', mute: 'le sacó el chat', desmute: 'le devolvió el chat', ban: 'lo baneó', desban: 'lo desbaneó', licencia: 'cambió la licencia', clave: 'cambió la contraseña', aviso: 'le mandó un aviso' };
+  echar: 'lo desconectó', mute: 'le sacó el chat', desmute: 'le devolvió el chat', ban: 'lo baneó', desban: 'lo desbaneó', licencia: 'cambió la licencia', clave: 'cambió la contraseña', aviso: 'le mandó un aviso' };
 function audDet(a) {
   const d = a.detalle || {};
   if (d.antes != null && d.despues != null) return `${miles(d.antes)} → ${miles(d.despues)}`;
@@ -2064,7 +2064,7 @@ function accionFicha(J, a) {
   const uid = f.uid, nick = esc(f.nick);
   const k = a.dataset.accion;
   if (k === 'g-aviso-uno') return formAviso(J, 'uid', uid, f.nick);
-  if (k === 'g-echar') return confirmar({ titulo: `¿Echar a ${nick}?`, icono: 'logout', ok: 'Echar',
+  if (k === 'g-echar') return confirmar({ titulo: `¿Desconectar a ${nick}?`, icono: 'logout', ok: 'Desconectar',
     txt: 'Lo desconecta del juego al instante. Puede volver a entrar cuando quiera.',
     extra: '<span class="lab">Motivo (opcional, para la auditoría)</span><label class="campo"><span class="sr">Motivo</span><input id="mdExtra" maxlength="200" autocomplete="off" placeholder="Por ejemplo: trabado en una sala"></label>',
     alAceptar: async m => trasAccion(J, uid, await gPost(J, `usuario/${uid}/echar`, { motivo: m.trim() }), `${nick} fue desconectado`) });
@@ -2281,7 +2281,7 @@ function formPermisos(i) {
   const medidor = (dado, cupo) => `<div class="g-medidor" role="img" aria-label="Usó ${miles(dado)} de ${miles(cupo)}"><i style="width:${cupo ? Math.min(100, (100 * dado) / cupo).toFixed(1) : 0}%"></i></div>`;
   const seccion = j => { const x = de(j), nj = juegoCat(j).nombre;
     return `<section class="g-perm" data-juego="${esc(j)}"><h3>${etqJuego(j)} ${esc(nj)}</h3>
-      <p class="tenue g-nota">${ic('check', 's14')} Siempre puede: mirar el tablero y las fichas, mandar avisos, echar y sacar el chat.</p>
+      <p class="tenue g-nota">${ic('check', 's14')} Siempre puede: mirar el tablero y las fichas, mandar avisos, desconectar y sacar el chat.</p>
       <div class="g-perm-acc">${P.asignables.map(a => `<label class="radio"><input type="checkbox" value="${esc(a.id)}" ${x.acciones.includes(a.id) ? 'checked' : ''}><span><b>${esc(a.nombre)}</b>${a.cupo ? `<span>con un cupo de ${a.cupo === 'rcoin' ? 'Rcoin' : 'EXP'} (lo que puede dar en total)</span>` : ''}</span></label>`).join('')}</div>
       <div class="g-cupos">${['rcoin', 'exp'].map(k => `<div class="g-cupo-f" data-cupo="${k}" ${x.acciones.includes(k) ? '' : 'hidden'}><span class="lab">Cupo de ${k === 'rcoin' ? 'Rcoin' : 'EXP'}</span>
         <label class="campo"><span class="sr">Cupo</span><input type="number" min="0" max="100000000" step="1" inputmode="numeric" value="${x['cupo_' + k]}"></label>
@@ -2326,7 +2326,7 @@ async function pintarMisPermisos() {
   const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', gorila: 'monedas gorila', chat: 'leer el chat guardado' };
   c.innerHTML = js.map((j, i) => { const r = rs[i]; if (!r.ok || !r.d.gestionable) return '';
     const ex = r.d.acciones.filter(a => nom[a]), cu = r.d.cupos || {};
-    return `<span>${ic('dash', 's14')} ${esc(juegoCat(j).nombre)}: tablero, fichas, avisos, echar y sacar el chat${ex.length ? `; además ${ex.map(a => nom[a] + (cu[a] ? ` (le quedan ${miles(cu[a].queda)} de ${miles(cu[a].cupo)})` : '')).join(', ')}` : ''}.</span>`; }).join('');
+    return `<span>${ic('dash', 's14')} ${esc(juegoCat(j).nombre)}: tablero, fichas, avisos, desconectar y sacar el chat${ex.length ? `; además ${ex.map(a => nom[a] + (cu[a] ? ` (le quedan ${miles(cu[a].queda)} de ${miles(cu[a].cupo)})` : '')).join(', ')}` : ''}.</span>`; }).join('');
 }
 async function personajesDePersona(p) {
   const c = $('#perPjs'); if (!c) return;
