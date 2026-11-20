@@ -18,6 +18,12 @@
   - [ ] la parte B de `pruebas/probar_contenedores.py` (con Docker) corrida desde acá: pide `R2BEAT2013_REPO` y la imagen del juego (`--imagenes`)
   - [ ] `pruebas/probar_puerta_login.py` se salta sin `R2BEAT2013_REPO` (arma los paquetes con el generador del juego): correrla con él
 - [ ] **3 · «Generar backup»**: botón manual (sólo admin) + comando; UN archivo cifrado con la clave de Benja con las bases (cuentas + cada juego), la configuración y los secretos (llaves de firma, `.env`, OAuth, tokens)
+  - [x] el comando (`herramientas/respaldo/`): bases en vivo con la API de SQLite, cifrado con `age` a la llave PÚBLICA, MANIFIESTO con sha256 y filas; prueba con controles (16 verdes, corrida en el VPS) — 19-nov
+  - [x] la lista del VPS de Miami (`respaldo_vps.json`, 24 cosas, todas medidas ahí) — 19-nov
+  - [ ] Benja crea SU llave (`crear_llave.sh`) y se sube la pública
+  - [ ] el primer respaldo de verdad + abrirlo en otra máquina (`respaldo.py ver`)
+  - [ ] los secretos de la PC de Benja (llave de las listas de GunBound, Cloudflare, SSH)
+  - [ ] el botón en el panel (sólo admin)
 - [ ] **6 · La ficha `enenos.json`** de cada juego (qué sabe hacer su server, para que el panel muestre sólo lo que funciona)
   - [x] GunBound — 19-nov
   - [ ] R2beat-2013 — PR #3 listo (pruebas en verde), falta fusionarlo

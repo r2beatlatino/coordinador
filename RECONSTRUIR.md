@@ -19,9 +19,36 @@ launcher nuevo y que todos lo reinstalen.
 
 ## 1 · Generar el respaldo (Benja, a mano)
 
-⏳ Por fabricar: «Generar backup» en el panel (sólo admin) y su comando. Junta en UN archivo cifrado:
-la base de cuentas, la de cada juego, la configuración (moderadores, lanzamientos…), los `.env` y las llaves.
-El archivo se baja y no queda en el server.
+Todo está en `herramientas/respaldo/` (cómo es por dentro: el encabezado de `respaldo.py`).
+
+**Una sola vez — la llave.** En la PC de Benja: `sh herramientas/respaldo/crear_llave.sh <carpeta>`. Deja la llave
+PRIVADA cifrada con su contraseña (`enenos_respaldo_llave.age`: guardarla en dos lugares fuera de la PC) y la PÚBLICA
+en `herramientas/respaldo/llave_publica.txt` (va al repo: sólo sirve para cifrar).
+
+**Cada respaldo.** En el VPS, como root, parado en este repo:
+
+```sh
+sh herramientas/respaldo/generar_backup.sh        # → /opt/enenos/respaldos/enenos_respaldo_<fecha>.tar.gz.age
+```
+
+Qué guarda lo dice `herramientas/respaldo/respaldo_vps.json` (un juego nuevo = sus líneas ahí): las bases de cuentas y
+de cada juego (copiadas EN VIVO con la API de SQLite y comprobadas), las llaves que firman los pases y el manifiesto de
+EDA, los `.env`, Caddy con su certificado de origen y las tareas programadas. Los clientes de los juegos NO van.
+Si falta algo obligatorio, NO se arma. El VPS sólo tiene la llave pública: puede cifrar, nunca leer.
+Después: bajarlo (`scp`) a dos lugares y borrarlo del VPS.
+
+**Abrirlo / comprobarlo** (en cualquier máquina con `age`, o con la imagen `enenos-respaldo`; pide la contraseña):
+
+```sh
+python herramientas/respaldo/respaldo.py ver   --archivo <respaldo>.age --llave enenos_respaldo_llave.age
+python herramientas/respaldo/respaldo.py abrir --archivo <respaldo>.age --llave enenos_respaldo_llave.age --destino <carpeta>
+```
+
+`abrir` deja `<carpeta>/respaldo/datos/<la misma ruta que tenía en el VPS>` y comprueba cada cosa contra su
+`MANIFIESTO.json` (sha256, integridad y filas por tabla).
+
+⏳ Falta: el botón en el panel y los secretos que viven en la PC de Benja (la llave que firma las listas de GunBound,
+los tokens de Cloudflare, las llaves SSH de los VPS).
 
 ## 2 · Levantar todo
 
@@ -65,5 +92,5 @@ repos y el archivo, y se anota acá la fecha del último simulacro que salió bi
 | repo padre + catálogo `juegos.json` + guardia | ✅ 19-nov |
 | repo GunBound público | ✅ 19-nov |
 | mudar el código de las cuentas y la casa a este repo | 🟡 19-nov copiado y con pruebas verdes; falta lo de `PENDIENTES.md` 1 y 2 |
-| «Generar backup» | ⏳ |
+| «Generar backup» | 🟡 19-nov comando + prueba (16 verdes); falta el botón y los secretos de la PC |
 | guía completa + simulacro | ⏳ |

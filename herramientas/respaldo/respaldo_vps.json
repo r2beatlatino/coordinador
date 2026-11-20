@@ -1,0 +1,33 @@
+{
+  "_que_es": "Qué guarda «Generar backup» en el VPS de USA (Miami). Rutas relativas a la raíz «/». Un juego nuevo = sus líneas acá. Lo opcional que falta se anota; lo obligatorio que falta FRENA el respaldo. Los clientes de los juegos (releases, paks) NO van: se respaldan aparte.",
+  "cosas": [
+    { "nombre": "cuentas · base de cuentas", "tipo": "sqlite", "ruta": "var/lib/docker/volumes/enenos_cuentas_datos/_data/cuentas.db" },
+    { "nombre": "cuentas · base del portero", "tipo": "sqlite", "ruta": "var/lib/docker/volumes/enenos_cuentas_datos/_data/portero.db" },
+    { "nombre": "cuentas · LLAVE que firma los pases", "tipo": "archivo", "ruta": "var/lib/docker/volumes/enenos_cuentas_datos/_data/portero_clave.json" },
+    { "nombre": "cuentas · roles (admin, moderadores, lanzamientos)", "tipo": "carpeta", "ruta": "var/lib/docker/volumes/enenos_cuentas_datos/_data/config" },
+    { "nombre": "cuentas · manifiestos de los juegos", "tipo": "carpeta", "ruta": "var/lib/docker/volumes/enenos_cuentas_datos/_data/manifiestos", "opcional": true },
+
+    { "nombre": "R2Beat 2013 · base del juego", "tipo": "sqlite", "ruta": "var/lib/docker/volumes/enenos_r2beat2013_datos/_data/datos.db" },
+    { "nombre": "R2Beat 2013 · base del panel", "tipo": "sqlite", "ruta": "var/lib/docker/volumes/enenos_r2beat2013_datos/_data/panel.db", "opcional": true },
+    { "nombre": "R2Beat 2013 prueba · base del juego", "tipo": "sqlite", "ruta": "var/lib/docker/volumes/enenos_r2beat2013_prueba_datos/_data/datos.db", "opcional": true },
+
+    { "nombre": "GunBound · base", "tipo": "sqlite", "ruta": "var/lib/docker/volumes/enenos_gunbound_datos/_data/gunbound.db" },
+    { "nombre": "GunBound prueba · base", "tipo": "sqlite", "ruta": "var/lib/docker/volumes/enenos_gunbound_prueba_datos/_data/gunbound.db", "opcional": true },
+
+    { "nombre": "EDA prod · portería", "tipo": "sqlite", "ruta": "opt/eda/estado-prod/porteria.db" },
+    { "nombre": "EDA prod · estado (cuentas, inventarios)", "tipo": "carpeta", "ruta": "opt/eda/estado-prod", "ignorar": ["*.db", "*.db-wal", "*.db-shm", "*.log"] },
+    { "nombre": "EDA prueba · estado", "tipo": "carpeta", "ruta": "opt/eda/estado-prueba", "ignorar": ["*.db", "*.db-wal", "*.db-shm", "*.log"], "opcional": true },
+    { "nombre": "EDA ensayo · estado", "tipo": "carpeta", "ruta": "var/lib/docker/volumes/enenos_eda_estado/_data", "ignorar": ["_antes*", "*.log"], "opcional": true },
+    { "nombre": "EDA · LLAVE que firma su manifiesto", "tipo": "archivo", "ruta": "opt/eda/claves/manifiesto-actual.pem" },
+    { "nombre": "EDA · entorno prod", "tipo": "archivo", "ruta": "opt/eda/prod.env" },
+    { "nombre": "EDA · entorno prueba", "tipo": "archivo", "ruta": "opt/eda/prueba.env", "opcional": true },
+    { "nombre": "EDA · script de Caddy del VPS", "tipo": "archivo", "ruta": "opt/eda/caddy.sh", "opcional": true },
+    { "nombre": "EDA · script del cortafuegos", "tipo": "archivo", "ruta": "opt/eda/cortafuegos.sh", "opcional": true },
+
+    { "nombre": "casa · entorno (.env con los secretos de la pila)", "tipo": "archivo", "ruta": "opt/enenos/.env" },
+    { "nombre": "casa · llaves de R2 (Cloudflare)", "tipo": "archivo", "ruta": "root/.r2_r2beat", "opcional": true },
+    { "nombre": "casa · Caddy del sistema + certificado de origen", "tipo": "carpeta", "ruta": "etc/caddy", "ignorar": ["*.antes*"] },
+    { "nombre": "casa · tareas programadas (cron.d)", "tipo": "carpeta", "ruta": "etc/cron.d", "opcional": true },
+    { "nombre": "casa · tareas programadas de root", "tipo": "archivo", "ruta": "var/spool/cron/crontabs/root", "opcional": true }
+  ]
+}
