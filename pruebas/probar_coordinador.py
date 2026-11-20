@@ -315,10 +315,10 @@ try:
     ok(cod == 403, f"⟲ NO puede banear en EDA (no asignado): {cod}")
     cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "aprobar", "uid": J, "pase": "r2beat2013-subir"}, S_MOD)
     ok(cod == 403, f"⟲ ni aprobar en un pase de R2Beat: {cod}")
-    cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "banear", "uid": J, "pase": "gunbound", "detalle": "trampa"}, S_MOD)
+    cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "banear", "uid": J, "pase": "gunbound", "detalle": "trampa", "horas": 2}, S_MOD)
     ok(cod == 200 and P._propia().execute("SELECT 1 FROM baneos WHERE uid = ? AND juego = 'gunbound'", (J,)).fetchone(),
        f"en GunBound SÍ banea ({cod})")
-    cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "banear", "uid": J, "pase": "gunbound-prueba"}, S_MOD)
+    cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "banear", "uid": J, "pase": "gunbound-prueba", "motivo": "trampa", "dias": 1}, S_MOD)
     ok(cod == 200, f"y en el servidor de prueba de GunBound (es del mismo juego) ({cod})")
     cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "banear", "uid": J, "pase": "eda", "detalle": "x"}, S_JEFA)
     ok(cod == 200, f"la ADMIN sí banea en EDA ({cod})")

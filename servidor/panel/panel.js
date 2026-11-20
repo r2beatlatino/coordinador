@@ -5,7 +5,7 @@
      #/entrar          sólo Discord o Google vinculados a un Eñeños ID con rol
      #/juegos          las tarjetas de juegos.json, con PROD / TEST
      #/red             personas, invitaciones, lanzamientos, moderadores y permisos, auditoría
-     #/persona/<uid>   vínculos, estado y permisos por juego
+     #/persona/<uid>   vínculos, estado y permisos por juego (★ 20-nov: banear en varios juegos, con tiempo y motivo)
      #/j/…             lo de adentro de cada juego: fases B y C («Próximamente»)
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 const $ = (s, r = document) => r.querySelector(s);
@@ -28,6 +28,8 @@ function fmtDur(min) {
   if (min < 1440) { const h = Math.floor(min / 60), m = min % 60; return m ? `${h} h ${m} min` : `${h} h`; }
   const d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60); return h ? `${d} d ${h} h` : `${d} ${d === 1 ? 'día' : 'días'}`;
 }
+/* ★ 20-nov: el tiempo de un baneo, de los segundos que faltan (los da el servidor: no depende del reloj de esta PC) */
+const venceTxt = s => s == null ? 'permanente' : `vence en ${fmtDur(Math.ceil(Number(s) / 60))}`;
 const haceSeg = s => { const min = (Date.now() / 1000 - Number(s)) / 60; return min < 1 ? 'ahora' : `hace ${fmtDur(min)}`; };
 const fechaEpoch = s => { const d = new Date(Number(s) * 1000); return `${DIAS_L[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]} · ${dos(d.getHours())}:${dos(d.getMinutes())}`; };
 /* «2026-11-19 21:40:05» (hora del servidor) -> «19 nov 21:40» */
@@ -363,6 +365,10 @@ function vistaRed() {
           <div class="caja-cuerpo"><label class="campo">${ic('search', 's16')}<span class="sr">Buscar persona</span><input id="qCuenta" placeholder="${esAdmin() ? 'Eñeños-ID, Ñ2-ID (apodo) o usuario…' : 'Eñeños-ID, Ñ2-ID (apodo) o usuario exacto…'}" autocomplete="off" spellcheck="false"></label></div>
           <ul class="lista" id="resCuentas"><li style="justify-content:center;padding:18px 16px;color:var(--tx-3);font-size:13px">Escriba para buscar.</li></ul>
         </section>
+        <section class="caja" aria-labelledby="tBan">
+          <div class="caja-cab"><h3 id="tBan">${ic('ban', 's16')}Baneos vigentes <span class="n rosa" id="nBan">…</span></h3><span class="sub">cuánto falta para que venza cada uno</span></div>
+          <ul class="lista" id="listaBan"><li><div class="t tenue">Cargando…</div></li></ul>
+        </section>
         <section class="caja" aria-labelledby="tAud">
           <div class="caja-cab"><h3 id="tAud">${ic('history', 's16')}Auditoría ${esAdmin() ? 'de la red' : ''}</h3><span class="sub">${esAdmin() ? 'todo lo que hizo el equipo' : 'los movimientos en sus juegos'}</span></div>
           <ul class="tl" id="tlRed"><li><div class="txt tenue">Cargando…</div></li></ul>
@@ -387,7 +393,7 @@ function vistaRed() {
       </div>
     </section>
   </main>`;
-  pintarInvitaciones(); pintarLanzamientos(); pintarAuditoria();
+  pintarInvitaciones(); pintarLanzamientos(); pintarAuditoria(); pintarBaneos();
   if (esAdmin()) pintarMods();
 }
 function tusPermisos() {
@@ -511,7 +517,7 @@ function pintarPersona(p) {
     if (puede('banear') && !x.baneada) botones.push(`<button type="button" class="btn chico fantasma" data-accion="persona-accion" data-acc="banear" data-pase="${esc(x.pase)}">${ic('ban', 's14')}Banear</button>`);
     if (puede('desbanear') && x.baneada) botones.push(`<button type="button" class="btn chico" data-accion="persona-accion" data-acc="desbanear" data-pase="${esc(x.pase)}">${ic('check', 's14')}Desbanear</button>`);
     return `<li><span class="etq-env ${x.entorno === 'test' ? 'test' : 'live'}">${x.entorno === 'extra' ? 'OTRO' : ENV_TXT[x.entorno]}</span>
-      <div class="t"><b>${esc(x.nombre)}</b><span>${x.permitido ? '<span style="color:var(--green)">Puede entrar</span>' : '<span style="color:var(--red)">No puede entrar</span>'}${x.abierto ? (!x.permitido && !x.baneada ? ' · todavía no abrió (lanzamiento): sólo el equipo y las aprobadas' : ' · para toda cuenta activa') : ' · sólo aprobadas'}${x.aprobada ? ' · aprobada' : ''}${x.baneada ? ` · <b style="color:var(--red)">baneada</b>${x.motivo ? ` «${esc(x.motivo)}»` : ''}` : ''}</span></div>
+      <div class="t"><b>${esc(x.nombre)}</b><span>${x.permitido ? '<span style="color:var(--green)">Puede entrar</span>' : '<span style="color:var(--red)">No puede entrar</span>'}${x.abierto ? (!x.permitido && !x.baneada ? ' · todavía no abrió (lanzamiento): sólo el equipo y las aprobadas' : ' · para toda cuenta activa') : ' · sólo aprobadas'}${x.aprobada ? ' · aprobada' : ''}${x.baneada ? ` · <b style="color:var(--red)">baneada</b> <span style="color:var(--gold)">(${venceTxt(x.restante_seg)})</span>${x.motivo ? ` «${esc(x.motivo)}»` : ''}` : ''}</span></div>
       <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${botones.join('')}</span></li>`;
   };
   raiz.innerHTML = barraHub('red') + `<main class="hub" id="contenido">
@@ -525,7 +531,7 @@ function pintarPersona(p) {
         <div class="persona-vinc" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${p.vinculos.length ? p.vinculos.map(v => `<span class="chip" style="height:26px;padding:0 10px">${logoProv(v.proveedor)}${PROV[v.proveedor] || esc(v.proveedor)} vinculado${v.nombre ? ` · ${esc(v.nombre)}` : ''}</span>`).join('') : '<span class="tenue" style="font-size:13px">Sin Discord ni Google vinculado.</span>'}</div>
       </div>
     </div></section>
-    <div class="titulo-sec"><h2>Permisos por juego</h2><span class="tenue">${p.acciones.length === 4 ? 'Aprobar, quitar, banear y desbanear, por servidor.' : 'Aprobar y quitar, por servidor.'}</span></div>
+    <div class="titulo-sec"><h2>Permisos por juego</h2><span class="tenue">${p.acciones.length === 4 ? 'Aprobar, quitar, banear y desbanear, por servidor.' : 'Aprobar y quitar, por servidor.'}</span>${p.acciones.includes('banear') && p.juegos.some(j => j.pases.length) ? `<button type="button" class="btn chico" data-accion="banear-varios" style="margin-left:auto">${ic('ban', 's14')}Banear en varios juegos…</button>` : ''}</div>
     ${p.juegos.length ? p.juegos.map(j => `<section class="caja" style="margin-bottom:14px"><div class="caja-cab"><h3>${etqJuego(j.id)} ${esc(j.nombre)}</h3>${j.invitacion ? `<span class="sub">invitación anticipada: ${esc(j.invitacion)}</span>` : ''}</div>
       ${j.pases.length ? `<ul class="lista">${j.pases.map(x => fila(j, x)).join('')}</ul>` : '<div class="caja-cuerpo tenue" style="font-size:13px">Todavía no tiene servidor con pase.</div>'}</section>`).join('')
       : `<section class="caja">${vacio('Sin juegos para mostrar', 'No tiene juegos asignados en el Coordinador.')}</section>`}
@@ -542,11 +548,100 @@ function accionPersona(acc, pase) {
     pintarPersona(r.d.persona);
     toast({ t: { aprobar: 'Aprobada', quitar: 'Aprobación quitada', banear: 'Baneada', desbanear: 'Desbaneada' }[acc] + ` en ${esc(x.nombre)}`, sub: 'Quedó en la auditoría.' });
   };
-  if (acc === 'banear') confirmar({ titulo: `¿Banear a ${esc(p.nombre)} en ${esc(x.nombre)}?`, ok: 'Banear', icono: 'ban',
-    txt: 'No va a poder pedir el pase de ese servidor hasta que lo desbaneen. El resto de sus juegos sigue igual.',
-    extra: '<span class="lab">Motivo (queda en la auditoría)</span><label class="campo"><span class="sr">Motivo</span><input id="mdExtra" maxlength="200" autocomplete="off"></label>', alAceptar: hacer });
+  if (acc === 'banear') formBaneo(pase);
   else if (acc === 'quitar') confirmar({ titulo: `¿Quitarle la aprobación en ${esc(x.nombre)}?`, ok: 'Quitar', icono: 'x', txt: 'Si el servidor es sólo para aprobadas, deja de poder entrar.', alAceptar: hacer });
   else hacer('');
+}
+
+/* ★ 20-nov — EL FORMULARIO DEL BANEO. `pase` = un solo servidor (el botón de la fila); sin él, casillas con los juegos
+   (cada uno con TODOS sus servidores). Duración: horas / días / permanente (sólo Admin); un moderador, hasta su tope.
+   El motivo es obligatorio (≤ 200): lo ve la persona en el launcher al apretar «Jugar». El servidor exige lo mismo. */
+function formBaneo(pase) {
+  const p = S.persona; if (!p) return;
+  const lim = p.sancion || { permanente: false, red: false, tope_seg: null, motivo_max: 200 };
+  const uno = pase ? p.juegos.flatMap(j => j.pases).find(y => y.pase === pase) : null;
+  if (pase && !uno) return;
+  const juegos = p.juegos.filter(j => j.pases.length);
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="bnTit">
+    <div class="modal-cab"><span class="ic">${ic('ban', 's20')}</span><div><h2 id="bnTit">Banear a ${esc(p.nombre)}</h2>
+      <p>${uno ? `En ${esc(uno.nombre)}.` : 'Cada juego que marque, con todos sus servidores (PROD y TEST).'} Al apretar «Jugar», el launcher le muestra el motivo y cuánto falta.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:16px">
+      ${uno ? '' : `<div><span class="lab">Juegos</span><div class="alcance" id="bnJuegos">${juegos.map(j => `<label class="radio"><input type="checkbox" value="${esc(j.id)}"><span><b>${esc(j.nombre)}</b><span>${j.pases.map(x => x.entorno === 'extra' ? 'OTRO' : ENV_TXT[x.entorno]).join(' · ')}${j.pases.some(x => x.baneada) ? ' · ya tiene un baneo (se reemplaza)' : ''}</span></span></label>`).join('')}
+        ${lim.red ? `<label class="radio"><input type="checkbox" id="bnRed"><span><b>Toda la red</b><span>Todos los juegos de Eñeños, con todos sus servidores (sólo Admin)</span></span></label>` : ''}</div></div>`}
+      <div><span class="lab">Duración</span>
+        <div class="chips" role="group" aria-label="Duración"><button type="button" class="chipb" data-bn="horas" aria-pressed="true">Horas</button><button type="button" class="chipb" data-bn="dias" aria-pressed="false">Días</button>${lim.permanente ? '<button type="button" class="chipb" data-bn="permanente" aria-pressed="false">Permanente</button>' : ''}</div>
+        <label class="campo" id="bnCantCampo" style="margin-top:8px;max-width:200px"><span class="sr">Cantidad</span><input id="bnCant" type="number" min="1" step="1" value="24" inputmode="numeric"><span class="tenue" id="bnUnidad" style="font-size:13px">horas</span></label>
+        ${lim.tope_seg ? `<div class="tenue" style="font-size:12px;margin-top:6px">Como moderador puede banear hasta ${fmtDur(lim.tope_seg / 60)}. Más largo, o permanente: un Admin.</div>` : ''}</div>
+      <div><span class="lab">Motivo (lo ve la persona y queda en la auditoría)</span>
+        <label class="campo"><span class="sr">Motivo</span><input id="bnMotivo" maxlength="${Number(lim.motivo_max) || 200}" autocomplete="off" placeholder="Por ejemplo: insultos en el chat"></label>
+        <div class="cuenta-txt"><span id="bnErr" style="color:var(--red)"></span><span id="bnCuenta">0/${Number(lim.motivo_max) || 200}</span></div></div>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn peligro lleno" id="bnOk">Banear</button></div></div>`);
+  let tipo = 'horas';
+  const err = t => { $('#bnErr', pn).textContent = t || ''; };
+  $$('[data-bn]', pn).forEach(b => b.addEventListener('click', () => {
+    tipo = b.dataset.bn;
+    $$('[data-bn]', pn).forEach(x => x.setAttribute('aria-pressed', x === b));
+    $('#bnCantCampo', pn).hidden = tipo === 'permanente';
+    $('#bnUnidad', pn).textContent = tipo === 'dias' ? 'días' : 'horas';
+    err('');
+  }));
+  const red = $('#bnRed', pn);
+  if (red) red.addEventListener('change', () => $$('#bnJuegos input[type=checkbox]:not(#bnRed)', pn).forEach(c => { c.disabled = red.checked; c.closest('.radio').classList.toggle('off', red.checked); }));
+  const mot = $('#bnMotivo', pn);
+  mot.addEventListener('input', () => { $('#bnCuenta', pn).textContent = `${mot.value.length}/${Number(lim.motivo_max) || 200}`; err(''); });
+  $('#bnOk', pn).addEventListener('click', async () => {
+    const cuerpo = { accion: 'banear', uid: p.uid, motivo: mot.value.trim() };
+    if (uno) cuerpo.pase = pase;
+    else if (red && red.checked) cuerpo.red = true;
+    else {
+      cuerpo.juegos = $$('#bnJuegos input[type=checkbox]:checked:not(#bnRed)', pn).map(c => c.value);
+      if (!cuerpo.juegos.length) return err('Marque al menos un juego.');
+    }
+    if (tipo === 'permanente') cuerpo.permanente = true;
+    else {
+      const n = Number($('#bnCant', pn).value);
+      if (!Number.isInteger(n) || n < 1) return err('La duración tiene que ser un número entero, 1 o más.');
+      if (lim.tope_seg && n * (tipo === 'dias' ? 86400 : 3600) > lim.tope_seg) return err(`Como moderador, hasta ${fmtDur(lim.tope_seg / 60)}.`);
+      cuerpo[tipo] = n;
+    }
+    if (!cuerpo.motivo) { mot.focus(); return err('Escriba el motivo.'); }
+    const b = $('#bnOk', pn); b.disabled = true;
+    const r = await api('accion', cuerpo);
+    b.disabled = false;
+    if (!r.ok) return err((r.d && (r.d.texto || r.d.error)) || `Error ${r.status}`);
+    cerrarCapa();
+    pintarPersona(r.d.persona);
+    const dur = tipo === 'permanente' ? 'de forma permanente' : `por ${fmtDur(Number(cuerpo[tipo]) * (tipo === 'dias' ? 1440 : 60))}`;
+    toast({ t: `Baneada ${dur}`, sub: (uno ? esc(uno.nombre) : cuerpo.red ? 'En toda la red' : esc(cuerpo.juegos.map(id => (juegos.find(j => j.id === id) || { nombre: id }).nombre).join(', '))) + ' · quedó en la auditoría.' });
+  });
+}
+
+/* ★ 20-nov: los baneos VIGENTES de sus juegos, en la red: quién, dónde, cuánto falta, y desbanear antes de tiempo */
+async function pintarBaneos() {
+  const ul = $('#listaBan'); if (!ul) return;
+  const r = await api('baneos');
+  if (!$('#listaBan')) return;
+  if (!r.ok) { ul.innerHTML = `<li><div class="t tenue">${errTxt(r)}</div></li>`; return; }
+  const bs = r.d.baneos || [];
+  S.baneos = bs;
+  $('#nBan').textContent = bs.length;
+  ul.innerHTML = bs.length ? bs.slice(0, 60).map((b, i) => `<li>${ava(b.persona, 'redondo')}
+      <div class="t"><b><a href="#/persona/${esc(b.uid)}">${esc(b.persona)}</a>${b.usuario ? ` <span class="tenue" style="font-weight:500">${esc(b.usuario)}</span>` : ''}</b>
+        <span style="margin-top:3px">${etqJuego(b.juego)} <span class="tenue">${esc(b.nombre)}</span> · <b style="color:${b.restante_seg == null ? 'var(--red)' : 'var(--gold)'};font-weight:600">${venceTxt(b.restante_seg)}</b> · «${esc(b.motivo)}» <span class="muy-tenue">· ${esc(b.quien)}</span></span></div>
+      <button type="button" class="btn chico" data-accion="ban-levantar" data-i="${i}" aria-label="Desbanear a ${esc(b.persona)} en ${esc(b.nombre)}">${ic('check', 's14')}<span>Desbanear</span></button></li>`).join('')
+    : `<li style="justify-content:center;padding:18px 16px;color:var(--tx-3);font-size:13px">Nadie está baneado ahora en sus juegos.</li>`;
+}
+function levantarBaneo(i) {
+  const b = (S.baneos || [])[i]; if (!b) return;
+  confirmar({ titulo: `¿Desbanear a ${esc(b.persona)} en ${esc(b.nombre)}?`, ok: 'Desbanear', icono: 'check', peligro: false,
+    txt: `Hoy está baneada (${esc(venceTxt(b.restante_seg))}). Vuelve a poder entrar al instante; el baneo queda en la auditoría.`,
+    alAceptar: async () => {
+      const r = await api('accion', { accion: 'desbanear', uid: b.uid, pase: b.pase });
+      if (!r.ok) { toast({ t: 'No se pudo', sub: errTxt(r), tipo: 'err' }); return; }
+      toast({ t: `Desbaneada en ${esc(b.nombre)}`, sub: 'Quedó en la auditoría.' });
+      pintarBaneos(); pintarAuditoria();
+    } });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -622,6 +717,8 @@ document.addEventListener('click', async e => {
         if (!r.ok) { toast({ t: 'No se pudo agregar', sub: errTxt(r), tipo: 'err' }); return; }
         pintarMods(r.d); pintarAuditoria(); toast({ t: 'Se sumó al equipo', sub: r.d.aviso ? esc(r.d.aviso) : 'Asígnele juegos tocando sus etiquetas.', tipo: r.d.aviso ? 'info' : 'ok', ms: 8000 }); } }); break;
     case 'persona-accion': accionPersona(a.dataset.acc, a.dataset.pase); break;
+    case 'banear-varios': formBaneo(''); break;
+    case 'ban-levantar': levantarBaneo(Number(a.dataset.i)); break;
   }
 });
 document.addEventListener('keydown', e => {

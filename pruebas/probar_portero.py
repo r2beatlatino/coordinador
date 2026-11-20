@@ -253,7 +253,7 @@ try:
     ok(st == 200 and not pt.permitido(102, "eda"), "el panel BANEA de EDA: comun ya no puede (aunque siga aprobada)")
     st, d, _h = http("GET", "/cuentas/admin/lista", cookie=ck)
     ok(st == 200 and [a["accion"] for a in d["auditoria"][:3]] == ["banear", "aprobar", "entrar al panel"]
-       and d["auditoria"][0]["quien"] == "jefe" and d["auditoria"][0]["detalle"] == "prueba", "la auditoría anota quién hizo qué")
+       and d["auditoria"][0]["quien"] == "jefe" and d["auditoria"][0]["detalle"] == "permanente · prueba", "la auditoría anota quién hizo qué")
     ok("pass_hash" not in json.dumps(d) and sha("clave2") not in json.dumps(d), "la lista no trae hashes")
     ok(http("POST", "/cuentas/admin/aprobar", {"uid": 99999, "juego": "eda"}, cookie=ck)[0] == 404, "una cuenta inexistente: 404")
     open(admin_txt, "w").write("# ya no hay admins" + chr(10))

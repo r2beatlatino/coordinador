@@ -65,6 +65,43 @@ mod1 eda,r2beat2013    # dos juegos
 - Los admins no se tocan desde el panel (siguen en `admin.txt`, a mano).
 - La misma regla vale en el panel chico (`/cuentas/admin`): `admin_accion` y `lanzamientos.decidir` miran el juego.
 
+### 2.1 · ★ Los baneos con tiempo (20-nov-2026 · EN LOCAL, rama `baneos-con-tiempo`, NO en prod)
+
+Benja: *«baneos en X juegos, por X horas, por X días, X motivo; el launcher baneado, al presionar "Jugar" en X juego,
+debe recibir un popup con el motivo de su ban + el tiempo»*.
+
+- **`baneos.hasta`** (epoch; `NULL` = permanente). La columna se agrega sola (`ALTER`) al abrir una `portero.db` de
+  antes: **los baneos viejos quedan permanentes**, como eran.
+- **Un baneo vencido deja de contar solo**, al chequear (`portero.baneo_vigente`). No se borra: la fila queda como
+  historial. **Desbanear antes de tiempo** = `hasta` pasa a «ahora» (tampoco se borra). Todo va a la auditoría, un
+  renglón por servidor, con la duración y el motivo (`por 3 días · Insultos en el chat`).
+- **Varios juegos de una vez**: `juegos: [...]` (ids del catálogo: cada uno con TODOS sus servidores — PROD, TEST y los
+  `<live>-…`), o `pases: [...]`, o `pase` (uno, como antes). **Todo o nada**: si uno no se puede, no se toca ninguno.
+- **Duración**: `horas: n`, `dias: n` o `permanente: true` (una sola). **Motivo obligatorio, ≤ 200**: lo ve la persona.
+- **Sólo ADMIN**: permanente y `red: true` (toda la red = todos los pases de los juegos del catálogo; `parches` y `web`
+  no). Un ADMIN sin duración = permanente (como antes).
+- **Moderador con juegos**: sólo en sus juegos, siempre con duración y hasta `portero.BANEO_TOPE_MODERADOR_SEG`.
+  ⚠ **A confirmar con Benja: el tope quedó en 30 días.** El moderador de formato viejo sigue sin banear.
+- **El panel**: en la ficha de la persona, «Banear en varios juegos…» (casillas de juegos, «Toda la red» sólo admin,
+  Horas / Días / Permanente, motivo con contador) y el «Banear» de cada servidor abre el mismo formulario para ese solo
+  servidor; cada servidor baneado dice «vence en 2 d 3 h» o «permanente». En **La red**, la caja **Baneos vigentes**
+  (los que vencen antes primero) con «Desbanear» antes de tiempo.
+- **El pase negado** (`POST /pase`): el MISMO **403** de «no permitido», con los campos nuevos:
+
+  ```json
+  {"error": "baneado", "juego": "gunbound", "nombre": "GunBound", "motivo": "Insultos en el chat",
+   "hasta": 1795151433, "restante_seg": 183600,
+   "texto": "No puedes entrar a GunBound: Insultos en el chat. Vence en 2 días y 3 horas."}
+  ```
+
+  (`hasta` y `restante_seg` en `null` = permanente). ⚠ Un launcher VIEJO muestra `error` tal cual: dirá «baneado»
+  en vez de «Tu cuenta todavía no tiene acceso…». `/manifiesto/<juego>` (EDA) devuelve la frase en `error` y el resto
+  con `baneado: true`. `/entrar` y `/yo` marcan el juego con `baneo: {motivo, hasta, restante_seg}`.
+- **El launcher** (rama `launcher-tauri`, `src-tauri/src/baneo.rs`): con `error: "baneado"` muestra el popup
+  «No puedes entrar a <juego>», el motivo (como texto, escapado), «Vence en 2 días y 3 horas» / «Este bloqueo es
+  permanente» y «Entendido»; no arranca el juego. Sin los campos nuevos, el mensaje de siempre.
+- Pruebas: `pruebas/probar_baneos.py` (cada regla con su control al revés).
+
 **Lo que nunca le llega a un moderador:** el login de nadie (las personas se muestran por Ñ2-ID o «Eñeños #id»; en la
 auditoría los ADMIN, la consola y lo interno salen «ADMIN»), el nombre de la cuenta de Google/Discord (suele ser el
 nombre real), las cuentas con rol (ni en el buscador ni en la ficha), IPs, correos (no se guardan) ni nada de la
@@ -88,6 +125,8 @@ contraseña. Busca por Eñeños-ID, por Ñ2-ID o por el login **exacto** (el adm
 | `POST /coordinador/api/canjear {ticket}` | ticket → cookie de sesión |
 | `POST /coordinador/api/salir` | |
 | `POST /coordinador/api/accion {accion, uid, pase, detalle}` | aprobar · quitar · banear · desbanear (por pase) |
+| ★ `POST /coordinador/api/accion {accion: banear, uid, juegos \| pases \| pase \| red, horas \| dias \| permanente, motivo}` | banear en VARIOS juegos de una vez, con tiempo (ver §2.1) |
+| ★ `GET /coordinador/api/baneos` | los baneos vigentes de sus juegos, con `hasta` y `restante_seg` |
 | `POST /coordinador/api/invitacion {id, accion}` | aprobar · rechazar |
 | `POST /coordinador/api/equipo {accion, uid, juegos}` | juegos · agregar · quitar (sólo admin) |
 

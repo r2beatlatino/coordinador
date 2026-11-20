@@ -33,9 +33,13 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     GET  /coordinador/api/personas?q=                  buscar (Eñeños ID, apodo; login: ADMIN por prefijo, moderador exacto)
     GET  /coordinador/api/persona/<uid>                la ficha: vínculos, estado y permisos en cada juego
     GET  /coordinador/api/invitaciones · lanzamientos · auditoria
+    GET  /coordinador/api/baneos                       ★ 20-nov: los baneos vigentes de sus juegos («vence en …»)
     GET  /coordinador/api/equipo                       admins y moderadores con sus juegos (sólo ADMIN)
     POST /coordinador/api/oauth {proveedor, destino?}  · canjear {ticket} · salir
     POST /coordinador/api/accion {accion, uid, pase, detalle}   aprobar | quitar | banear | desbanear (por pase)
+         ★ 20-nov banear / desbanear: además `pases: [...]`, `juegos: [...]` (con todos sus servidores), `red: true`
+         (sólo ADMIN), y para banear `horas: n` | `dias: n` | `permanente: true` (sólo ADMIN) + `motivo` (obligatorio,
+         ≤ 200). Un moderador: sólo en sus juegos y hasta portero.BANEO_TOPE_MODERADOR_SEG.
     POST /coordinador/api/invitacion {id, accion}      aprobar | rechazar
     POST /coordinador/api/equipo {accion, uid, juegos} juegos | agregar | quitar (sólo ADMIN; escribe moderadores.txt)
 ⛔ Todo POST pide `X-R2: 1` (lo mira el portero antes de llegar acá). ⛔ A un moderador nunca le llega un login, un
@@ -486,6 +490,7 @@ def _acciones_de(P, viewer):
 
 
 def persona(P, viewer, uid, ahora=None):
+    ahora = int(time.time() if ahora is None else ahora)
     try:
         uid = int(uid)
     except (TypeError, ValueError):
@@ -510,11 +515,13 @@ def persona(P, viewer, uid, ahora=None):
     for j in visibles(P, viewer):
         pases = []
         for pase, entorno in pases_de(P, j["id"]):
-            ban = p.execute("SELECT motivo, desde FROM baneos WHERE uid = ? AND juego = ?", (uid, pase)).fetchone()
+            ban = P.baneo_vigente(uid, pase, ahora)                 # ★ 20-nov: sólo el que HOY cuenta
             apr = p.execute("SELECT desde FROM aprobados WHERE uid = ? AND juego = ?", (uid, pase)).fetchone()
             pases.append({"pase": pase, "entorno": entorno, "nombre": P._juegos()[pase]["nombre"],
                           "abierto": bool(P._juegos()[pase]["abierto"]), "aprobada": bool(apr), "baneada": bool(ban),
-                          "motivo": (ban["motivo"] or "") if ban else "", "permitido": P.permitido(uid, pase)})
+                          "motivo": (ban["motivo"] or "") if ban else "", "permitido": P.permitido(uid, pase, ahora),
+                          **({"hasta": P.datos_baneo(ban, ahora)["hasta"],
+                              "restante_seg": P.datos_baneo(ban, ahora)["restante_seg"]} if ban else {})})
         inv = None
         if j["id"] in tabla:
             f = LZ._ultima(P, uid, j["id"])
@@ -522,23 +529,95 @@ def persona(P, viewer, uid, ahora=None):
         js.append({"id": j["id"], "nombre": j.get("corto") or j.get("nombre"), "pases": pases, "invitacion": inv})
     d["juegos"] = js
     d["acciones"] = acciones
+    d["sancion"] = limites_sancion(P, viewer)
     return 200, {"persona": d}
+
+
+def limites_sancion(P, viewer):
+    """★ 20-nov: lo que ESTA cuenta del equipo puede poner en un baneo (el formulario lo respeta; el server lo exige)."""
+    admin = _es_admin(P, viewer)
+    return {"permanente": admin, "red": admin, "tope_seg": None if admin else P.BANEO_TOPE_MODERADOR_SEG,
+            "motivo_max": P.BANEO_MOTIVO_MAX}
+
+
+def pases_pedidos(P, viewer, d):
+    """★ 20-nov: los pases de un banear / desbanear: `pase` (uno, como antes), `pases` (lista) y/o `juegos` (ids del
+    catálogo: cada uno con TODOS sus servidores — PROD, TEST y los extra). -> (lista, error)."""
+    out = []
+    if d.get("pase"):
+        out.append(str(d["pase"]))
+    for k in ("pases", "juegos"):
+        v = d.get(k)
+        if v is None:
+            continue
+        if not isinstance(v, list) or len(v) > 40 or not all(isinstance(x, str) for x in v):
+            return None, "Esa lista de juegos no sirve."
+        for x in v:
+            if k == "pases":
+                out.append(x)
+            else:
+                ps = [p for p, _e in pases_de(P, x)]
+                if not ps:
+                    return None, "Ese juego no tiene servidor con pase."
+                out += ps
+    return list(dict.fromkeys(out)), None
 
 
 def accion(P, viewer, d):
     acc = str(d.get("accion") or "")
     if acc not in ACCIONES:
         return 400, {"error": "Acción desconocida."}
-    pase = str(d.get("pase") or "")
-    if pase not in P._juegos():
-        return 404, {"error": "Ese juego no existe."}
     uid = d.get("uid")
     if isinstance(uid, bool) or not isinstance(uid, (int, str)) or not str(uid).isdigit():
         return 400, {"error": "Eñeños ID inválido."}
+    if acc in ("banear", "desbanear"):
+        red = d.get("red") is True
+        pases, err = pases_pedidos(P, viewer, d)
+        if err:
+            return 400, {"error": err}
+        if not red and not pases:
+            return 400, {"error": "Elija al menos un juego."}
+        if not red and any(x not in P._juegos() for x in pases):
+            return 404, {"error": "Ese juego no existe."}
+        motivo = d.get("motivo") if d.get("motivo") is not None else d.get("detalle")
+        if acc == "banear":
+            codigo, datos = P.admin_banear(viewer, int(uid), pases, str(motivo or ""), d, red=red)
+        else:
+            codigo, datos = P.admin_desbanear(viewer, int(uid), P.pases_de_la_red() if red else pases)
+        if codigo != 200:
+            return codigo, datos
+        return persona(P, viewer, int(uid))
+    pase = str(d.get("pase") or "")
+    if pase not in P._juegos():
+        return 404, {"error": "Ese juego no existe."}
     codigo, datos = P.admin_accion(viewer, acc, int(uid), pase, str(d.get("detalle") or "")[:200])
     if codigo != 200:
         return codigo, datos
     return persona(P, viewer, int(uid))
+
+
+def baneos(P, viewer, ahora=None):
+    """★ 20-nov: GET /api/baneos — los baneos VIGENTES de los juegos que esa cuenta ve (permanentes y con fecha),
+    los que vencen antes primero. ⛔ Al moderador: ni logins ni cuentas con rol (como en todo el panel)."""
+    ahora = int(time.time() if ahora is None else ahora)
+    admin = _es_admin(P, viewer)
+    admins_login = {P._login_de(u) for u in P.admins()} - {None}
+    filas = P._propia().execute("SELECT uid, juego, desde, quien, motivo, hasta FROM baneos "
+                                "WHERE hasta IS NULL OR hasta > ? ORDER BY hasta IS NULL, hasta, desde DESC LIMIT 500",
+                                (ahora,)).fetchall()
+    out = []
+    for f in filas:
+        if not P.puede_en(viewer, f["juego"]):
+            continue
+        if not admin and P.rol_de(f["uid"]) is not None:
+            continue
+        g = dict({"uid": int(f["uid"]), "persona": _nombre(P, f["uid"]), "pase": f["juego"],
+                  "juego": juego_de_pase(P, f["juego"]), "nombre": P._juegos().get(f["juego"], {}).get("nombre", f["juego"]),
+                  "desde": f["desde"], "quien": _quien_para(P, f["quien"], admin, admins_login)}, **P.datos_baneo(f, ahora))
+        if admin:
+            g["usuario"] = P._login_de(f["uid"]) or ""
+        out.append(g)
+    return 200, {"ahora": ahora, "baneos": out}
 
 
 def invitaciones(P, viewer):
@@ -776,6 +855,8 @@ def atender(P, H, metodo, p, d):
             return H._mandar(*lanzamientos(P, viewer))
         if api == ["auditoria"]:
             return H._mandar(*auditoria(P, viewer))
+        if api == ["baneos"]:
+            return H._mandar(*baneos(P, viewer))
         if api == ["equipo"]:
             return H._mandar(*equipo(P, viewer))
         return H._mandar(404, {"error": "no existe"})

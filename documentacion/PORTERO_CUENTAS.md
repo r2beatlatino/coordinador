@@ -38,7 +38,7 @@ Las rutas andan con o sin el prefijo `/cuentas`. Todo POST pide `X-R2: 1`.
 | `GET /salud` | `{"ok": true}` |
 | `GET /clave-publica` | la JWKS: la clave pública. El server de EDA la baja una vez |
 | `POST /entrar {usuario, clave}` o `{usuario, pass_sha256_upper}` | → `{sesion, uid, vence, juegos:[{id, nombre, permitido}]}`. La sesión dura 30 días, se guarda en `portero.db` y sobrevive a un reinicio |
-| `POST /pase {juego}` + `Bearer` | → `{pase, vence}`. **403** si la cuenta no está aprobada, está baneada en ese juego, está baneada en R2Beat o fue fusionada |
+| `POST /pase {juego}` + `Bearer` | → `{pase, vence}`. **403** si la cuenta no está aprobada, está baneada en ese juego, está baneada en R2Beat o fue fusionada. ★ 20-nov: baneada en ese juego → `{"error": "baneado", juego, nombre, motivo, hasta, restante_seg, texto}` (ver `PANEL_COORDINADOR.md` §2.1) |
 | `GET /manifiesto/<juego>` + `Bearer` | → el manifest del cliente, **sólo a aprobadas**. Sale de `R2_PORTERO_MANIFIESTOS/<juego>.json` y se lee del disco en cada pedido |
 | `GET /yo` + `Bearer` | → `{uid, juegos}` |
 | `POST /salir` + `Bearer` | cierra la sesión |
@@ -96,8 +96,8 @@ un tramo al azar: `/files-eda/<release>-<azar>/`.
 ```bash
 python -m servidor.portero aprobar <usuario> [eda]
 python -m servidor.portero quitar <usuario> [eda]
-python -m servidor.portero banear <usuario> [eda] [motivo…]
-python -m servidor.portero desbanear <usuario> [eda]
+python -m servidor.portero banear <usuario> [eda] [--horas N | --dias N] [motivo…]   # ★ 20-nov: sin tiempo = permanente
+python -m servidor.portero desbanear <usuario> [eda]     # levanta antes de tiempo (la fila queda como historial)
 python -m servidor.portero lista [eda]
 python -m servidor.portero clave            # la clave PÚBLICA (JWKS), para pasársela a EDA
 ```
