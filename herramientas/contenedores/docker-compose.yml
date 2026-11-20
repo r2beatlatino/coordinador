@@ -248,6 +248,8 @@ services:
       # El Eñeños ID da el PASE para entrar, no personajes hechos: quien entra por primera vez nace sin personajes y
       #   crea los suyos en la pantalla del juego (Benja, 15-nov). `personaje` = el de siempre ya hecho.
       EDA_CUENTA_NUEVA: ${EDA_CUENTA_NUEVA:-vacia}
+      # ★ 20-nov: la puerta del panel del Coordinador (/interno/panel, contrato v1): sin esta ficha contesta 404
+      R2_CUENTAS_FICHA_INTERNA: ${R2_CUENTAS_FICHA_INTERNA:-}
       # El canje del pase (`POST /eda/pase`, puerto 25901) escucha dentro de la red de contenedores y NO se publica:
       #   afuera sale por `web` (Caddy), con HTTPS, porque el ticket que devuelve es un secreto.
       EDA_HTTP_ESCUCHAR: 0.0.0.0
@@ -358,6 +360,8 @@ services:
       GB_DESCRIPCION_MUNDO: ${GB_DESCRIPCION_MUNDO:-Avatar ON}
       GB_GM: ${GB_GM:-}
       GB_P2P: ${GB_P2P:-}
+      # ★ 20-nov: la puerta del panel del Coordinador (/interno/panel, contrato v1): sin esta ficha contesta 404
+      R2_CUENTAS_FICHA_INTERNA: ${R2_CUENTAS_FICHA_INTERNA:-}
     volumes:
       - gunbound_datos:/datos
     ports:
