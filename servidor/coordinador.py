@@ -704,7 +704,9 @@ def auditoria(P, viewer, limite=60):
     out = []
     for f in filas:
         if not admin:
-            if f["accion"] not in MOVIMIENTOS or not f["juego"] or not P.puede_en(viewer, f["juego"]):
+            # ★ 20-nov fase C: también lo que se hizo desde la gestión de SUS juegos («gestión · rcoin»…)
+            de_gestion = str(f["accion"] or "").startswith("gestión · ")
+            if (f["accion"] not in MOVIMIENTOS and not de_gestion) or not f["juego"] or not P.puede_en(viewer, f["juego"]):
                 continue
             if f["uid"] and P.rol_de(f["uid"]) is not None:
                 continue
@@ -892,8 +894,9 @@ def atender(P, H, metodo, p, d):
             jid = str(q.get("juego") or "")
             if not GE._juego_ok(_yo(), P, viewer, jid):
                 return H._mandar(404, {"error": "Ese juego no existe o no está asignado a su cuenta."})
-            return H._mandar(200, dict(GE.permisos(P, viewer, jid),
-                                       gestionable=any(juego_de_pase(P, p) == jid for p in GE.fuentes())))
+            pases = (next((j for j in catalogo(P) if j["id"] == jid), {}).get("pases") or {})
+            entornos = {e: bool(pases.get(e)) and pases.get(e) in GE.fuentes() for e in ("live", "test")}
+            return H._mandar(200, dict(GE.permisos(P, viewer, jid), gestionable=any(entornos.values()), entornos=entornos))
         if len(api) >= 4 and api[0] == "gestion":
             return H._mandar(*GE.pedir(_yo(), P, viewer, api[1], api[2], "GET", "/".join(api[3:]), query=q))
         return H._mandar(404, {"error": "no existe"})

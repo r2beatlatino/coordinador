@@ -778,9 +778,10 @@ async function vistaJuego(jid, env, tab, sel) {
     api(`gestion/mios?juego=${encodeURIComponent(jid)}`)]);
   if (S.ruta !== ruta0) return;
   if (jr && jr.ok) S.juegos = jr.d.juegos || [];
-  /* ★ fase C: ¿este servidor se gestiona desde el Coordinador? (`gestionable` es por juego: el TEST se prueba con /salud) */
+  /* ★ fase C: ¿este servidor se gestiona desde el Coordinador? `entornos` lo dice por PROD y TEST; /salud lo confirma */
   let g = null;
-  if (mr && mr.ok && mr.d.gestionable && (mr.d.acciones || []).includes('ver')) {
+  const sinEste = mr && mr.ok && mr.d.entornos && mr.d.entornos[env] === false;
+  if (mr && mr.ok && mr.d.gestionable && !sinEste && (mr.d.acciones || []).includes('ver')) {
     g = nuevoG(mr.d);
     const s = await api(`gestion/${encodeURIComponent(jid)}/${env}/salud`);
     if (S.ruta !== ruta0) return;

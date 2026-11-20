@@ -222,6 +222,13 @@ ok("gestión · aviso" in acc and "gestión · rcoin" in acc and "equipo: permis
    and all(f["juego"] in ("r2beat2013", None) for f in filas if f["accion"].startswith("gestión")),
    f"avisos, Rcoin y permisos quedan anotados ({len(acc)})")
 ok(not any(a == "gestión · ver" for a in acc), "⟲ mirar no se anota (sólo lo que cambia algo)")
+cod, d = callado(CO.auditoria, P, MR2)
+vio = {x["accion"] for x in d["auditoria"]}
+ok(cod == 200 and "gestión · rcoin" in vio and "gestión · aviso" in vio,
+   "el moderador de R2Beat ve en la auditoría lo hecho desde la gestión de SU juego")
+cod, d = callado(CO.auditoria, P, MGB)
+ok(cod == 200 and not any(x["accion"].startswith("gestión") for x in d["auditoria"]),
+   "⟲ el de GunBound no ve lo de R2Beat")
 
 juego_srv.shutdown()
 P.cerrar_conexiones()
