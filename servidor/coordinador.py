@@ -34,6 +34,12 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     GET  /coordinador/api/persona/<uid>                la ficha: vínculos, estado y permisos en cada juego
     GET  /coordinador/api/invitaciones · lanzamientos · auditoria
     GET  /coordinador/api/baneos                       ★ 20-nov: los baneos vigentes de sus juegos («vence en …»)
+    GET  /coordinador/api/contenido?juego=&entorno=live|test   ★ 20-nov fase B: asistencia, ruleta, tira y lanzamiento
+    GET  /coordinador/api/contenido/items?juego=&entorno=&q=   buscar ítems para los premios
+    GET  /coordinador/api/novedades                    el acordeón de noticias del launcher (cada una con `editable`)
+    POST /coordinador/api/contenido {juego, entorno, clave, valor}   asistencia | ruleta | tira | lanzamiento (admin)
+    POST /coordinador/api/contenido/previa {juego, entorno, clave, valor, mes?}   validar sin guardar
+    POST /coordinador/api/novedades {noticias, base}   el moderador sólo toca las de sus juegos (ver contenido.py)
     GET  /coordinador/api/equipo                       admins y moderadores con sus juegos (sólo ADMIN)
     POST /coordinador/api/oauth {proveedor, destino?}  · canjear {ticket} · salir
     POST /coordinador/api/accion {accion, uid, pase, detalle}   aprobar | quitar | banear | desbanear (por pase)
@@ -50,6 +56,8 @@ VARIABLES
                         siempre. Ej.: https://coordinador.xn--eeos-gqab.link . Vacía = el panel no deja entrar.
     R2_PANEL_ARTE       la carpeta con el arte de los juegos (por omisión `panel_arte/` al lado de portero.db). ⛔ El
                         arte de los juegos (Softnyx, etc.) NO va al repo público: sin el archivo, la tarjeta usa su color.
+    R2_PANEL_CONTENIDO  ★ 20-nov «pase=http://…/api/interno/contenido;…» el contenido dinámico de cada servidor
+                        (con la ficha interna R2_CUENTAS_FICHA_INTERNA). R2_NOVEDADES_FUENTE: el pase con las noticias.
     R2_PANEL_SALUD      «pase=url;…» el `/salud` de cada servidor por la red de adentro (ej. GunBound: {"en_linea": n}).
     R2_JUEGOS_CATALOGO  otro `juegos.json` (por omisión, el de la raíz del repo / de la imagen).
 """
@@ -64,6 +72,7 @@ import time
 import urllib.parse
 import urllib.request
 
+from . import contenido as CT
 from . import lanzamientos as LZ
 from . import social as SO
 from . import vinculos as V
@@ -809,6 +818,11 @@ def _estatico(P, H, p):
     return H._mandar(404, {"error": "no existe"})
 
 
+def _yo():
+    import sys
+    return sys.modules[__name__]
+
+
 def atender(P, H, metodo, p, d):
     """Todo `/coordinador/…`. `p` = las partes de la ruta después de `coordinador`."""
     if not P.es_duena():
@@ -859,6 +873,12 @@ def atender(P, H, metodo, p, d):
             return H._mandar(*baneos(P, viewer))
         if api == ["equipo"]:
             return H._mandar(*equipo(P, viewer))
+        if api == ["contenido"]:                                     # ★ 20-nov fase B (contenido.py)
+            return H._mandar(*CT.leer(_yo(), P, viewer, q.get("juego"), q.get("entorno") or "live", time.time()))
+        if api == ["contenido", "items"]:
+            return H._mandar(*CT.items(_yo(), P, viewer, q.get("juego"), q.get("entorno") or "live", q.get("q")))
+        if api == ["novedades"]:
+            return H._mandar(*CT.leer_novedades(_yo(), P, viewer))
         return H._mandar(404, {"error": "no existe"})
     if api == ["accion"]:
         return H._mandar(*accion(P, viewer, d))
@@ -866,4 +886,10 @@ def atender(P, H, metodo, p, d):
         return H._mandar(*decidir(P, viewer, d))
     if api == ["equipo"]:
         return H._mandar(*cambiar_equipo(P, viewer, d))
+    if api == ["contenido"]:                                         # ★ 20-nov fase B (contenido.py)
+        return H._mandar(*CT.guardar(_yo(), P, viewer, d, time.time()))
+    if api == ["contenido", "previa"]:
+        return H._mandar(*CT.previa(_yo(), P, viewer, d))
+    if api == ["novedades"]:
+        return H._mandar(*CT.guardar_novedades(_yo(), P, viewer, d))
     return H._mandar(404, {"error": "no existe"})
