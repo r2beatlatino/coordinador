@@ -339,10 +339,16 @@ def _cuentas():
 
 
 def cerrar_conexiones():
+    """★ 20-nov: la llama el manejador al terminar CADA conexión HTTP (ver `_Manejador.handle`). Antes no la llamaba
+    nadie y las conexiones de los hilos terminados quedaban abiertas: con toda la gente de Chile en Miami, el proceso
+    llegó a 1023 archivos abiertos (tope 1024) y cada pedido dio «unable to open database file» (login caído)."""
     for k in ("juego", "propia", "cuentas"):
         c = getattr(_hilo, k, None)
         if c is not None:
-            c.close()
+            try:
+                c.close()
+            finally:
+                setattr(_hilo, k, None)
             setattr(_hilo, k, None)
             setattr(_hilo, k + "_ruta", None)
 
@@ -1565,6 +1571,14 @@ def _archivo_panel(nombre):
 class _Manejador(BaseHTTPRequestHandler):
     server_version = "r2beat-portero"
     sys_version = ""
+
+    def handle(self):
+        # ★ 20-nov: cada conexión HTTP corre en SU hilo (ThreadingHTTPServer) y abre sus conexiones a las bases: al
+        #   terminar se cierran, siempre (ver `cerrar_conexiones`).
+        try:
+            super().handle()
+        finally:
+            cerrar_conexiones()
 
     def log_message(self, *_a):          # el log lo lleva `_log`, sin la línea por pedido
         pass
