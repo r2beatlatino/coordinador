@@ -40,6 +40,11 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     POST /coordinador/api/contenido {juego, entorno, clave, valor}   asistencia | ruleta | tira | lanzamiento (admin)
     POST /coordinador/api/contenido/previa {juego, entorno, clave, valor, mes?}   validar sin guardar
     POST /coordinador/api/novedades {noticias, base}   el moderador sólo toca las de sus juegos (ver contenido.py)
+    GET  /coordinador/api/gestion/<juego>/<live|test>/<ruta del panel del juego>?…   ★ 20-nov fase C (gestion.py)
+    GET  /coordinador/api/gestion/mios?juego=          lo que ESTA cuenta puede en ese juego (acciones y cupos)
+    GET  /coordinador/api/gestion/permisos             (ADMIN) los permisos y cupos de cada moderador por juego
+    POST /coordinador/api/gestion {juego, entorno, ruta, cuerpo}   una acción (lista cerrada; cupos del moderador)
+    POST /coordinador/api/gestion/permisos {uid, juego, acciones, cupo_rcoin, cupo_exp, reiniciar_dado?}  (ADMIN)
     GET  /coordinador/api/equipo                       admins y moderadores con sus juegos (sólo ADMIN)
     POST /coordinador/api/oauth {proveedor, destino?}  · canjear {ticket} · salir
     POST /coordinador/api/accion {accion, uid, pase, detalle}   aprobar | quitar | banear | desbanear (por pase)
@@ -56,6 +61,7 @@ VARIABLES
                         siempre. Ej.: https://coordinador.xn--eeos-gqab.link . Vacía = el panel no deja entrar.
     R2_PANEL_ARTE       la carpeta con el arte de los juegos (por omisión `panel_arte/` al lado de portero.db). ⛔ El
                         arte de los juegos (Softnyx, etc.) NO va al repo público: sin el archivo, la tarjeta usa su color.
+    R2_PANEL_GESTION    ★ 20-nov fase C «pase=http://…/api/interno/panel;…» el panel de cada servidor (ver gestion.py).
     R2_PANEL_CONTENIDO  ★ 20-nov «pase=http://…/api/interno/contenido;…» el contenido dinámico de cada servidor
                         (con la ficha interna R2_CUENTAS_FICHA_INTERNA). R2_NOVEDADES_FUENTE: el pase con las noticias.
     R2_PANEL_SALUD      «pase=url;…» el `/salud` de cada servidor por la red de adentro (ej. GunBound: {"en_linea": n}).
@@ -73,6 +79,7 @@ import urllib.parse
 import urllib.request
 
 from . import contenido as CT
+from . import gestion as GE
 from . import lanzamientos as LZ
 from . import social as SO
 from . import vinculos as V
@@ -697,7 +704,9 @@ def auditoria(P, viewer, limite=60):
     out = []
     for f in filas:
         if not admin:
-            if f["accion"] not in MOVIMIENTOS or not f["juego"] or not P.puede_en(viewer, f["juego"]):
+            # ★ 20-nov fase C: también lo que se hizo desde la gestión de SUS juegos («gestión · rcoin»…)
+            de_gestion = str(f["accion"] or "").startswith("gestión · ")
+            if (f["accion"] not in MOVIMIENTOS and not de_gestion) or not f["juego"] or not P.puede_en(viewer, f["juego"]):
                 continue
             if f["uid"] and P.rol_de(f["uid"]) is not None:
                 continue
@@ -879,6 +888,17 @@ def atender(P, H, metodo, p, d):
             return H._mandar(*CT.items(_yo(), P, viewer, q.get("juego"), q.get("entorno") or "live", q.get("q")))
         if api == ["novedades"]:
             return H._mandar(*CT.leer_novedades(_yo(), P, viewer))
+        if api == ["gestion", "permisos"]:                           # ★ 20-nov fase C (gestion.py)
+            return H._mandar(*GE.ver_permisos(_yo(), P, viewer))
+        if api == ["gestion", "mios"]:
+            jid = str(q.get("juego") or "")
+            if not GE._juego_ok(_yo(), P, viewer, jid):
+                return H._mandar(404, {"error": "Ese juego no existe o no está asignado a su cuenta."})
+            pases = (next((j for j in catalogo(P) if j["id"] == jid), {}).get("pases") or {})
+            entornos = {e: bool(pases.get(e)) and pases.get(e) in GE.fuentes() for e in ("live", "test")}
+            return H._mandar(200, dict(GE.permisos(P, viewer, jid), gestionable=any(entornos.values()), entornos=entornos))
+        if len(api) >= 4 and api[0] == "gestion":
+            return H._mandar(*GE.pedir(_yo(), P, viewer, api[1], api[2], "GET", "/".join(api[3:]), query=q))
         return H._mandar(404, {"error": "no existe"})
     if api == ["accion"]:
         return H._mandar(*accion(P, viewer, d))
@@ -892,4 +912,9 @@ def atender(P, H, metodo, p, d):
         return H._mandar(*CT.previa(_yo(), P, viewer, d))
     if api == ["novedades"]:
         return H._mandar(*CT.guardar_novedades(_yo(), P, viewer, d))
+    if api == ["gestion", "permisos"]:                               # ★ 20-nov fase C (gestion.py)
+        return H._mandar(*GE.poner_permisos(_yo(), P, viewer, d))
+    if api == ["gestion"]:
+        return H._mandar(*GE.pedir(_yo(), P, viewer, str(d.get("juego") or ""), str(d.get("entorno") or ""), "POST",
+                                   str(d.get("ruta") or ""), cuerpo=d.get("cuerpo")))
     return H._mandar(404, {"error": "no existe"})

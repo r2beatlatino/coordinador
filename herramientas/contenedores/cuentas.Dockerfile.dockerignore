@@ -8,6 +8,7 @@
 !servidor/lanzamientos.py
 !servidor/coordinador.py
 !servidor/contenido.py
+!servidor/gestion.py
 !servidor/panel
 !juegos.json
 !servidor/portero_panel.html

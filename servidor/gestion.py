@@ -1,0 +1,295 @@
+# -*- coding: utf-8 -*-
+"""gestion — ★ 20-nov-2026, FASE C del panel del Coordinador: la GESTIÓN de cada juego (tablero, fichas, acciones).
+
+Benja: *«la gestión de X juego»* · y para los moderadores *«con cupo y permisos asignables para X acción también»*.
+
+CÓMO
+- El panel le habla al server del juego por la red de adentro, con la ficha interna: `R2_PANEL_GESTION` =
+  «pase=http://…/api/interno/panel;…». En R2Beat esa puerta corre el PANEL VIEJO entero como un actor externo
+  (`panel_admin.con_externo`): nada se reescribe, y su auditoría dice «coordinador:<login>».
+- ⛔ LISTA CERRADA: sólo pasan las rutas de `RUTAS` (método + forma). Lo demás, 404 — también para un ADMIN.
+- QUIÉN PUEDE QUÉ (lo decide el Coordinador, el juego sólo ejecuta):
+    · ADMIN: todo lo de la lista, sin cupo.
+    · MODERADOR con ese juego asignado: lo de BASE (mirar, avisar, echar, sacar el chat) + las acciones que un ADMIN le
+      asignó para ESE juego (`ASIGNABLES`), cada una con su cupo si lo tiene (Rcoin, EXP).
+    · moderador de formato viejo (sin juegos) o sin ese juego: nada.
+- CUPOS: por moderador y por juego, en `portero.db` (`permisos_juego`). Se RESERVA antes de mandar (atómico: nunca
+  pasa del cupo aunque mande dos a la vez) y se DEVUELVE si el juego dice que no. El moderador sólo SUMA o RESTA
+  («poner» un valor fijo es de ADMIN: podría saltarse el cupo). Restar no gasta cupo.
+- PRIVACIDAD: a un moderador nunca le llega una IP, un login ni con quién comparte IP (`_SIN_PRIVADOS`).
+"""
+import json
+import os
+import re
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+TIMEOUT = 10
+
+BASE = ("ver", "aviso", "echar", "mute")
+# acción asignable -> (texto para el panel, cupo que gasta o None)
+ASIGNABLES = {
+    "rcoin": ("Dar o quitar Rcoin", "rcoin"),
+    "exp": ("Dar o quitar EXP", "exp"),
+    "item/dar": ("Dar ítems", None),
+    "item/quitar": ("Quitar ítems", None),
+    "apodo": ("Cambiar el apodo", None),
+    "gorila": ("Monedas gorila", None),
+    "chat": ("Leer el chat público guardado", None),
+}
+CUPOS = ("rcoin", "exp")
+CUPO_MAX = 100_000_000
+
+_N = r"\d{1,12}"
+# (método, regex de la ruta) -> acción que pide
+RUTAS = [
+    ("GET", r"salud", "ver"),
+    ("GET", r"conectados", "ver"),
+    ("GET", r"salas", "ver"),
+    ("GET", r"usuarios", "ver"),
+    ("GET", rf"usuario/{_N}", "ver"),
+    ("GET", rf"usuario/{_N}/historia", "ver"),
+    ("GET", rf"usuario/{_N}/dia", "ver"),
+    ("GET", r"catalogo", "ver"),
+    ("GET", r"muteos", "ver"),
+    ("GET", r"alertas", "ver"),
+    ("GET", r"chat", "chat"),
+    ("POST", r"aviso", "aviso"),
+    ("POST", rf"usuario/{_N}/echar", "echar"),
+    ("POST", rf"usuario/{_N}/mute", "mute"),
+    ("POST", rf"usuario/{_N}/desmute", "mute"),
+    ("POST", rf"usuario/{_N}/rcoin", "rcoin"),
+    ("POST", rf"usuario/{_N}/exp", "exp"),
+    ("POST", rf"usuario/{_N}/item/dar", "item/dar"),
+    ("POST", rf"usuario/{_N}/item/quitar", "item/quitar"),
+    ("POST", rf"usuario/{_N}/apodo", "apodo"),
+    ("POST", rf"usuario/{_N}/gorila", "gorila"),
+]
+_RUTAS = [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS]
+_SIN_PRIVADOS = frozenset({"ip", "ips", "login", "username", "misma_ip", "comparte_ip", "correo", "email", "geoip"})
+
+ESQUEMA = """
+CREATE TABLE IF NOT EXISTS permisos_juego (
+    uid        INTEGER NOT NULL,          -- el Eñeños ID del moderador
+    juego      TEXT NOT NULL,             -- el id del catálogo (r2beat2013, gunbound…)
+    acciones   TEXT NOT NULL DEFAULT '[]',
+    cupo_rcoin INTEGER NOT NULL DEFAULT 0,
+    cupo_exp   INTEGER NOT NULL DEFAULT 0,
+    dado_rcoin INTEGER NOT NULL DEFAULT 0,
+    dado_exp   INTEGER NOT NULL DEFAULT 0,
+    cambiado   TEXT,
+    quien      TEXT,
+    PRIMARY KEY (uid, juego)
+);
+"""
+_tabla_ok = set()
+_lock = threading.Lock()
+
+
+def _con(P):
+    c = P._propia()
+    if id(c) not in _tabla_ok:
+        c.executescript(ESQUEMA)
+        _tabla_ok.add(id(c))
+    return c
+
+
+# ── la red de adentro ─────────────────────────────────────────────────────────────────────────────
+def fuentes():
+    out = {}
+    for parte in (os.environ.get("R2_PANEL_GESTION") or "").split(";"):
+        if "=" in parte:
+            p, u = parte.split("=", 1)
+            if p.strip() and u.strip().startswith(("http://", "https://")):
+                out[p.strip()] = u.strip().rstrip("/")
+    return out
+
+
+def _http(url, ruta, query, cuerpo, quien, admin):
+    ficha = (os.environ.get("R2_CUENTAS_FICHA_INTERNA") or "").strip()
+    if not ficha:
+        return 503, {"error": "Falta la ficha interna: este servidor no se puede gestionar."}
+    cab = {"X-Ficha-Interna": ficha, "X-Coordinador-Quien": quien, "X-Coordinador-Admin": "1" if admin else "0",
+           "User-Agent": "enenos-coordinador", "Content-Type": "application/json"}
+    datos = None
+    if cuerpo is not None:
+        cab["X-R2"] = "1"
+        datos = json.dumps(cuerpo, ensure_ascii=False).encode("utf-8")
+    full = url + "/" + ruta + (("?" + urllib.parse.urlencode(query)) if query else "")
+    try:
+        with urllib.request.urlopen(urllib.request.Request(full, data=datos, headers=cab), timeout=TIMEOUT) as r:
+            return r.status, json.loads(r.read(8 << 20).decode("utf-8") or "{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read(65536).decode("utf-8") or "{}")
+        except ValueError:
+            return e.code, {"error": f"El servidor del juego contestó {e.code}."}
+    except (OSError, ValueError):
+        return 503, {"error": "El servidor del juego no contesta ahora. Pruebe en un rato."}
+
+
+def _limpiar(v):
+    """Saca lo privado (IP, login…) de una respuesta, en cualquier nivel."""
+    if isinstance(v, dict):
+        return {k: _limpiar(x) for k, x in v.items() if k not in _SIN_PRIVADOS}
+    if isinstance(v, list):
+        return [_limpiar(x) for x in v]
+    return v
+
+
+# ── permisos ──────────────────────────────────────────────────────────────────────────────────────
+def _juego_ok(CO, P, viewer, jid):
+    return P.rol_de(viewer) is not None and any(j["id"] == jid for j in CO.visibles(P, viewer))
+
+
+def permisos(P, viewer, jid):
+    """{rol, acciones: [...], cupos: {rcoin: {cupo, dado, queda}, exp: …}} de esa cuenta en ese juego."""
+    rol = P.rol_de(viewer)
+    if rol == "admin":
+        return {"rol": "admin", "acciones": list(BASE) + list(ASIGNABLES), "cupos": None, "poner": True}
+    mios = P.juegos_de_moderador(viewer) if rol == "moderador" else None
+    if rol != "moderador" or mios is None or jid not in mios:
+        return {"rol": rol, "acciones": [], "cupos": None, "poner": False}
+    r = _con(P).execute("SELECT * FROM permisos_juego WHERE uid = ? AND juego = ?", (int(viewer), jid)).fetchone()
+    extra = [a for a in json.loads(r["acciones"]) if a in ASIGNABLES] if r else []
+    cupos = {k: {"cupo": int(r[f"cupo_{k}"]) if r else 0, "dado": int(r[f"dado_{k}"]) if r else 0} for k in CUPOS}
+    for c in cupos.values():
+        c["queda"] = max(0, c["cupo"] - c["dado"])
+    return {"rol": "moderador", "acciones": list(BASE) + extra, "cupos": cupos, "poner": False}
+
+
+def _pide(metodo, ruta):
+    for m, rx, accion in _RUTAS:
+        if m == metodo and rx.match(ruta):
+            return accion
+    return None
+
+
+def _cupo_de(accion, cuerpo):
+    """(cupo, cuánto gasta) de ese pedido, o (None, 0). Sólo SUMAR gasta (restar no)."""
+    k = (ASIGNABLES.get(accion) or (None, None))[1]
+    if not k:
+        return None, 0
+    try:
+        v = int(cuerpo.get("valor"))
+    except (TypeError, ValueError, AttributeError):
+        return k, 0
+    return k, max(0, v)
+
+
+def _reservar(P, uid, jid, k, n):
+    """Suma `n` a lo dado SI entra en el cupo (en una sola sentencia: dos pedidos a la vez no lo pasan)."""
+    with _lock:
+        c = _con(P)
+        cur = c.execute(f"UPDATE permisos_juego SET dado_{k} = dado_{k} + ? WHERE uid = ? AND juego = ? "
+                        f"AND dado_{k} + ? <= cupo_{k}", (n, int(uid), jid, n))
+        c.commit()
+        return cur.rowcount == 1
+
+
+def _devolver(P, uid, jid, k, n):
+    with _lock:
+        c = _con(P)
+        c.execute(f"UPDATE permisos_juego SET dado_{k} = MAX(0, dado_{k} - ?) WHERE uid = ? AND juego = ?", (n, int(uid), jid))
+        c.commit()
+
+
+# ── el pedido ─────────────────────────────────────────────────────────────────────────────────────
+def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
+    """-> (código, datos). `ruta` = la del panel del juego (`usuario/123/rcoin`)."""
+    if not _juego_ok(CO, P, viewer, jid):
+        return 404, {"error": "Ese juego no existe o no está asignado a su cuenta."}
+    j = next((x for x in CO.catalogo(P) if x["id"] == jid), None)
+    pase = ((j or {}).get("pases") or {}).get(entorno) if entorno in ("live", "test") else None
+    url = fuentes().get(pase or "")
+    if not url:
+        return 404, {"error": "Este servidor todavía no se puede gestionar desde el Coordinador."}
+    ruta = str(ruta or "").strip("/")
+    accion = _pide(metodo, ruta)
+    if not accion:
+        return 404, {"error": "no existe"}
+    per = permisos(P, viewer, jid)
+    if accion not in per["acciones"]:
+        return 403, {"error": "Su cuenta no tiene permiso para esto en este juego. Lo asigna un ADMIN."}
+    admin = per["rol"] == "admin"
+    cuerpo = cuerpo if isinstance(cuerpo, dict) else ({} if metodo == "POST" else None)
+    k, n = (None, 0)
+    if metodo == "POST" and not admin:
+        if accion in ("rcoin", "exp") and str(cuerpo.get("modo") or "") != "sumar":
+            return 403, {"error": "Un moderador sólo suma o resta (poner un valor fijo es de un ADMIN)."}
+        k, n = _cupo_de(accion, cuerpo)
+        if k and n and not _reservar(P, viewer, jid, k, n):
+            q = per["cupos"][k]["queda"]
+            return 403, {"error": f"Eso pasa su cupo de {'Rcoin' if k == 'rcoin' else 'EXP'}: le quedan {q:,}.".replace(",", ".")}
+    q = {k2: str(v)[:120] for k2, v in (query or {}).items() if k2 not in ("juego", "entorno")} if metodo == "GET" else None
+    quien = "coordinador:" + (P._login_de(viewer) or f"uid {viewer}")
+    cod, d = _http(url, ruta, q, cuerpo if metodo == "POST" else None, quien, admin)
+    if k and n and cod != 200:
+        _devolver(P, viewer, jid, k, n)
+    if metodo == "POST" and cod == 200:
+        P._auditar(viewer, f"gestión · {accion}", None, pase, ruta[:120])
+    if not admin:
+        d = _limpiar(d)
+    if metodo == "POST" and k:
+        d = dict(d, cupos=permisos(P, viewer, jid)["cupos"])
+    return cod, d
+
+
+# ── el ADMIN reparte permisos y cupos ─────────────────────────────────────────────────────────────
+def ver_permisos(CO, P, viewer):
+    """GET /api/gestion/permisos (ADMIN): por moderador y juego, sus acciones y cupos. Más el catálogo de acciones."""
+    if P.rol_de(viewer) != "admin":
+        return 403, {"error": "Sólo un ADMIN reparte permisos."}
+    filas = _con(P).execute("SELECT * FROM permisos_juego").fetchall()
+    out = [{"uid": int(r["uid"]), "juego": r["juego"], "acciones": [a for a in json.loads(r["acciones"]) if a in ASIGNABLES],
+            "cupo_rcoin": int(r["cupo_rcoin"]), "cupo_exp": int(r["cupo_exp"]), "dado_rcoin": int(r["dado_rcoin"]),
+            "dado_exp": int(r["dado_exp"]), "cambiado": r["cambiado"] or "", "quien": r["quien"] or ""} for r in filas]
+    return 200, {"permisos": out, "base": list(BASE),
+                 "asignables": [{"id": k, "nombre": v[0], "cupo": v[1]} for k, v in ASIGNABLES.items()],
+                 "gestionables": sorted({CO.juego_de_pase(P, p) for p in fuentes()} - {None})}
+
+
+def poner_permisos(CO, P, viewer, d):
+    """POST /api/gestion/permisos {uid, juego, acciones, cupo_rcoin, cupo_exp, reiniciar_dado?} (ADMIN)."""
+    if P.rol_de(viewer) != "admin":
+        return 403, {"error": "Sólo un ADMIN reparte permisos."}
+    d = d if isinstance(d, dict) else {}
+    try:
+        uid = int(str(d.get("uid")).lstrip("#"))
+    except (TypeError, ValueError):
+        return 400, {"error": "Cuenta inválida."}
+    jid = str(d.get("juego") or "")
+    if P.rol_de(uid) != "moderador":
+        return 404, {"error": "Esa cuenta no es moderadora."}
+    mios = P.juegos_de_moderador(uid)
+    if mios is None or jid not in mios:
+        return 409, {"error": "Primero asígnele ese juego en el equipo."}
+    acc = d.get("acciones") or []
+    if not isinstance(acc, list) or not all(isinstance(a, str) and a in ASIGNABLES for a in acc):
+        return 400, {"error": "Acciones: " + " · ".join(ASIGNABLES)}
+    cupos = {}
+    for k in CUPOS:
+        try:
+            v = int(d.get(f"cupo_{k}") or 0)
+        except (TypeError, ValueError):
+            return 400, {"error": f"El cupo de {k} tiene que ser un número."}
+        if not 0 <= v <= CUPO_MAX:
+            return 400, {"error": f"El cupo de {k}: entre 0 y {CUPO_MAX:,}.".replace(",", ".")}
+        cupos[k] = v
+    reiniciar = bool(d.get("reiniciar_dado"))
+    with _lock:
+        c = _con(P)
+        c.execute("INSERT INTO permisos_juego (uid, juego, acciones, cupo_rcoin, cupo_exp, cambiado, quien) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(uid, juego) DO UPDATE SET acciones = excluded.acciones, "
+                  "cupo_rcoin = excluded.cupo_rcoin, cupo_exp = excluded.cupo_exp, cambiado = excluded.cambiado, "
+                  "quien = excluded.quien" + (", dado_rcoin = 0, dado_exp = 0" if reiniciar else ""),
+                  (uid, jid, json.dumps(sorted(set(acc))), cupos["rcoin"], cupos["exp"],
+                   time.strftime("%Y-%m-%d %H:%M:%S"), P._login_de(viewer) or ""))
+        c.commit()
+    P._auditar(viewer, "equipo: permisos del moderador", uid, jid,
+               f"{','.join(sorted(set(acc))) or 'sólo base'} · cupo Rcoin {cupos['rcoin']} · EXP {cupos['exp']}"
+               + (" · cupo reiniciado" if reiniciar else ""))
+    return ver_permisos(CO, P, viewer)
