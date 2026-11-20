@@ -27,7 +27,7 @@ CAMPOS = {"id", "nombre", "repo", "estado", "pases", "nota"}
 # ★ 19-nov (el panel del Coordinador): opcionales. `corto` = el nombre que se muestra en el panel y el launcher
 #   («R2Beat», «EDA»); `panel` = cómo se pinta su tarjeta. El ARTE se nombra acá pero NO vive en el repo (es de cada
 #   juego, a veces de terceros): el panel lo busca en su carpeta de arte y, si no está, usa el color.
-OPCIONALES = {"corto", "panel"}
+OPCIONALES = {"corto", "panel", "noticias"}   # ★ 20-nov: con qué nombre sale en el acordeón de noticias
 PANEL = {"color", "arte", "pos", "logo", "genero", "desc"}
 
 

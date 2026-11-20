@@ -1,5 +1,5 @@
 {
-  "_como_se_usa": "El catálogo de los juegos de Eñeños. Un juego nuevo = un bloque más. Después: python herramientas/catalogo.py (rehace la tabla del README). Lo leen el panel del Coordinador y el launcher. estado: produccion | beta | alpha | en_preparacion | en_planes",
+  "_como_se_usa": "El catálogo de los juegos de Eñeños. Un juego nuevo = un bloque más. Después: python herramientas/catalogo.py (rehace la tabla del README). Lo leen el panel del Coordinador y el launcher. noticias: con qué nombre sale en el acordeón de noticias del launcher (r2beat · eda · love · gunbound). estado: produccion | beta | alpha | en_preparacion | en_planes",
   "juegos": [
     {
       "id": "r2beat2013",
@@ -12,6 +12,7 @@
       },
       "nota": "El más completo. Su panel viejo (sólo R2Beat) es la base del panel del Coordinador.",
       "corto": "R2Beat",
+      "noticias": "r2beat",
       "panel": {
         "color": "243,38,134",
         "arte": "fondo-r2beat.jpg",
@@ -32,6 +33,7 @@
       },
       "nota": "Server propio en Python. Admin hoy: /salud y comandos de chat.",
       "corto": "GunBound",
+      "noticias": "gunbound",
       "panel": {
         "color": "95,200,255",
         "arte": "fondo-gunbound.jpg",
@@ -51,6 +53,7 @@
       },
       "nota": "Corre en el VPS de USA (eda-prod y eda-prueba). Su prueba todavía no tiene pase propio.",
       "corto": "EDA",
+      "noticias": "eda",
       "panel": {
         "color": "179,139,255",
         "arte": "eda-fondo.jpg",
