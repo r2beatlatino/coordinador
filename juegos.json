@@ -1,5 +1,5 @@
 {
-  "_como_se_usa": "El catálogo de los juegos de Eñeños. Un juego nuevo = un bloque más. Después: python herramientas/catalogo.py (rehace la tabla del README). Lo leen el panel del Coordinador y el launcher. noticias: con qué nombre sale en el acordeón de noticias del launcher (r2beat · eda · love · gunbound). estado: produccion | beta | alpha | en_preparacion | en_planes",
+  "_como_se_usa": "El catálogo de los juegos de Eñeños. Un juego nuevo = un bloque más. Después: python herramientas/catalogo.py (rehace la tabla del README). Lo leen el panel del Coordinador y el launcher. noticias: con qué nombre sale en el acordeón de noticias del launcher (r2beat · eda · love · gunbound · enenosbit). estado: produccion | beta | alpha | en_preparacion | en_planes",
   "juegos": [
     {
       "id": "r2beat2013",
@@ -73,6 +73,7 @@
       },
       "nota": "El server lo está montando la sesión de fluidez. El repo se crea cuando esté.",
       "corto": "Eñeñosbit 2027",
+      "noticias": "enenosbit",
       "panel": {
         "color": "111,220,156",
         "genero": "Ritmo · Nueva generación",
