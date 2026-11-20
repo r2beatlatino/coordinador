@@ -193,6 +193,42 @@ Comprobado: el EDA de Miami contesta, su lista (`ensayo…/eda/manifiesto.jws`) 
 canje `POST /eda/pase` vivo (400 «formato» con un cuerpo vacío), `eñeños.link/admin` 404. **El launcher viejo ya no
 entra a EDA** (era la condición de retirarlo).
 
+## 5i · ✅ LA MUDANZA DE R2BEAT 2013: PROD = MIAMI (20-nov)
+
+Benja: *«a Chile no avisaremos, solamente mandaremos nuestro nuevo launcher como actualización»*, *«la web seguirá
+prendida, el servicio apagado»*. Antes: el respaldo validado con el ensayo del día del reemplazo (copia temporal: 15
+chequeos, 0 mal) y el salto del launcher viejo probado de verdad (el 3.0.1 se actualiza solo al N2launcher y éste usa SU
+carpeta `Data`: no hereda el `net.json` que apuntaba a Chile).
+
+En orden:
+1. **Chile**: `r2beat-game2013` apagado y deshabilitado. La web y el server de parches siguen prendidos.
+2. **La base FINAL** (con el juego quieto: más fresca que un respaldo en caliente), bajada en pedazos de 2 MB con su
+   sha256 (las transferencias largas por ssh desde la PC de desarrollo se cortan) y subida a Miami.
+3. **Miami** (`herramientas/contenedores/usa/` → `cargar_chile_en_miami.sh`): respaldo de lo de antes, la base de Chile
+   en el volumen del juego, `portero importar` (las cuentas nuevas), `importar-amigos --apodos`, `enlazar_cuentas` (todas
+   enlazadas, ninguna suelta) y recién al final `vaciar-claves` (la base del juego deja de guardar contraseñas).
+4. **GitHub** `v-latest` (el botón de la web y el auto-update del launcher viejo) con el N2launcher, la descarga pública
+   comprobada por md5.
+5. **El server de parches de Chile** anuncia el N2launcher: cada launcher viejo se muda solo al abrirse.
+
+Lo que salió mal, y cómo se arregló:
+- **El `importar` falló la 1.ª vez:** una base en modo WAL, en una carpeta de root, no se abre en sólo lectura desde el
+  contenedor (SQLite necesita crear el `-shm`). Arreglo: `journal_mode=delete` sobre la copia y la carpeta a nombre del
+  usuario del contenedor.
+- **Las noticias y la tienda del launcher se pisaron:** viven DENTRO de `datos.db` (`launcher_contenido`) y la base de
+  Chile traía las suyas. Se restauraron desde el respaldo de Miami con `launcher_contenido.guardar`. ⇒ antes de pisar
+  una base, comparar clave por clave lo que el Coordinador editó.
+- **El login se cayó a los 15 min** («error interno»): el proceso de `cuentas` llegó a 1023 archivos abiertos (tope 1024)
+  — `cerrar_conexiones()` existía pero nadie la llamaba. Arreglo: el manejador la llama al terminar cada conexión
+  (`probar_conexiones.py`) + `ulimits: nofile 65536` en el override. ⇒ **Los ensayos probaron los DATOS, nunca la
+  CARGA**: después de un corte, mirar los errores ~30 min con la gente entrando.
+- **Los accesos directos del launcher viejo** («R2Beat TEST») seguían con su ícono: Windows guarda el ícono POR RUTA y el
+  exe se reemplaza en el mismo lugar. El launcher (3.0.23) escribe su ícono como `.ico` en una ruta nueva y apunta ahí
+  los accesos que son suyos.
+
+Después de la mudanza, en el Coordinador: **«Restablecer contraseña»** (sólo Admin; una provisoria al azar que se ve una
+vez, sesiones cerradas, auditoría sin la contraseña).
+
 ## 6 · Lo que queda
 
 - El **R2Beat moderno** (server + cliente de ~15 GB) lo arma la sesión de Fluidez en este mismo VPS, cuando Benja
