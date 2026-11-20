@@ -6,40 +6,93 @@
       "nombre": "R2Beat 2013",
       "repo": "r2beatlatino/R2beat-2013",
       "estado": "produccion",
-      "pases": { "live": "r2beat2013", "test": "r2beat2013-prueba" },
-      "nota": "El más completo. Su panel viejo (sólo R2Beat) es la base del panel del Coordinador."
+      "pases": {
+        "live": "r2beat2013",
+        "test": "r2beat2013-prueba"
+      },
+      "nota": "El más completo. Su panel viejo (sólo R2Beat) es la base del panel del Coordinador.",
+      "corto": "R2Beat",
+      "panel": {
+        "color": "243,38,134",
+        "arte": "fondo-r2beat.jpg",
+        "pos": "50% 32%",
+        "logo": "r2beat-logo.png",
+        "genero": "Ritmo · Carreras",
+        "desc": "Carreras en patines al ritmo de la música."
+      }
     },
     {
       "id": "gunbound",
       "nombre": "GunBound",
       "repo": "r2beatlatino/GunBound",
       "estado": "beta",
-      "pases": { "live": "gunbound", "test": "gunbound-prueba" },
-      "nota": "Server propio en Python. Admin hoy: /salud y comandos de chat."
+      "pases": {
+        "live": "gunbound",
+        "test": "gunbound-prueba"
+      },
+      "nota": "Server propio en Python. Admin hoy: /salud y comandos de chat.",
+      "corto": "GunBound",
+      "panel": {
+        "color": "95,200,255",
+        "arte": "fondo-gunbound.jpg",
+        "pos": "12% 30%",
+        "genero": "Artillería · Turnos",
+        "desc": "Duelos de artillería por turnos."
+      }
     },
     {
       "id": "eda",
       "nombre": "EDA · Espada del Alma",
       "repo": "r2beatlatino/EDA",
       "estado": "beta",
-      "pases": { "live": "eda", "test": null },
-      "nota": "Corre en el VPS de USA (eda-prod y eda-prueba). Su prueba todavía no tiene pase propio."
+      "pases": {
+        "live": "eda",
+        "test": null
+      },
+      "nota": "Corre en el VPS de USA (eda-prod y eda-prueba). Su prueba todavía no tiene pase propio.",
+      "corto": "EDA",
+      "panel": {
+        "color": "179,139,255",
+        "arte": "eda-fondo.jpg",
+        "pos": "55% 18%",
+        "genero": "Rol · Acción",
+        "desc": "Espada del Alma: rol y acción."
+      }
     },
     {
       "id": "r2beat-moderno",
       "nombre": "Eñeñosbit 2027",
       "repo": null,
       "estado": "en_preparacion",
-      "pases": { "live": "r2beat-moderno", "test": null },
-      "nota": "El server lo está montando la sesión de fluidez. El repo se crea cuando esté."
+      "pases": {
+        "live": "r2beat-moderno",
+        "test": null
+      },
+      "nota": "El server lo está montando la sesión de fluidez. El repo se crea cuando esté.",
+      "corto": "Eñeñosbit 2027",
+      "panel": {
+        "color": "111,220,156",
+        "genero": "Ritmo · Nueva generación",
+        "desc": "El ritmo de nueva generación."
+      }
     },
     {
       "id": "wolfteam",
       "nombre": "Wolf Team",
       "repo": "r2beatlatino/Wolf-Team",
       "estado": "en_planes",
-      "pases": { "live": null, "test": null },
-      "nota": "Va a tardar."
+      "pases": {
+        "live": null,
+        "test": null
+      },
+      "nota": "Va a tardar.",
+      "corto": "Wolf Team",
+      "panel": {
+        "color": "255,95,126",
+        "arte": "wolf-team-portada.jpg",
+        "genero": "Disparos · Equipos",
+        "desc": "Disparos en equipo. Todavía sin servidor."
+      }
     }
   ]
 }

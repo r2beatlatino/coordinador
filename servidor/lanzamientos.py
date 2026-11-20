@@ -194,6 +194,9 @@ def decidir(P, uid_admin, iid, accion, ahora=None):
     f = ficha(P, iid)
     if not f:
         return 404, {"error": "Esa solicitud no existe."}
+    # ★ 19-nov (Coordinador): un moderador con juegos asignados sólo decide las de SUS juegos
+    if not P.puede_en(uid_admin, f["juego"]):
+        return 403, {"error": "Ese juego no está asignado a tu cuenta."}
     if f["estado"] != "pendiente":
         return 409, {"error": f"Esa solicitud ya está {f['estado']} (por {f['quien'] or '—'}).", "invitacion": f}
     quien = P._login_de(uid_admin) or f"uid {uid_admin}"
@@ -206,6 +209,8 @@ def decidir(P, uid_admin, iid, accion, ahora=None):
         c.execute("UPDATE invitaciones SET estado = ?, decidida = ?, quien = ? WHERE id = ? AND estado = 'pendiente'",
                   ("aprobada" if accion == "aprobar" else "rechazada", int(ahora), quien, iid))
         c.commit()
+    if accion == "rechazar":                                  # ★ 19-nov: la aprobada ya queda por `admin_accion`
+        P._auditar(uid_admin, "rechazar invitación", f["uid"], f["juego"], f"invitación anticipada #{iid}")
     P._log(f"invitación #{iid}: {accion} por {quien}")
     _discord_en_hilo(P, iid)
     return 200, {"ok": True, "invitacion": ficha(P, iid)}

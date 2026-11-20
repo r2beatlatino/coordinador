@@ -66,6 +66,9 @@ LA LISTA DE APROBADOS — se maneja desde la consola del VPS (el panel, más ade
     python -m servidor.portero banear <usuario> [motivo…]     suspende la cuenta en cuentas.db (o banear-cuenta)
     python -m servidor.portero desbanear <usuario>            reactiva la cuenta en cuentas.db (o desbanear-cuenta)
 ★ 12-nov: también hay PANEL web (`/cuentas/admin`, y por proxy `eñeños.link/admin`), sólo para los ADMIN de admin.txt.
+★ 19-nov: y el PANEL DEL COORDINADOR (`/coordinador/…`, servidor/coordinador.py): se entra con Discord/Google vinculado
+  a un Eñeños ID con rol; en `moderadores.txt` cada moderador puede llevar sus juegos (`uid eda,gunbound`).
+  Ver documentacion/PANEL_COORDINADOR.md.
 Un ban de R2Beat (`BANNED:` en el hash) o una cuenta fusionada (`FUSIONADA:`) tampoco recibe pases.
 
 VARIABLES
@@ -93,6 +96,7 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 import secrets
 import sqlite3
 import sys
@@ -106,6 +110,7 @@ from . import firma_ed25519 as ed
 from . import vinculos as V          # ★ 16-nov: entrar / registrarse / vincular con Google y Discord
 from . import social as SO           # ★ 16-nov: amigos, estado y chat de la plataforma
 from . import lanzamientos as LZ     # ★ 18-nov: cuándo se abre cada juego + invitaciones anticipadas (Discord)
+from . import coordinador as CO      # ★ 19-nov: el panel del Coordinador Eñeños (fase A: entrar, juegos, la red)
 
 # ⚠ Este módulo NO se disfraza el `__file__` (ver CLAUDE.md §2): `RAIZ` es de verdad la carpeta de arriba de `servidor/`.
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -296,6 +301,7 @@ def _propia():
         c.execute("PRAGMA journal_mode = WAL")
         c.executescript(ESQUEMA)
         c.executescript(LZ.ESQUEMA)
+        c.executescript(CO.ESQUEMA)
         _hilo.propia, _hilo.propia_ruta = c, ruta
     return c
 
@@ -944,55 +950,99 @@ def ruta_admins():
     return os.path.join(base, "admin.txt")
 
 
+_JUEGOS_LINEA = re.compile(r"^(?:-|[a-z0-9][a-z0-9-]*(?:\s*,\s*[a-z0-9][a-z0-9-]*)*)$")
+
+
+def partir_linea_rol(cruda):
+    """★ 19-nov (Coordinador, fase A): una línea de `admin.txt` / `moderadores.txt` -> (identidad, juegos).
+    `juegos` = None si la línea no los trae (= como siempre: un moderador SIN lista puede en todos los juegos, con
+    las acciones de antes) o un frozenset con los ids del catálogo (`juegos.json`); `-` = ninguno.
+        110                     -> ("110", None)
+        110 eda,gunbound        -> ("110", {"eda", "gunbound"})
+        mod1   r2beat2013       -> ("mod1", {"r2beat2013"})
+        110 -                   -> ("110", frozenset())
+    ⛔ Si lo que sigue a la identidad NO tiene forma de lista de juegos, la línea entera es la identidad (como antes:
+       un «@apodo con espacios» sigue siendo un apodo)."""
+    linea = str(cruda).split("#", 1)[0].strip()
+    if not linea:
+        return "", None
+    partes = linea.split(None, 1)
+    if len(partes) == 2 and _JUEGOS_LINEA.match(partes[1].strip()):
+        resto = partes[1].strip()
+        if resto == "-":
+            return partes[0], frozenset()
+        return partes[0], frozenset(j.strip() for j in resto.split(",") if j.strip())
+    return linea, None
+
+
 def _leer_admins(ruta):
-    uids = set()
+    return frozenset(_leer_roles(ruta))
+
+
+def _leer_roles(ruta):
+    """{uid: juegos} de un archivo de roles (ver `partir_linea_rol`). Dos líneas de la misma cuenta se juntan; si
+    alguna no trae lista, queda sin lista (todos)."""
+    roles = {}
     with open(ruta, encoding="utf-8", errors="replace") as f:
         for cruda in f:
-            linea = cruda.split("#", 1)[0].strip()
+            linea, juegos = partir_linea_rol(cruda)
             if not linea:
                 continue
-            if linea.isdigit():
-                n = int(linea)
-                if es_duena():
-                    cc = _cuentas()
-                    if cc.execute("SELECT 1 FROM cuentas WHERE uid = ?", (n,)).fetchone():
-                        uids.add(n)
-                    else:
-                        r_imp = cc.execute("SELECT uid FROM importadas WHERE uid_viejo = ?", (n,)).fetchone()
-                        if r_imp:
-                            uids.add(int(r_imp[0]))
-                        elif n >= _uid_nuevas_desde():
-                            uids.add(n)
+            for u in _uids_de_identidad(linea):
+                if u in roles:
+                    roles[u] = None if (roles[u] is None or juegos is None) else roles[u] | juegos
                 else:
-                    uids.add(n)
-            elif linea.startswith("@"):
-                if es_duena():
-                    continue
-                try:
-                    filas = _juego().execute("SELECT uid FROM chars WHERE lower(nickname) = lower(?)",
-                                             (linea[1:],)).fetchall()
-                except sqlite3.Error:
-                    filas = []
-                if len(filas) == 1:
-                    uids.add(int(filas[0][0]))
-            elif es_duena():
-                r = _cuentas().execute("SELECT uid FROM cuentas WHERE usuario = ? COLLATE BINARY", (linea,)).fetchone()
-                if r:
-                    uids.add(int(r[0]))
+                    roles[u] = juegos
+    return roles
+
+
+def _uids_de_identidad(linea):
+    """La(s) cuenta(s) que nombra una identidad de `admin.txt` / `moderadores.txt` (uid, login o @apodo)."""
+    uids = set()
+    if linea.isdigit():
+        n = int(linea)
+        if es_duena():
+            cc = _cuentas()
+            if cc.execute("SELECT 1 FROM cuentas WHERE uid = ?", (n,)).fetchone():
+                uids.add(n)
             else:
-                r = _juego().execute("SELECT uid FROM users WHERE username = ?", (linea,)).fetchone()
-                if r:
-                    uids.add(int(r[0]))
+                r_imp = cc.execute("SELECT uid FROM importadas WHERE uid_viejo = ?", (n,)).fetchone()
+                if r_imp:
+                    uids.add(int(r_imp[0]))
+                elif n >= _uid_nuevas_desde():
+                    uids.add(n)
+        else:
+            uids.add(n)
+    elif linea.startswith("@"):
+        if es_duena():
+            return frozenset()
+        try:
+            filas = _juego().execute("SELECT uid FROM chars WHERE lower(nickname) = lower(?)",
+                                     (linea[1:],)).fetchall()
+        except sqlite3.Error:
+            filas = []
+        if len(filas) == 1:
+            uids.add(int(filas[0][0]))
+    elif es_duena():
+        r = _cuentas().execute("SELECT uid FROM cuentas WHERE usuario = ? COLLATE BINARY", (linea,)).fetchone()
+        if r:
+            uids.add(int(r[0]))
+    else:
+        r = _juego().execute("SELECT uid FROM users WHERE username = ?", (linea,)).fetchone()
+        if r:
+            uids.add(int(r[0]))
     return frozenset(uids)
 
 
 def _lista_de(cache, ruta):
-    """Los uids de un archivo de roles, releído SÓLO si cambió (fecha): se consulta en cada pedido del panel."""
+    """Los uids de un archivo de roles, releído SÓLO si cambió (fecha): se consulta en cada pedido del panel.
+    ★ 19-nov: guarda también `mapa` = {uid: juegos} (los juegos asignados de cada moderador)."""
     fecha = os.path.getmtime(ruta) if os.path.isfile(ruta) else None
     modo = es_duena()
     with _escribir:
         if ruta != cache["ruta"] or fecha != cache["fecha"] or modo != cache.get("modo"):
-            cache.update(ruta=ruta, fecha=fecha, modo=modo, uids=_leer_admins(ruta) if fecha else frozenset())
+            mapa = _leer_roles(ruta) if fecha else {}
+            cache.update(ruta=ruta, fecha=fecha, modo=modo, uids=frozenset(mapa), mapa=mapa)
         return cache["uids"]
 
 
@@ -1017,6 +1067,77 @@ def ruta_moderadores():
 
 def moderadores():
     return _lista_de(_moderadores, ruta_moderadores())
+
+
+# ★ 19-nov (Coordinador, fase A) — LOS JUEGOS ASIGNADOS. En `moderadores.txt`, después de la identidad, la lista de
+#   juegos del catálogo (`juegos.json`): `110 eda,gunbound`. Compatible con lo de antes:
+#     · SIN lista  -> como siempre: ve todos los juegos y sólo APRUEBA / QUITA (Benja, 12-nov: «sin banear»);
+#     · CON lista  -> sólo ve y toca ESOS juegos (también invitaciones y auditoría), y ahí además puede BANEAR /
+#                     DESBANEAR por juego. `-` = ninguno (está en el equipo pero sin juegos todavía).
+#   Los asigna un ADMIN desde «Moderadores y permisos» del Coordinador (`escribir_moderador`), y queda en la auditoría.
+ACCIONES_MODERADOR_ASIGNADO = ("aprobar", "quitar", "banear", "desbanear")
+
+
+def juegos_de_moderador(uid):
+    """Los juegos del catálogo de ese moderador: frozenset, o None = sin lista (todos, como antes)."""
+    moderadores()
+    return _moderadores.get("mapa", {}).get(int(uid))
+
+
+def juegos_de_rol(uid):
+    """None = todos los juegos (ADMIN, o moderador sin lista) · frozenset = sólo ésos · frozenset() = ninguno."""
+    rol = rol_de(uid)
+    if rol == "admin":
+        return None
+    if rol == "moderador":
+        return juegos_de_moderador(uid)
+    return frozenset()
+
+
+def puede_en(uid, pase):
+    """¿Esa cuenta del equipo puede tocar ese pase (`aud`: eda, gunbound-prueba, r2beat2013-subir…)?"""
+    if rol_de(uid) is None:
+        return False
+    permitidos = juegos_de_rol(uid)
+    return permitidos is None or CO.juego_de_pase(sys.modules[__name__], pase) in permitidos
+
+
+def escribir_moderador(uid, juegos, quien="", ahora_txt=None):
+    """Pone (o saca, con `juegos=False`) una cuenta de `moderadores.txt` con su lista de juegos, SIN tocar las demás
+    líneas ni los comentarios. `juegos`: iterable de ids del catálogo (vacío = `-`, ninguno). Escritura atómica
+    (archivo nuevo + `os.replace`). -> cuántas líneas cambiaron o se sumaron. ⛔ El que llama valida y audita."""
+    uid = int(uid)
+    ruta = ruta_moderadores()
+    lista = None if juegos is False else (",".join(sorted({str(j) for j in juegos})) or "-")
+    lineas = []
+    if os.path.isfile(ruta):
+        with open(ruta, encoding="utf-8", errors="replace") as f:
+            lineas = f.read().splitlines()
+    nuevas, tocadas = [], 0
+    for cruda in lineas:
+        ident, _j = partir_linea_rol(cruda)
+        if ident and uid in _uids_de_identidad(ident):
+            tocadas += 1
+            if lista is None:
+                continue                                            # sacar del equipo
+            coment = ("  #" + cruda.split("#", 1)[1]) if "#" in cruda else ""
+            nuevas.append(f"{ident} {lista}{coment}")
+        else:
+            nuevas.append(cruda)
+    if lista is not None and not tocadas:
+        nuevas.append(f"{uid} {lista}  # desde el Coordinador, {ahora_txt or _ahora_txt()}")
+        tocadas = 1
+    if not tocadas:
+        return 0
+    os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
+    tmp = ruta + ".nuevo"
+    with _escribir:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(nuevas) + "\n")
+        os.replace(tmp, ruta)
+        _moderadores["fecha"] = None                                # se relee en el próximo pedido
+    _log(f"moderadores.txt: uid={uid} -> {lista if lista is not None else '(fuera)'} ({quien})")
+    return tocadas
 
 
 def rol_de(uid):
@@ -1058,16 +1179,24 @@ def admin_entrar(usuario, clave_txt=None, ip="", ahora=None):
     if rol is None:
         _anotar_fallo([f"adm-ip:{ip}"], ahora)
         return 401, {"error": "Usuario o contraseña incorrectos."}, None
+    token = abrir_sesion_admin(uid, ip, ahora)
+    _auditar(uid, "entrar al panel", None, None, rol)
+    _log(f"panel: entró el {rol} uid={uid}")
+    return 200, {"admin": _login_de(uid), "rol": rol}, token
+
+
+def abrir_sesion_admin(uid, ip="", ahora=None):
+    """Una sesión del panel (8 h) para una cuenta del equipo. -> el token (va en una cookie HttpOnly). ★ 19-nov: la
+    usan el panel chico (`/cuentas/admin`) y el Coordinador (`servidor/coordinador.py`)."""
+    ahora = time.time() if ahora is None else ahora
     token = secrets.token_urlsafe(32)
     with _escribir:
         c = _propia()
         c.execute("DELETE FROM sesiones_admin WHERE vence < ?", (int(ahora),))
         c.execute("INSERT INTO sesiones_admin VALUES (?, ?, ?, ?, ?)",
-                  (_huella(token), uid, int(ahora), int(ahora + ADMIN_HORAS * 3600), ip[:64]))
+                  (_huella(token), int(uid), int(ahora), int(ahora + ADMIN_HORAS * 3600), str(ip or "")[:64]))
         c.commit()
-    _auditar(uid, "entrar al panel", None, None, rol)
-    _log(f"panel: entró el {rol} uid={uid}")
-    return 200, {"admin": _login_de(uid), "rol": rol}, token
+    return token
 
 
 def admin_de(token, ahora=None):
@@ -1162,8 +1291,14 @@ def admin_accion(uid_admin, accion, uid, juego="eda", detalle=""):
     rol = rol_de(uid_admin)
     if rol is None:
         return 401, {"error": "Tenés que entrar con una cuenta ADMIN o MODERADOR."}
-    if rol != "admin" and accion not in ACCIONES_MODERADOR:
-        return 403, {"error": "Los moderadores sólo pueden aprobar o quitar."}
+    if rol != "admin":
+        asignados = juegos_de_moderador(uid_admin)
+        if asignados is None and accion not in ACCIONES_MODERADOR:
+            return 403, {"error": "Los moderadores sólo pueden aprobar o quitar."}
+        if accion not in ACCIONES_MODERADOR_ASIGNADO:
+            return 403, {"error": "Los moderadores no pueden hacer eso."}
+        if not puede_en(uid_admin, juego):
+            return 403, {"error": "Ese juego no está asignado a tu cuenta."}
     try:
         uid = int(uid)
     except (TypeError, ValueError):
@@ -1276,7 +1411,7 @@ class _Manejador(BaseHTTPRequestHandler):
         rol = rol_de(uid) or "moderador"
         q = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).items()}
         if p == ["admin", "invitaciones"]:                            # ★ 18-nov: todas las pendientes
-            fs = LZ.pendientes(sys.modules[__name__])
+            fs = [f for f in LZ.pendientes(sys.modules[__name__]) if puede_en(uid, f["juego"])]
             if rol != "admin":
                 for f in fs:
                     if rol_de(f["uid"]) == "admin":
@@ -1327,6 +1462,8 @@ class _Manejador(BaseHTTPRequestHandler):
             p = self._partes()
             if p and p[0] == "admin":
                 return self._get_admin(p)
+            if p and p[0] == CO.PREFIJO:                             # ★ 19-nov: el panel del Coordinador
+                return CO.atender(sys.modules[__name__], self, "GET", p[1:], None)
             if p == ["salud"]:
                 return self._mandar(200, {"ok": True})
             # ★ 16-nov: Google y Discord (servidor/vinculos.py)
@@ -1340,7 +1477,9 @@ class _Manejador(BaseHTTPRequestHandler):
                 return self._mandar(302, b"", extra=(("Location", url), ("Referrer-Policy", "no-referrer")))
             if p == ["oauth", "vuelta"] and es_duena():
                 q = {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).items()}
-                codigo, cuerpo = V.vuelta_de(sys.modules[__name__], q)
+                codigo, cuerpo = V.vuelta_de(sys.modules[__name__], q, al_panel=lambda f, r, a: CO.al_volver(sys.modules[__name__], f, r, a))
+                if codigo == 302:                                    # ★ 19-nov: el ingreso al Coordinador (ticket)
+                    return self._mandar(302, b"", extra=(("Location", cuerpo), ("Referrer-Policy", "no-referrer")))
                 return self._mandar(codigo, cuerpo, tipo="text/html; charset=utf-8", extra=self._SEGURIDAD_OAUTH)
             if p == ["oauth", "vinculos"] and es_duena():
                 return self._mandar(*V.lista(sys.modules[__name__], self._token()))
@@ -1386,6 +1525,8 @@ class _Manejador(BaseHTTPRequestHandler):
             p = self._partes()
             if p and p[0] == "admin":
                 return self._post_admin(p, d)
+            if p and p[0] == CO.PREFIJO:                             # ★ 19-nov: el panel del Coordinador
+                return CO.atender(sys.modules[__name__], self, "POST", p[1:], d)
             if p == ["interno", "cuenta"]:
                 return self._mandar(*admin_interno_crear(
                     d.get("usuario"), d.get("pass_sha256_upper"), self._ficha_interna()))

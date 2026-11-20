@@ -49,6 +49,12 @@ ver(roto(lambda js: js[0].update(estado="vivo")), "control: un estado inventado 
 ver(roto(lambda js: js[1].update(pases={"live": "r2beat2013", "test": None})), "control: un pase de otro juego salta")
 ver(roto(lambda js: js[0].pop("nota")), "control: un campo de menos salta")
 ver(roto(lambda js: js[0].update(repo="sin-barra")), "control: un repo sin «dueño/nombre» salta")
+# ★ 19-nov (el panel del Coordinador): `corto` y `panel` son opcionales, pero con forma
+ver(not roto(lambda js: [(j.pop("panel", None), j.pop("corto", None)) for j in js]), "sin «panel» ni «corto» el catálogo sigue bien")
+ver(roto(lambda js: js[0].update(inventado=1)), "control: un campo inventado salta")
+ver(roto(lambda js: js[0]["panel"].update(color="rosa")), "control: un color que no es «r,g,b» salta")
+ver(roto(lambda js: js[0]["panel"].update(arte="../../etc/passwd")), "control: un arte con ruta (no un nombre simple) salta")
+ver(roto(lambda js: js[0]["panel"].update(script="x")), "control: una clave de más en «panel» salta")
 c = copy.deepcopy(cat); c["juegos"].append({**cat["juegos"][0], "id": "nuevo", "nombre": "Juego Nuevo",
                                             "pases": {"live": "nuevo", "test": None}})
 ver(catalogo.readme_con_tabla(readme, c) != readme, "control: sumar un juego cambia la tabla (no queda vieja)")

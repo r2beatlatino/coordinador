@@ -6,5 +6,8 @@
 !servidor/social.py
 !servidor/firma_ed25519.py
 !servidor/lanzamientos.py
+!servidor/coordinador.py
+!servidor/panel
+!juegos.json
 !servidor/portero_panel.html
 !servidor/portero_panel.js

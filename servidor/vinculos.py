@@ -107,14 +107,17 @@ def _limpiar(ahora):
         _flujos.pop(k, None)
 
 
-def iniciar(P, proveedor, modo, token, ip, ahora=None):
-    """-> (código, datos). `P` es el módulo portero (sesiones, freno, base de cuentas)."""
+def iniciar(P, proveedor, modo, token, ip, ahora=None, extra=None):
+    """-> (código, datos). `P` es el módulo portero (sesiones, freno, base de cuentas).
+    ★ 19-nov: modo «panel» = entrar al Coordinador (`servidor/coordinador.py`): lo pide el panel, no el launcher, y
+    a la vuelta no se abre sesión acá sino un TICKET para el panel. `extra` va guardado en el flujo (destino y huella
+    del navegador, que ya validó el coordinador)."""
     ahora = time.time() if ahora is None else ahora
     if not P.es_duena():
         return 404, {"error": "no existe"}
     if proveedor not in PROVEEDORES or not prendido(proveedor):
         return 400, {"error": "Ese método de entrada todavía no está disponible."}
-    if modo not in ("entrar", "vincular"):
+    if modo not in ("entrar", "vincular", "panel"):
         return 400, {"error": "pedido mal armado"}
     with _lock:
         v = [t for t in _por_ip.get(ip, []) if ahora - t < FRENO_VENTANA]
@@ -135,7 +138,8 @@ def iniciar(P, proveedor, modo, token, ip, ahora=None):
         if len(_flujos) > 5000:
             return 503, {"error": "Demasiados pedidos a la vez. Intente de nuevo en un momento."}
         _flujos[sid] = {"proveedor": proveedor, "modo": modo, "uid": uid, "ip": ip, "creado": ahora,
-                        "verificador": verificador, "estado": "pendiente", "resultado": None}
+                        "verificador": verificador, "estado": "pendiente", "resultado": None,
+                        "extra": dict(extra or {})}
     return 200, {"sid": sid, "url": base() + "/oauth/ir/" + sid}
 
 
@@ -193,6 +197,8 @@ def _resolver(P, f, externo, nombre, ahora):
     c = P._cuentas()
     prov = f["proveedor"]
     ya = c.execute("SELECT uid FROM vinculos WHERE proveedor = ? AND externo = ?", (prov, externo)).fetchone()
+    if f["modo"] == "panel":                 # ★ 19-nov: sólo QUIÉN es; el coordinador decide (rol, estado) y da el ticket
+        return {"panel": True, "uid": int(ya["uid"]) if ya else None, "proveedor": prov, "nombre": nombre}
     if f["modo"] == "vincular":
         if ya and int(ya["uid"]) != int(f["uid"]):
             return {"error": f"Esa cuenta de {PROVEEDORES[prov]['nombre']} ya está vinculada a otro Eñeños ID."}
@@ -221,8 +227,10 @@ def _sesion(P, uid, ip, ahora):
             "juegos": P.juegos_de(uid)}
 
 
-def vuelta_de(P, q, ahora=None):
-    """GET /oauth/vuelta. -> (código, html). Nunca deja ver el resultado en la página: lo lee el launcher."""
+def vuelta_de(P, q, ahora=None, al_panel=None):
+    """GET /oauth/vuelta. -> (código, html). Nunca deja ver el resultado en la página: lo lee el launcher.
+    ★ 19-nov: si el flujo es del PANEL (modo «panel») -> (302, dirección): `al_panel(flujo, resultado, ahora)` emite el
+    ticket y arma la dirección de vuelta (sólo la de la lista blanca). Sin `al_panel`, o si no hay a dónde volver: 400."""
     ahora = time.time() if ahora is None else ahora
     sid = str(q.get("state") or "")
     with _lock:
@@ -239,6 +247,13 @@ def vuelta_de(P, q, ahora=None):
         except Exception as e:                                      # noqa: BLE001 — el proveedor falló o tardó
             P._log(f"⚠ oauth {f['proveedor']}: {type(e).__name__}")
             res = {"error": f"No se pudo confirmar con {PROVEEDORES[f['proveedor']]['nombre']}. Inténtelo de nuevo."}
+    if f["modo"] == "panel":
+        with _lock:
+            _flujos.pop(sid, None)                                  # de un solo uso: el resultado viaja en el ticket
+        destino = al_panel(f, res, ahora) if al_panel else None
+        if destino:
+            return 302, destino
+        return 400, pagina("No se pudo completar", "El panel no está configurado. Avise a un administrador.")
     with _lock:
         f["resultado"], f["estado"] = res, "listo"
     if res.get("error"):

@@ -24,6 +24,11 @@ MARCA_FIN = "<!-- juegos:fin -->"
 ESTADOS = {"produccion": "🟢 en producción", "beta": "🟡 beta", "alpha": "🟠 alpha",
            "en_preparacion": "🔧 en preparación", "en_planes": "💭 en planes"}
 CAMPOS = {"id", "nombre", "repo", "estado", "pases", "nota"}
+# ★ 19-nov (el panel del Coordinador): opcionales. `corto` = el nombre que se muestra en el panel y el launcher
+#   («R2Beat», «EDA»); `panel` = cómo se pinta su tarjeta. El ARTE se nombra acá pero NO vive en el repo (es de cada
+#   juego, a veces de terceros): el panel lo busca en su carpeta de arte y, si no está, usa el color.
+OPCIONALES = {"corto", "panel"}
+PANEL = {"color", "arte", "pos", "logo", "genero", "desc"}
 
 
 def errores(cat):
@@ -35,9 +40,19 @@ def errores(cat):
     vistos, pases = set(), set()
     for i, j in enumerate(juegos):
         donde = f"juego #{i + 1} ({j.get('id', '?')})"
-        if set(j) != CAMPOS:
-            mal.append(f"{donde}: campos {sorted(set(j) ^ CAMPOS)} de más o de menos")
+        if not CAMPOS <= set(j) <= CAMPOS | OPCIONALES:
+            mal.append(f"{donde}: campos {sorted((set(j) - OPCIONALES) ^ CAMPOS)} de más o de menos")
             continue
+        if "corto" in j and not (isinstance(j["corto"], str) and 1 <= len(j["corto"]) <= 24):
+            mal.append(f"{donde}: «corto» es un texto de 1 a 24 letras")
+        pan = j.get("panel", {})
+        if not isinstance(pan, dict) or set(pan) - PANEL:
+            mal.append(f"{donde}: «panel» sólo lleva {sorted(PANEL)}")
+        elif "color" in pan and not re.fullmatch(r"\d{1,3},\d{1,3},\d{1,3}", str(pan["color"])):
+            mal.append(f"{donde}: el color del panel va como «r,g,b»")
+        elif any(k in pan and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*\.(jpg|jpeg|png|webp)", str(pan[k]))
+                 for k in ("arte", "logo")):
+            mal.append(f"{donde}: el arte del panel es un nombre de archivo simple (.jpg/.png/.webp)")
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", j["id"] or ""):
             mal.append(f"{donde}: el id va en minúsculas, números y guiones")
         if j["id"] in vistos:

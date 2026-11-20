@@ -97,6 +97,7 @@ def preparar(c):
 _lock = threading.Lock()
 _latidos = {}               # uid -> {"t", "juego"}
 _en_juego = {}              # eid -> {"t", "juego", ...lo que contó el juego}
+_lecturas = {}              # ★ 19-nov: juego -> cuándo contestó su presencia por última vez (el panel del Coordinador)
 _hilo = {"vivo": False, "purga": 0.0}
 _freno = {}                 # uid -> [t, ...]
 _visto_escrito = {}         # uid -> cuándo se guardó su `visto` por última vez
@@ -127,6 +128,8 @@ def leer_juegos(P, ahora=None):
                 d = json.loads(r.read().decode("utf-8"))
         except Exception:                                              # noqa: BLE001 — ese juego no contesta: queda el resto
             continue
+        with _lock:
+            _lecturas[juego] = ahora
         try:
             traer_amistades(P, juego, url, ficha)
         except Exception as e:                                         # noqa: BLE001 — sin amistades no se cae la presencia
@@ -243,6 +246,29 @@ def estado_de(uid, ahora):
         return {"tipo": "launcher"}
     visto = max((lat or {}).get("t", 0), (g or {}).get("t", 0))
     return {"tipo": "desconectado", "visto": int(visto) if visto else None}
+
+
+def jugando_por_juego(P, ahora=None):
+    """★ 19-nov (el panel del Coordinador): {juego: cuántos juegan AHORA} SÓLO de los juegos que cuentan su presencia
+    (`R2_PRESENCIA`) y contestaron hace poco. Un juego que no contesta NO aparece (= «sin dato», nunca un 0 de mentira).
+    Arranca el hilo de la presencia si todavía no corría (lo mismo que hace el primer latido de un launcher)."""
+    ahora = time.time() if ahora is None else ahora
+    _arrancar_hilo(P)
+    out = {}
+    with _lock:
+        for juego, _url in _fuentes():
+            t = _lecturas.get(juego)
+            if t is not None and ahora - t <= VIDA_JUEGO:
+                out[juego] = 0
+        for g in _en_juego.values():
+            if g["juego"] in out and ahora - g["t"] <= VIDA_JUEGO:
+                out[g["juego"]] += 1
+    return out
+
+
+def presencia_configurada():
+    """Los juegos que cuentan su presencia (tengan o no respuesta ahora)."""
+    return {j for j, _u in _fuentes()}
 
 
 # ── ayudas ─────────────────────────────────────────────────────────────────────────────────────

@@ -14,3 +14,6 @@ admin.txt
 gm.txt
 __pycache__/
 _trabajo/
+
+# ★ 19-nov: el arte de los juegos para el panel (de terceros: NO va al repo público; vive en el volumen)
+panel_arte/
