@@ -8,7 +8,7 @@
      #/persona/<uid>   vínculos, estado y permisos por juego (★ 20-nov: banear en varios juegos, con tiempo y motivo)
      #/j/<juego>/<live|test>/<parte>   ★ fase B (20-nov): el contenido dinámico del launcher de ese juego
                        (asistencia · ruleta · avisos del lobby · lanzamiento). ★ fase C: la GESTIÓN, antes del contenido:
-                       resumen (el tablero) · personas (y personas/<uid>: la ficha de un personaje)
+                       resumen (el tablero) · personas (y personas/<uid>: la ficha de un personaje) · ★ torneos
      #/novedades       ★ fase B: el acordeón de noticias de todos los launchers
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 const $ = (s, r = document) => r.querySelector(s);
@@ -351,7 +351,11 @@ const ACC_TXT = { aprobar: ['aprobó a', 'check', 'verde'], quitar: ['le quitó 
   'gestión · rcoin': ['cambió el Rcoin de un jugador', 'coins', 'oro'], 'gestión · exp': ['cambió la EXP de un jugador', 'sparkle', 'oro'],
   'gestión · item/dar': ['le dio un ítem a un jugador', 'gift', 'rosa'], 'gestión · item/quitar': ['le quitó un ítem a un jugador', 'gift', ''],
   'gestión · apodo': ['cambió el apodo de un jugador', 'user', 'cian'], 'gestión · gorila': ['cambió las monedas gorila de un jugador', 'coins', 'oro'],
-  'gestión · moneda': ['cambió las monedas de un jugador', 'coins', 'oro'] };
+  'gestión · moneda': ['cambió las monedas de un jugador', 'coins', 'oro'],
+  'torneos · crear': ['creó un torneo', 'trophy', 'oro'], 'torneos · editar': ['editó un torneo', 'trophy', ''], 'torneos · estado': ['cambió el estado de un torneo', 'trophy', 'rosa'],
+  'torneos · fijar_hora': ['fijó la hora de un torneo', 'clock', 'cian'], 'torneos · resultado': ['cargó un resultado', 'sword', 'oro'], 'torneos · reiniciar': ['reinició un cruce', 'refresh', ''],
+  'torneos · cancion': ['eligió la canción de un cruce', 'music', 'cian'], 'torneos · jugando': ['marcó un cruce en juego', 'play', 'rosa'], 'torneos · tercero': ['marcó el tercer puesto', 'trophy', 'oro'],
+  'torneos · quitar': ['quitó a un inscrito', 'x', ''] };
 /* ★ fase C: «usuario/101/rcoin» -> «personaje #101 · rcoin» */
 const detGestion = d => esc(String(d || '').replace(/^usuario\/(\d+)\/?/, 'personaje #$1 · ').replace(/ · $/, ''));
 function tlItem(a) {
@@ -759,7 +763,7 @@ function nombresDe(J, mes) {
   mes.dias.forEach(x => [...(x.premios || []), ...(x.si_no || [])].forEach(p => { if (p.item != null && p.nombre) J.nombres[p.item] = p.nombre; }));
 }
 const tabsC = J => [...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
-const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero
+const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas'] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
 const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
 const suciasJc = J => Object.keys(J.borr).filter(k => puedeJc(J, k) && ser(J.borr[k]) !== J.orig[k]);
 const juegoCat = jid => S.catalogo.find(x => x.id === jid) || S.juegos.find(x => x.id === jid) || { id: jid, nombre: jid, color: '' };
@@ -775,8 +779,8 @@ async function vistaJuego(jid, env, tab, sel) {
   raiz.innerHTML = barraHub('juegos') + `<main class="hub jc" id="contenido">${cabJuego(j, env)}
     <div class="caja jc-carga" aria-live="polite"><span class="esq" style="height:14px;width:40%"></span><span class="esq" style="height:180px"></span><span class="tenue">Cargando el juego…</span></div></main>`;
   if (ARTE.asis === null) { ARTE.asis = false; probarArte(['arte/asistencia-ticket_gris.png', 'arte/asistencia-digitos.png'], ok => { ARTE.asis = ok; if (ok && S.jc && S.jc.tab === 'asistencia') pintarPreviaJ(); }); }
-  const [r, jr, mr] = await Promise.all([api(`contenido?juego=${encodeURIComponent(jid)}&entorno=${env}`), S.juegos.length ? null : api('juegos'),
-    api(`gestion/mios?juego=${encodeURIComponent(jid)}`)]);
+  const [r, jr, mr, tr] = await Promise.all([api(`contenido?juego=${encodeURIComponent(jid)}&entorno=${env}`), S.juegos.length ? null : api('juegos'),
+    api(`gestion/mios?juego=${encodeURIComponent(jid)}`), api(`torneos?juego=${encodeURIComponent(jid)}&entorno=${env}`)]);
   if (S.ruta !== ruta0) return;
   if (jr && jr.ok) S.juegos = jr.d.juegos || [];
   /* ★ fase C: ¿este servidor se gestiona desde el Coordinador? `entornos` lo dice por PROD y TEST; /salud lo confirma */
@@ -793,13 +797,15 @@ async function vistaJuego(jid, env, tab, sel) {
     if (g.ok) { g.salud = s.ok ? s.d : null; g.saludErr = s.ok ? null : errTxt(s); }
   } else if (mr && mr.ok) g = Object.assign(nuevoG(mr.d), { ok: false });
   if (r.status === 401 || (mr && mr.status === 401)) return;
-  if (!r.ok && !(g && g.ok)) {
+  const tOk = !!(tr && tr.ok && tr.d.con_fuente);             // ★ 20-nov: los torneos, si este servidor tiene la fuente
+  if (!r.ok && !(g && g.ok) && !tOk) {
     $('#contenido').innerHTML = `<a class="volver" href="#/juegos" style="margin-bottom:12px;display:inline-flex">${ic('left', 's14')}Juegos</a>
       <section class="caja" style="max-width:560px;margin:24px auto">${vacio('No se puede abrir este juego', errTxt(r), '<a class="btn chico" href="#/juegos">Volver a los juegos</a>')}</section>`;
     return;
   }
   S.jc = nuevoJc(r.ok ? r.d : {}, jid, env);
   S.jc.g = g;
+  S.jc.t = tOk ? nuevoT(tr.d) : null;
   if (!r.ok) S.jc.cErr = (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
   const ts = tabsJc(S.jc);
   S.jc.tab = ts.includes(tab) ? tab : ts[0] || null;
@@ -819,7 +825,7 @@ function cabJuego(j, env, J) {
       <span class="jc-min" aria-hidden="true">${mini}</span>
       <div class="jc-t"><span class="jc-sup">${J && esG(J.tab) ? 'Gestión del juego' : 'Contenido del launcher'}</span>
         <h1>${esc(j.nombre)} <span class="pill-env"><span class="punto"></span>${envTxt(env)}</span></h1>
-        <p>${env === 'test' ? 'Servidor de PRUEBA: lo que haga aquí no les llega a los jugadores de PROD.' : J && esG(J.tab) ? 'Lo que pasa ahora en el servidor, y cada jugador con todos sus personajes.' : 'Lo que ve el jugador en el launcher. Al publicar llega en vivo: no hace falta un launcher nuevo.'}</p></div>
+        <p>${env === 'test' ? 'Servidor de PRUEBA: lo que haga aquí no les llega a los jugadores de PROD.' : J && J.tab === 'torneos' ? 'Los torneos del launcher: la votación de la hora, la inscripción y la llave. El servidor del juego guarda todo; aquí se cargan los resultados.' : J && esG(J.tab) ? 'Lo que pasa ahora en el servidor, y cada jugador con todos sus personajes.' : 'Lo que ve el jugador en el launcher. Al publicar llega en vivo: no hace falta un launcher nuevo.'}</p></div>
       <nav class="jc-envs" aria-label="Servidor">${envBtn('live', 'radio')}${envBtn('test', 'flask')}</nav>
     </section>`;
 }
@@ -857,6 +863,12 @@ function pintarAccJ() {
 }
 function pintarCuerpoJ(foco) {
   const J = S.jc, c = $('#jcCuerpo'); if (!J || !c) return;
+  if (J.tab === 'torneos') {                               // ★ 20-nov: los torneos
+    c.innerHTML = edTorneos(J);
+    if (Date.now() - J.t.t > 15000) cargarTorneos(J, true);
+    if (foco) { const f = $(foco); if (f) f.focus(); }
+    return;
+  }
   if (esG(J.tab)) {                                        // ★ fase C
     c.innerHTML = J.tab === 'resumen' ? edTablero(J) : edPersonas(J);
     if (J.tab === 'resumen') { pintarTableroCab(J); if (Date.now() - J.g.t > 10000) cargarTablero(J); }
@@ -2500,6 +2512,7 @@ function formItem(J, f) {
 
 /* la barra de la derecha de las pestañas, en la gestión */
 function accG(J) {
+  if (J.tab === 'torneos') return accT(J);
   const n = suciasJc(J).length, sucias = n ? `<span class="chip oro" title="En el contenido del launcher">${ic('clock', 's14')}${n} sin publicar</span>` : '';
   if (J.tab === 'resumen') return `${sucias}<span class="tenue g-act" id="gAct">${J.g.t ? '' : 'Cargando…'}</span>
     <button type="button" class="btn icono fantasma" data-accion="g-recargar" aria-label="Actualizar ahora" title="Actualizar ahora (se actualiza solo cada 15 s)">${ic('refresh', 's16')}</button>
@@ -2679,7 +2692,7 @@ async function pintarMisPermisos() {
   /* ★ contrato: los nombres de las monedas los dice cada juego */
   await Promise.all(js.filter((j, i) => rs[i].ok && rs[i].d.tipo === 'contrato1' && (rs[i].d.acciones || []).includes('moneda')).map(capDeJuego));
   if (!$('#misPermisosG')) return;
-  const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', gorila: 'monedas gorila', chat: 'leer el chat guardado', moneda: 'dar o quitar monedas' };
+  const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', gorila: 'monedas gorila', chat: 'leer el chat guardado', moneda: 'dar o quitar monedas', torneos: 'manejar los torneos' };
   c.innerHTML = js.map((j, i) => { const r = rs[i]; if (!r.ok || !r.d.gestionable) return '';
     const ex = r.d.acciones.filter(a => nom[a]), cu = r.d.cupos || {}, contrato = r.d.tipo === 'contrato1';
     const cupoTxt = a => (a === 'moneda' ? (ms => (ms.length ? ` (le quedan ${ms.join('; ')})` : ' (sin cupo todavía)'))(Object.keys(cu).filter(k => k.startsWith('moneda:') && cu[k].cupo).map(k => `${esc(nomMonedaJuego(j, k.slice(7)))}: ${miles(cu[k].queda)} de ${miles(cu[k].cupo)}`))
@@ -2919,6 +2932,372 @@ function accionNov(a) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   ★ 20-nov · TORNEOS — en la gestión de cada juego (#/j/<juego>/<live|test>/torneos), al lado de Tablero y Personas.
+   Los torneos viven en el SERVER DEL JUEGO (documentacion/TORNEOS.md del R2Beat 2013): aquí se crean, se mueven de
+   estado (borrador → votando → inscripción → en curso → terminado · o cancelado) y se carga la llave a mano.
+   El juego es el juez de las reglas: su error se muestra tal cual. Sin la acción «torneos» la pestaña es de sólo lectura.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+JC_TABS.torneos = ['Torneos', 'trophy'];
+G_TABS.push('torneos');
+const T_ESTADO = { borrador: ['Borrador', '', 'box'], votando: ['Votando la hora', 'violeta', 'clock'], inscripcion: ['Inscripción abierta', 'cian', 'users'],
+  en_curso: ['En curso', 'rosa', 'play'], terminado: ['Terminado', 'oro', 'trophy'], cancelado: ['Cancelado', 'rojo', 'x'] };
+const T_ORDEN = ['en_curso', 'inscripcion', 'votando', 'borrador', 'terminado', 'cancelado'];
+const T_MODO = { solo: ['Solo', 'user'], pareja: ['Pareja', 'users'], circulo: ['Círculo', 'circles'] };
+const T_ANTES = ['borrador', 'votando', 'inscripcion'];           // se puede inscribir / quitar / cambiar cupo y horas
+const T_LLAVE = ['en_curso', 'terminado'];
+const nuevoT = d => ({ d, sel: null, t: Date.now(), cargando: false, firma: JSON.stringify(d.servidor || null) });
+const listaT = J => ((J.t && J.t.d.servidor && J.t.d.servidor.torneos) || []).filter(t => t && t.id != null);
+const puedeT = J => !!(J.t && J.t.d.puede);
+const tSel = J => { const l = listaT(J); return l.find(t => String(t.id) === String(J.t.sel)) || null; };
+const ordenT = l => l.slice().sort((a, b) => (T_ORDEN.indexOf(a.estado) - T_ORDEN.indexOf(b.estado)) || ((Number(a.fecha) || Number(((a.horas || [])[0] || {}).t) || 9e9) - (Number(b.fecha) || Number(((b.horas || [])[0] || {}).t) || 9e9)));
+const pillT = e => { const [t, c, i] = T_ESTADO[e] || [e || '—', '', 'info']; return `<span class="chip ${c}">${ic(i, 's14')}${esc(t)}</span>`; };
+const modoT = m => { const [t, i] = T_MODO[m] || [m || '—', 'trophy']; return `<span class="chip">${ic(i, 's14')}${esc(t)}</span>`; };
+/* las horas propuestas llegan como [{t, votos}] (o [epoch] en una versión vieja): siempre se lee de la misma forma */
+const horasT = t => (Array.isArray(t.horas) ? t.horas : []).map(h => (typeof h === 'object' && h ? { t: Number(h.t), votos: Number(h.votos) || 0 } : { t: Number(h), votos: 0 })).filter(h => h.t > 0);
+const quienTxt = q => esc(String(q || '').replace(/^coordinador:/, '')) || 'alguien';
+const cambioTxt = x => (x && x.cambiado ? `Cambiado por ${quienTxt(x.quien)} · ${typeof x.cambiado === 'number' || /^\d{9,11}$/.test(String(x.cambiado)) ? haceSeg(x.cambiado) : fechaTxt(x.cambiado)}` : '');
+const nombreRondaT = n => ({ 1: 'Final', 2: 'Semifinal', 4: 'Cuartos', 8: 'Octavos', 16: 'Dieciseisavos' }[n] || `Ronda de ${n * 2}`);
+function insDe(t) { const m = {}; (t.inscritos || []).forEach(x => { m[String(x.id)] = x; }); return m; }
+const nomIns = (t, x) => (!x ? '' : t.modo === 'pareja' && x.pareja_nombre ? `${x.nombre} + ${x.pareja_nombre}` : x.nombre || `#${x.id}`);
+/* la llave: rondas[r] = los cruces de esa ronda, por idx */
+function rondasT(t) {
+  const rs = [];
+  (t.cruces || []).forEach(c => { const r = Number(c.ronda) || 0; (rs[r] = rs[r] || [])[Number(c.idx) || 0] = c; });
+  for (let r = 0; r < rs.length; r++) { rs[r] = rs[r] || []; const n = Math.max(1, (rs[0].length || 1) >> r); for (let i = 0; i < n; i++) rs[r][i] = rs[r][i] || { ronda: r, idx: i, a: null, b: null, ganador: null }; }
+  return rs;
+}
+/* el juego pide `forzar` cuando hay resultados que dependen (hoy: un 400 que lo dice; también un 409 o `{forzar: true}`) */
+const pideForzar = r => !r.ok && (r.status === 409 || !!(r.d && (r.d.forzar || r.d.pide_forzar)) || /\bforzar\b/i.test(String((r.d && r.d.error) || '')));
+const esLibre = (c, r) => r === 0 && (c.a == null) !== (c.b == null);
+const ganadorDe = c => (c.ganador === 'a' ? c.a : c.ganador === 'b' ? c.b : null);
+const perdedorDe = c => (c.ganador === 'a' ? c.b : c.ganador === 'b' ? c.a : null);
+
+async function cargarTorneos(J, auto) {
+  if (!J.t || J.t.cargando) return;
+  J.t.cargando = true;
+  const r = await api(`torneos?juego=${encodeURIComponent(J.jid)}&entorno=${J.env}`);
+  J.t.cargando = false;
+  if (S.jc !== J || !r.ok) { if (!auto && S.jc === J && !r.ok) toast({ t: 'No se pudieron leer los torneos', sub: errTxt(r), tipo: 'err' }); return; }
+  const firma = JSON.stringify(r.d.servidor || null), igual = firma === J.t.firma && r.d.puede === J.t.d.puede;
+  J.t.d = r.d; J.t.firma = firma; J.t.t = Date.now();
+  if (J.tab !== 'torneos') return;
+  if (!igual && !capas.innerHTML) pintarTorneos(J);
+  const a = $('#tAct'); if (a) a.textContent = 'Actualizado ahora';
+}
+/* un cambio: va al juego, y si sale bien se relee todo (el juego es la verdad) */
+async function tPost(J, cuerpo) {
+  const r = await api('torneos', Object.assign({ juego: J.jid, entorno: J.env }, cuerpo));
+  if (r.ok && S.jc === J) await cargarTorneos(J, true);
+  return r;
+}
+function accT(J) {
+  const n = suciasJc(J).length, sucias = n ? `<span class="chip oro" title="En el contenido del launcher">${ic('clock', 's14')}${n} sin publicar</span>` : '';
+  return `${sucias}<span class="tenue g-act" id="tAct"></span>
+    <button type="button" class="btn icono fantasma" data-accion="t-recargar" aria-label="Actualizar ahora" title="Actualizar ahora (se actualiza solo cada 20 s)">${ic('refresh', 's16')}</button>
+    ${puedeT(J) ? `<button type="button" class="btn prim" data-accion="t-nuevo">${ic('plus', 's16')}Nuevo torneo</button>` : `<span class="chip" title="Lo asigna un ADMIN">${ic('lock', 's14')}Sólo lectura</span>`}`;
+}
+function edTorneos(J) {
+  const T = J.t, l = ordenT(listaT(J));
+  if (!T.sel || !l.some(t => String(t.id) === String(T.sel))) T.sel = l.length ? l[0].id : null;
+  const avisos = [];
+  if (!T.d.servidor && T.d.sin_servidor) avisos.push(`<div class="conclusion mirar">${ic('info', 's20')}<div>${esc(T.d.sin_servidor)}</div></div>`);
+  if (T.d.servidor && !T.d.puede) avisos.push(`<div class="conclusion mirar">${ic('lock', 's20')}<div>Su cuenta puede mirar los torneos de este juego, pero no manejarlos.<small>Lo asigna un ADMIN («Permisos» del equipo, en La red).</small></div></div>`);
+  if (!T.d.servidor) return `<div id="tTab" role="tabpanel" aria-labelledby="jcTab-torneos" class="t-tab">${avisos.join('')}</div>`;
+  const fila = t => { const hs = horasT(t), n = t.ocupados != null ? Number(t.ocupados) : (t.inscritos || []).length;
+    const cuando = t.fecha ? fechaEpoch(t.fecha) : hs.length > 1 ? `Se vota entre ${hs.length} horas` : hs.length ? fechaEpoch(hs[0].t) : 'Sin hora todavía';
+    return `<li><button type="button" class="t-item ${String(t.id) === String(T.sel) ? 'sel' : ''}" data-accion="t-sel" data-id="${esc(t.id)}" aria-pressed="${String(t.id) === String(T.sel)}">
+      <span class="t-item-n"><b>${esc(t.nombre)}</b>${pillT(t.estado)}</span>
+      <span class="t-item-d">${ic(T_MODO[t.modo] ? T_MODO[t.modo][1] : 'trophy', 's14')}${esc((T_MODO[t.modo] || [t.modo])[0])} · ${ic('clock', 's14')}${cuando} · ${n}/${Number(t.cupo) || '—'}</span></button></li>`; };
+  const t = tSel(J);
+  return `<div id="tTab" role="tabpanel" aria-labelledby="jcTab-torneos" class="t-tab">${avisos.join('')}
+    <div class="t-grid">
+      <section class="caja t-lista" aria-labelledby="tLista"><div class="caja-cab"><h3 id="tLista">${ic('trophy', 's16')}Torneos<span class="n">${l.length}</span></h3><span class="sub">todos, también los borradores</span></div>
+        ${l.length ? `<ul class="t-items">${l.map(fila).join('')}</ul>` : `<div class="caja-cuerpo">${vacio('Todavía no hay torneos', puedeT(J) ? 'Cree el primero: empieza como borrador y sólo lo ve el equipo hasta que abra la votación o la inscripción.' : 'Cuando el equipo cree uno, aparece aquí.', puedeT(J) ? `<button type="button" class="btn chico prim" data-accion="t-nuevo">${ic('plus', 's14')}Nuevo torneo</button>` : '')}</div>`}</section>
+      <div class="t-det" id="tDet">${t ? detalleT(J, t) : ''}</div>
+    </div></div>`;
+}
+function pintarTorneos(J, foco) {
+  const c = $('#jcCuerpo'); if (!c || J.tab !== 'torneos') return;
+  const y = window.scrollY, f = foco || (document.activeElement && document.activeElement.dataset && document.activeElement.dataset.accion && c.contains(document.activeElement)
+    ? `[data-accion="${document.activeElement.dataset.accion}"]${document.activeElement.dataset.id ? `[data-id="${CSS.escape(document.activeElement.dataset.id)}"]` : ''}${document.activeElement.dataset.r ? `[data-r="${document.activeElement.dataset.r}"][data-i="${document.activeElement.dataset.i}"]` : ''}` : null);
+  c.innerHTML = edTorneos(J);
+  window.scrollTo(0, y);
+  if (f) { const e = $(f, c); if (e) e.focus({ preventScroll: true }); }
+}
+/* los botones de estado, en el orden natural: el primero es el paso que sigue */
+function botonesT(J, t) {
+  if (!puedeT(J)) return '';
+  const b = (acc, icono, txt, cls = 'btn chico', extra = '') => `<button type="button" class="${cls}" data-accion="${acc}" data-id="${esc(t.id)}" ${extra}>${ic(icono, 's14')}${txt}</button>`;
+  const hs = horasT(t), out = [];
+  if (t.estado === 'borrador') { if (hs.length > 1) out.push(b('t-votacion', 'clock', 'Abrir votación', 'btn chico prim')); out.push(b('t-inscripcion', 'users', 'Abrir inscripción', hs.length > 1 ? 'btn chico' : 'btn chico prim')); }
+  if (t.estado === 'votando') { out.push(b('t-hora', 'clock', 'Fijar hora', 'btn chico prim')); out.push(b('t-inscripcion', 'users', 'Abrir inscripción')); }
+  if (t.estado === 'inscripcion') { out.push(b('t-llave', 'sword', 'Cerrar inscripción y armar la llave', 'btn chico prim')); out.push(b('t-hora', 'clock', t.fecha ? 'Cambiar la hora' : 'Fijar hora')); }
+  if (t.estado !== 'cancelado') out.push(b('t-editar', 'box', 'Editar'));
+  if (t.estado === 'cancelado') out.push(b('t-borrador', 'refresh', 'Volver a borrador', 'btn chico prim'));
+  else if (t.estado !== 'terminado') out.push(b('t-cancelar', 'x', 'Cancelar torneo', 'btn chico peligro'));
+  return `<div class="t-acc" role="group" aria-label="Acciones del torneo">${out.join('')}</div>`;
+}
+function detalleT(J, t) {
+  const hs = horasT(t), n = t.ocupados != null ? Number(t.ocupados) : (t.inscritos || []).length, cupo = Number(t.cupo) || 0, cambio = cambioTxt(t);
+  const cuando = t.fecha ? `<b>${fechaEpoch(t.fecha)}</b>` : hs.length > 1 ? `Se vota entre <b>${hs.length}</b> horas` : hs.length ? `<b>${fechaEpoch(hs[0].t)}</b> <span class="tenue">(propuesta)</span>` : '<span class="tenue">Sin hora todavía</span>';
+  const llave = T_LLAVE.includes(t.estado) && (t.cruces || []).length;
+  return `<section class="caja t-cab-det" aria-labelledby="tTit"><div class="caja-cuerpo">
+      <div class="t-tit"><h2 id="tTit">${esc(t.nombre)}</h2><span class="t-pills">${pillT(t.estado)}${modoT(t.modo)}</span></div>
+      <div class="t-datos"><span>${ic('clock', 's14')}${cuando}</span><span>${ic('users', 's14')}<b>${n}</b>${cupo ? ` de ${cupo}` : ''} ${t.modo === 'circulo' ? 'círculos' : t.modo === 'pareja' ? 'inscritos (parejas)' : 'inscritos'}</span><span class="tenue">#${esc(t.id)}</span></div>
+      ${t.info ? `<p class="t-info">${esc(t.info)}</p>` : ''}
+      ${cambio ? `<p class="tenue t-cambio">${ic('history', 's14')}${cambio}</p>` : ''}
+      ${t.estado === 'borrador' ? `<p class="tenue g-nota">${ic('eye', 's14')} Borrador: sólo lo ve el equipo. Los jugadores lo ven al abrir la votación o la inscripción.</p>` : ''}
+      ${botonesT(J, t)}</div></section>
+    ${llave ? llaveT(J, t) : ''}
+    ${T_LLAVE.includes(t.estado) ? podioT(J, t) : ''}
+    ${hs.length > 1 || (hs.length && t.estado === 'votando') ? votosT(J, t, hs) : ''}
+    ${inscritosT(J, t)}`;
+}
+function votosT(J, t, hs) {
+  const tot = hs.reduce((a, h) => a + h.votos, 0), max = Math.max(0, ...hs.map(h => h.votos));
+  return `<section class="caja" aria-labelledby="tVot"><div class="caja-cab"><h3 id="tVot">${ic('clock', 's16')}La votación de la hora</h3><span class="sub">${tot} ${tot === 1 ? 'voto' : 'votos'} · en la hora de su navegador</span></div>
+    <div class="caja-cuerpo"><ul class="t-votos">${hs.map((h, i) => `<li class="${t.fecha && Number(t.fecha) === h.t ? 'elegida' : ''}"><span class="t-v-h">${fechaEpoch(h.t)}${t.fecha && Number(t.fecha) === h.t ? ' <span class="chip verde">Elegida</span>' : h.votos && h.votos === max ? ' <span class="chip violeta">La más votada</span>' : ''}</span>
+      <span class="t-v-barra" role="img" aria-label="${h.votos} votos"><i style="width:${tot ? (100 * h.votos / tot).toFixed(1) : 0}%"></i></span><b class="num">${h.votos}</b><span class="sr"> votos para la opción ${i + 1}</span></li>`).join('')}</ul></div></section>`;
+}
+function inscritosT(J, t) {
+  const ent = Array.isArray(t.entrantes) ? t.entrantes.map(String) : null;
+  const ins = (t.inscritos || []).filter(x => t.modo !== 'pareja' || !ent || !x.pareja_ok || ent.includes(String(x.id))), quitar = puedeT(J) && T_ANTES.includes(t.estado);
+  const orden = ins.slice().sort((a, b) => (Number(a.semilla) || 1e9) - (Number(b.semilla) || 1e9) || String(a.cuando || '').localeCompare(String(b.cuando || '')));
+  const nota = t.estado === 'inscripcion' || t.estado === 'votando' ? (() => { const ok = ent ? ent.length : ins.filter(x => t.modo !== 'pareja' || x.pareja_ok !== 0 && x.pareja_ok !== false).length, s = ok > 1 ? 2 ** Math.ceil(Math.log2(ok)) : 2;
+    return `<p class="tenue g-nota">${ic('sword', 's14')} La llave se arma al cerrar la inscripción, en orden de llegada${ok > 1 ? `: con ${ok} sería de ${s}${s - ok ? ` y ${s - ok} ${s - ok === 1 ? 'pasa' : 'pasan'} directo (libre)` : ''}` : ''}.${t.modo === 'pareja' ? ' Sólo entran las parejas confirmadas.' : ''}</p>`; })() : '';
+  return `<section class="caja" aria-labelledby="tIns"><div class="caja-cab"><h3 id="tIns">${ic('users', 's16')}Inscritos<span class="n">${ins.length}</span></h3><span class="sub">${t.modo === 'circulo' ? 'un círculo por inscripción' : t.modo === 'pareja' ? 'el que se inscribe nombra a su compañero' : 'un personaje por cuenta'}</span></div>
+    <div class="caja-cuerpo">${nota}${orden.length ? `<ul class="t-ins">${orden.map((x, i) => `<li>${x.semilla ? `<span class="t-sem" title="Semilla">${Number(x.semilla)}</span>` : `<span class="t-sem tenue">${i + 1}</span>`}${ava(x.nombre || '?', t.modo === 'circulo' ? 'cuad' : '')}
+      <span class="t-ins-n"><b>${esc(nomIns(t, x))}</b>${t.modo === 'pareja' && x.pareja_nombre && (x.pareja_ok === 0 || x.pareja_ok === false) ? ' <span class="chip oro">Falta que confirme</span>' : ''}${x.circulo_nombre && t.modo !== 'circulo' ? ` <span class="tenue">· ${esc(x.circulo_nombre)}</span>` : ''}${x.cuando ? `<small class="tenue">${cuandoTxt(x.cuando)}</small>` : ''}</span>
+      ${quitar ? `<button type="button" class="btn chico fantasma" data-accion="t-quitar" data-id="${esc(t.id)}" data-ins="${esc(x.id)}" aria-label="Quitar a ${esc(nomIns(t, x))} del torneo">${ic('x', 's14')}Quitar</button>` : ''}</li>`).join('')}</ul>` : '<p class="tenue g-nada">Todavía no se inscribió nadie.</p>'}</div></section>`;
+}
+/* ══════════════ la LLAVE: una columna por ronda, de izquierda a derecha, y el campeón al final ══════════════ */
+const TW = 184, TH = 60, TFILA = 14, TCOL = TW + 36, TCAB = 34, TCAMP = 96;
+function llaveT(J, t) {
+  const rs = rondasT(t), R = rs.length, ins = insDe(t), n0 = Math.max(1, rs[0].length), alto = n0 * (TH + TFILA);
+  const final = rs[R - 1][0], camp = final && ganadorDe(final) != null ? ins[String(ganadorDe(final))] : null;
+  const pos = (r, i) => { const n = Math.max(1, n0 >> r); return { x: r * TCOL, y: TCAB + (i + 0.5) * (alto / n) - TH / 2 }; };
+  let html = '', lineas = '', oro = '';
+  rs.forEach((cr, r) => {
+    html += `<div class="t-rcab" style="left:${r * TCOL}px;width:${TW}px">${nombreRondaT(cr.length)}</div>`;
+    cr.forEach((c, i) => {
+      const p = pos(r, i), libre = esLibre(c, r), vivo = c.estado === 'jugando';
+      const lado = (k, idIns) => {
+        if (idIns == null) return `<span class="t-lado ${libre ? 'libre' : 'tbd'}">${libre ? `${ic('right', 's14')}Libre · pasa directo` : 'Por definir'}</span>`;
+        const x = ins[String(idIns)], g = c.ganador === k && !libre, pe = c.ganador && c.ganador !== k;
+        return `<span class="t-lado ${g ? 'gana' : ''} ${pe ? 'pierde' : ''}"><span class="t-sem">${x && x.semilla ? Number(x.semilla) : ''}</span><span class="t-nom">${esc(x ? nomIns(t, x) : `#${idIns}`)}</span>${g ? ic('check', 's14') : ''}</span>`;
+      };
+      const cls = `t-cruce${vivo ? ' vivo' : ''}${c.ganador ? ' listo' : ''}${libre ? ' es-libre' : ''}`, st = `left:${p.x}px;top:${p.y}px;width:${TW}px;height:${TH}px`;
+      const dentro = `${lado('a', c.a)}${lado('b', c.b)}${c.cancion ? `<span class="t-mus" title="Canción: ${esc(c.cancion)}">${ic('music', 's14')}</span>` : ''}${vivo ? '<span class="t-vivo">EN JUEGO</span>' : ''}`;
+      const nombre = `${nombreRondaT(cr.length)}, cruce ${i + 1}: ${c.a != null ? esc(nomIns(t, ins[String(c.a)])) : 'por definir'} contra ${c.b != null ? esc(nomIns(t, ins[String(c.b)])) : 'por definir'}${c.ganador ? `, ganó ${esc(nomIns(t, ins[String(ganadorDe(c))]))}` : ''}`;
+      html += libre ? `<div class="${cls}" style="${st}" role="group" aria-label="${nombre}">${dentro}</div>`
+        : `<button type="button" class="${cls}" style="${st}" data-accion="t-cruce" data-id="${esc(t.id)}" data-r="${r}" data-i="${i}" aria-label="${nombre}. Abrir el cruce">${dentro}</button>`;
+      /* la línea al cruce siguiente (o al campeón): dorada si este cruce ya tiene ganador */
+      /* (la final baja al campeón, que va debajo de ella: así la llave entra a lo ancho) */
+      const x1 = p.x + TW, y1 = p.y + TH / 2, q = r < R - 1 ? pos(r + 1, i >> 1) : null, xm = x1 + 18;
+      const d = q ? `M${x1} ${y1}H${xm}V${q.y + TH / 2}H${q.x}` : `M${p.x + TW / 2} ${p.y + TH}V${p.y + TH + 22}`;
+      if (c.ganador) oro += `<path class="t-ln oro" d="${d}"/>`; else lineas += `<path class="t-ln${vivo ? ' vivo' : ''}" d="${d}"/>`;
+    });
+  });
+  const pf = pos(R - 1, 0), ancho = (R - 1) * TCOL + TW + 12, altoTot = Math.max(TCAB + alto + 10, pf.y + TH + 22 + TCAMP);
+  html += `<div class="t-campeon ${camp ? '' : 'nadie'}" style="left:${pf.x + (TW - 150) / 2}px;top:${pf.y + TH + 22}px">${ic('trophy', 's20')}<small>CAMPEÓN</small><b>${camp ? esc(nomIns(t, camp)) : 'Por definir'}</b></div>`;
+  return `<section class="caja t-llave-caja" aria-labelledby="tLla"><div class="caja-cab"><h3 id="tLla">${ic('sword', 's16')}La llave</h3><span class="sub">${puedeT(J) && t.estado === 'en_curso' ? 'toque un cruce para cargar quién ganó, la canción o si se está jugando' : 'fija desde que se cerró la inscripción'}</span></div>
+    <div class="t-llave" tabindex="-1"><div class="t-escena" style="width:${ancho}px;height:${altoTot}px"><svg width="${ancho}" height="${altoTot}" aria-hidden="true">${lineas}${oro}</svg>${html}</div></div></section>`;
+}
+function podioT(J, t) {
+  const ins = insDe(t), p = t.podio || {}, rs = rondasT(t), R = rs.length;
+  const de = id => (id != null && ins[String(id)] ? esc(nomIns(t, ins[String(id)])) : null);
+  /* los candidatos al 3.º: los que perdieron una semifinal (si no, cualquiera que no sea 1.º ni 2.º) */
+  const semis = R >= 2 ? rs[R - 2].map(perdedorDe).filter(x => x != null) : [];
+  const cand = (semis.length ? semis : (t.inscritos || []).map(x => x.id)).filter(x => String(x) !== String(p.primero) && String(x) !== String(p.segundo));
+  const sel = puedeT(J) && R >= 2 && t.estado !== 'cancelado' ? `<label class="t-tercero"><span class="lab">Tercer puesto</span><span class="campo"><select data-accion-cambio="t-tercero" data-id="${esc(t.id)}" aria-label="Tercer puesto">
+      <option value="">— Sin tercer puesto —</option>${cand.map(x => `<option value="${esc(x)}" ${String(x) === String(p.tercero) ? 'selected' : ''}>${de(x) || '#' + esc(x)}</option>`).join('')}</select></span>
+      <small class="tenue">No hay partido por el 3.º: lo marca el staff (por ejemplo, el que perdió la semifinal con el mejor tiempo).</small></label>` : '';
+  const caja = (k, txt, cls) => `<div class="t-pod ${cls}${de(p[k]) ? '' : ' nadie'}">${ic('trophy', 's20')}<span>${txt}</span><b>${de(p[k]) || 'Por definir'}</b></div>`;
+  return `<section class="caja t-podio-caja" aria-labelledby="tPod"><div class="caja-cab"><h3 id="tPod">${ic('trophy', 's16')}${t.estado === 'terminado' ? 'El podio' : 'El podio, hasta ahora'}</h3>${t.estado === 'terminado' ? '<span class="sub">el torneo terminó: así lo ven los jugadores</span>' : ''}</div>
+    <div class="caja-cuerpo"><div class="t-podio">${caja('segundo', '2.º', 'plata')}${caja('primero', '1.º', 'oro')}${caja('tercero', '3.º', 'bronce')}</div>${sel}</div></section>`;
+}
+
+/* ══════════════ los clics de la pestaña ══════════════ */
+function accionT(a) {
+  const J = S.jc; if (!J || !J.t) return;
+  const k = a.dataset.accion, t = listaT(J).find(x => String(x.id) === String(a.dataset.id));
+  if (k === 't-recargar') { cargarTorneos(J); return; }
+  if (k === 't-sel') { J.t.sel = a.dataset.id; pintarTorneos(J, `[data-accion="t-sel"][data-id="${CSS.escape(a.dataset.id)}"]`); if (window.innerWidth < 960) { const d = $('#tDet'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
+  if (!puedeT(J)) return;
+  if (k === 't-nuevo') { formTorneo(J, null); return; }
+  if (!t) return;
+  const nom = `<b>${esc(t.nombre)}</b>`;
+  const estado = (estadoNuevo, titulo, txt, ok, peligro, listo) => confirmar({ titulo, txt, ok, peligro, icono: peligro ? 'alert' : 'trophy', alAceptar: async () => {
+    const r = await tPost(J, { accion: 'estado', torneo: t.id, estado: estadoNuevo });
+    if (!r.ok) { toast({ t: 'El juego no lo dejó', sub: errTxt(r), tipo: 'err', ms: 9000 }); return; }
+    pintarTorneos(J); toast({ t: listo, sub: 'Quedó en la auditoría.', tipo: J.env === 'test' ? 'test' : 'ok' });
+  } });
+  switch (k) {
+    case 't-editar': formTorneo(J, t); break;
+    case 't-votacion': estado('votando', '¿Abrir la votación?', `Los jugadores ven ${nom} en el launcher y votan la hora entre las ${horasT(t).length} propuestas. También se pueden inscribir.`, 'Abrir votación', false, 'Votación abierta'); break;
+    case 't-inscripcion': estado('inscripcion', '¿Abrir la inscripción?', `Los jugadores ven ${nom} en el launcher y se pueden inscribir.${t.fecha ? '' : horasT(t).length > 1 ? ' <b>Todavía no tiene hora fija</b>: conviene fijarla antes con «Fijar hora».' : ''}`, 'Abrir inscripción', false, 'Inscripción abierta'); break;
+    case 't-llave': { const n = Array.isArray(t.entrantes) ? t.entrantes.length : (t.inscritos || []).length;
+      estado('en_curso', '¿Cerrar la inscripción y armar la llave?', `La llave de ${nom} queda <b>FIJA</b> con ${t.modo === 'pareja' ? `las ${n} parejas confirmadas` : t.modo === 'circulo' ? `los ${n} círculos` : `los ${n} inscritos`}, en orden de llegada (los que sobran para una llave exacta pasan directo). Después ya no se inscribe nadie ni se cambian el cupo ni las horas.`, 'Cerrar y armar la llave', true, 'La llave está armada'); break; }
+    case 't-cancelar': estado('cancelado', '¿Cancelar el torneo?', `${nom} deja de verse en el launcher. Los inscritos y los resultados quedan guardados en el juego.`, 'Cancelar torneo', true, 'Torneo cancelado'); break;
+    case 't-borrador': estado('borrador', '¿Volver a borrador?', `${nom} vuelve a ser un borrador: sólo lo ve el equipo.`, 'Volver a borrador', false, 'Volvió a borrador'); break;
+    case 't-hora': formHora(J, t); break;
+    case 't-quitar': { const x = (t.inscritos || []).find(y => String(y.id) === String(a.dataset.ins)); if (!x) break;
+      confirmar({ titulo: `¿Quitar a ${esc(nomIns(t, x))}?`, ok: 'Quitar', txt: `Sale de ${nom}. Se puede volver a inscribir mientras la inscripción siga abierta.`, alAceptar: async () => {
+        const r = await tPost(J, { accion: 'quitar', torneo: t.id, ins_id: x.id });
+        if (!r.ok) { toast({ t: 'No se pudo quitar', sub: errTxt(r), tipo: 'err', ms: 9000 }); return; }
+        pintarTorneos(J); toast({ t: `${esc(nomIns(t, x))} ya no está en el torneo`, sub: 'Quedó en la auditoría.' }); } }); break; }
+    case 't-cruce': formCruce(J, t, Number(a.dataset.r), Number(a.dataset.i)); break;
+  }
+}
+async function cambioTercero(el) {
+  const J = S.jc; if (!J || !J.t || !puedeT(J)) return;
+  el.disabled = true;
+  const r = await tPost(J, { accion: 'tercero', torneo: Number(el.dataset.id) || el.dataset.id, ins_id: el.value === '' ? null : Number(el.value) || el.value });
+  el.disabled = false;
+  if (!r.ok) { toast({ t: 'No se pudo marcar el tercer puesto', sub: errTxt(r), tipo: 'err', ms: 9000 }); pintarTorneos(J); return; }
+  pintarTorneos(J, '[data-accion-cambio="t-tercero"]');
+  toast({ t: el.value === '' ? 'Sin tercer puesto' : 'Tercer puesto marcado', sub: 'Quedó en la auditoría.' });
+}
+
+/* ══════════════ crear o editar un torneo ══════════════ */
+function formTorneo(J, t) {
+  const nuevo = !t, fijo = t && !T_ANTES.includes(t.estado);
+  const hs = t ? horasT(t).map(h => h.t) : [Math.ceil(Date.now() / 3600000 + 48) * 3600];
+  let modo = t ? t.modo : 'solo';
+  const filaHora = (v, i) => `<div class="t-hora-f"><label class="campo"><span class="sr">Hora ${i + 1}</span><input type="datetime-local" data-hora value="${v ? isoLocal(new Date(v * 1000)) : ''}"${fijo ? ' disabled' : ''}></label>${fijo ? '' : `<button type="button" class="btn icono chico fantasma" data-t-quitar-hora aria-label="Quitar la hora ${i + 1}" title="Quitar">${ic('x', 's14')}</button>`}</div>`;
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="tfTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(227,187,103,.12);color:var(--gold)">${ic('trophy', 's20')}</span><div><h2 id="tfTit">${nuevo ? 'Nuevo torneo' : `Editar «${esc(t.nombre)}»`}</h2><p>${nuevo ? 'Empieza como borrador: sólo lo ve el equipo hasta abrir la votación o la inscripción.' : fijo ? 'La llave ya está fija: sólo se cambian el nombre y la información.' : 'Los cambios llegan en vivo al launcher.'}</p></div></div>
+    <div class="modal-cuerpo t-form">
+      <label class="lc-campo"><span class="lab">Nombre</span><span class="campo"><input id="tfNom" maxlength="60" value="${t ? esc(t.nombre) : ''}" placeholder="Por ejemplo: Copa de Navidad" autocomplete="off" autofocus></span></label>
+      <div class="t-form-2">
+        <div class="lc-campo"><span class="lab" id="tfModoL">Modo</span><div class="seg" role="group" aria-labelledby="tfModoL">${Object.entries(T_MODO).map(([k, [txt, i]]) => `<button type="button" data-t-modo="${k}" aria-pressed="${modo === k}"${nuevo ? '' : ' disabled'}>${ic(i, 's14')}${txt}</button>`).join('')}</div>${nuevo ? '' : '<small class="tenue">El modo no se cambia después de crearlo.</small>'}</div>
+        <label class="lc-campo"><span class="lab">Cupo</span><span class="campo t-cupo"><input id="tfCupo" type="number" min="2" max="32" step="1" inputmode="numeric" value="${t ? Number(t.cupo) || 8 : 8}"${fijo ? ' disabled' : ''}></span><small class="tenue" id="tfCupoTxt"></small></label>
+      </div>
+      <div class="lc-campo"><span class="lab">Horas propuestas <span class="tenue" style="text-transform:none;letter-spacing:0;font-weight:500">· en la hora de su navegador</span></span>
+        <div id="tfHoras" class="t-horas">${hs.map(filaHora).join('')}</div>
+        ${fijo ? '' : `<div class="t-horas-pie"><button type="button" class="btn chico" id="tfMasHora">${ic('plus', 's14')}Agregar otra hora</button><small class="tenue">De 1 a 4. Con más de una, los jugadores votan.</small></div>`}</div>
+      <label class="g-area"><span class="lab">Información <span class="tenue" style="text-transform:none;letter-spacing:0;font-weight:500">· opcional, la ve el jugador</span></span><textarea class="area" id="tfInfo" maxlength="300" rows="3" placeholder="Por ejemplo: canciones de nivel 6 a 8, premio para el podio…">${t ? esc(t.info || '') : ''}</textarea></label>
+      <div class="cuenta-txt"><span id="tfErr" style="color:var(--red)" role="alert"></span><span id="tfN">${t ? (t.info || '').length : 0}/300</span></div>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="tfOk">${ic(nuevo ? 'plus' : 'check', 's16')}${nuevo ? 'Crear borrador' : 'Guardar'}</button></div></div>`);
+  const err = m => { $('#tfErr', pn).textContent = m; };
+  const cupoTxt = () => { const c = Number($('#tfCupo', pn).value), s = c > 1 ? 2 ** Math.ceil(Math.log2(c)) : 0; $('#tfCupoTxt', pn).textContent = c >= 2 && c <= 32 ? `Llave de hasta ${s}${s !== c ? ` (si se llena, ${s - c} ${s - c === 1 ? 'pasa' : 'pasan'} directo)` : ''}.` : 'De 2 a 32.'; };
+  const pie = () => { const n = $$('[data-hora]', pn).length, b = $('#tfMasHora', pn); if (b) b.disabled = n >= 4; $$('[data-t-quitar-hora]', pn).forEach(x => { x.disabled = n <= 1; }); };
+  cupoTxt(); pie();
+  $('#tfCupo', pn).addEventListener('input', () => { cupoTxt(); err(''); });
+  $('#tfInfo', pn).addEventListener('input', e => { $('#tfN', pn).textContent = `${e.target.value.length}/300`; });
+  pn.addEventListener('click', async e => {
+    const m = e.target.closest('[data-t-modo]'); if (m && !m.disabled) { modo = m.dataset.tModo; $$('[data-t-modo]', pn).forEach(x => x.setAttribute('aria-pressed', x === m)); return; }
+    const q = e.target.closest('[data-t-quitar-hora]'); if (q && !q.disabled) { q.closest('.t-hora-f').remove(); pie(); return; }
+    if (e.target.closest('#tfMasHora')) { const l = $$('[data-hora]', pn), ult = l.length ? new Date(l[l.length - 1].value).getTime() / 1000 : 0;
+      $('#tfHoras', pn).insertAdjacentHTML('beforeend', filaHora(ult > 0 ? ult + 3600 : Math.ceil(Date.now() / 3600000 + 48) * 3600, l.length)); pie(); const n = $$('[data-hora]', pn).pop(); if (n) n.focus(); return; }
+    if (!e.target.closest('#tfOk')) return;
+    const nombre = $('#tfNom', pn).value.trim(), cupo = Number($('#tfCupo', pn).value), info = $('#tfInfo', pn).value.trim();
+    const horas = $$('[data-hora]', pn).map(x => (x.value ? Math.floor(new Date(x.value).getTime() / 1000) : NaN));
+    if (!nombre) { err('Escriba el nombre del torneo.'); $('#tfNom', pn).focus(); return; }
+    if (!fijo && (!Number.isInteger(cupo) || cupo < 2 || cupo > 32)) { err('El cupo va de 2 a 32.'); $('#tfCupo', pn).focus(); return; }
+    if (!fijo && (!horas.length || horas.some(h => !Number.isFinite(h)))) { err('Complete cada hora (día y hora), o quite la que sobra.'); return; }
+    if (!fijo && new Set(horas).size !== horas.length) { err('Hay dos horas iguales.'); return; }
+    const cuerpo = nuevo ? { accion: 'crear', nombre, modo, cupo, horas: horas.slice().sort((a, b) => a - b), info }
+      : Object.assign({ accion: 'editar', torneo: t.id, nombre, info }, fijo ? {} : { cupo, horas: horas.slice().sort((a, b) => a - b) });
+    const b = $('#tfOk', pn); b.disabled = true;
+    const r = await tPost(J, cuerpo);
+    b.disabled = false;
+    if (!r.ok) { err((r.d && r.d.error) || `Error ${r.status}`); return; }
+    cerrarCapa();
+    if (nuevo) { const id = (r.d.torneo && r.d.torneo.id) || r.d.id; const l = listaT(J); J.t.sel = id != null ? id : (l.find(x => x.nombre === nombre && x.estado === 'borrador') || {}).id || J.t.sel; }
+    pintarTorneos(J);
+    toast({ t: nuevo ? `Borrador creado: ${esc(nombre)}` : 'Torneo guardado', sub: nuevo ? 'Sólo lo ve el equipo hasta abrir la votación o la inscripción.' : 'Quedó en la auditoría.', tipo: J.env === 'test' ? 'test' : 'ok' });
+  });
+}
+/* ══════════════ fijar la hora: la más votada, o una a mano ══════════════ */
+function formHora(J, t) {
+  const hs = horasT(t), max = Math.max(0, ...hs.map(h => h.votos));
+  /* la más votada (en un empate, la más temprana); si ya hay una fija, ésa */
+  let pre = hs.findIndex(h => t.fecha && h.t === Number(t.fecha));
+  if (pre < 0 && Number.isInteger(t.hora_ganadora) && hs[t.hora_ganadora]) pre = t.hora_ganadora;
+  if (pre < 0) pre = hs.reduce((m, h, i) => (m < 0 || h.votos > hs[m].votos || (h.votos === hs[m].votos && h.t < hs[m].t) ? i : m), -1);
+  const otra = t.fecha && !hs.some(h => h.t === Number(t.fecha));
+  const pn = abrirCapa(`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="thTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(179,139,255,.12);color:var(--violet)">${ic('clock', 's20')}</span><div><h2 id="thTit">Fijar la hora</h2><p>De <b>${esc(t.nombre)}</b>. Es la que ven los jugadores en el launcher (cada uno en su hora).</p></div></div>
+    <div class="modal-cuerpo t-form" role="radiogroup" aria-labelledby="thTit">
+      ${hs.map((h, i) => `<label class="radio"><input type="radio" name="thOp" value="${i}" ${!otra && i === pre ? 'checked' : ''}><span><b>${fechaEpoch(h.t)}</b><span>${h.votos} ${h.votos === 1 ? 'voto' : 'votos'}${h.votos && h.votos === max ? ' · la más votada' : ''}</span></span></label>`).join('')}
+      <label class="radio"><input type="radio" name="thOp" value="otra" ${otra || !hs.length ? 'checked' : ''}><span><b>Otra hora</b><span>Una a mano, en la hora de su navegador</span></span></label>
+      <label class="campo"><span class="sr">Otra hora</span><input type="datetime-local" id="thOtra" value="${otra ? isoLocal(new Date(Number(t.fecha) * 1000)) : hs.length ? isoLocal(new Date(hs[Math.max(0, pre)].t * 1000)) : ''}"></label>
+      <span id="thErr" style="color:var(--red)" role="alert"></span>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="thOk">${ic('check', 's16')}Fijar la hora</button></div></div>`);
+  $('#thOtra', pn).addEventListener('focus', () => { const r = $('input[value="otra"]', pn); if (r) r.checked = true; });
+  $('#thOk', pn).addEventListener('click', async () => {
+    const v = ($('input[name="thOp"]:checked', pn) || {}).value;
+    let cuerpo = { accion: 'fijar_hora', torneo: t.id };
+    if (v === 'otra' || v == null) { const f = Math.floor(new Date($('#thOtra', pn).value).getTime() / 1000); if (!Number.isFinite(f)) { $('#thErr', pn).textContent = 'Elija el día y la hora.'; return; } cuerpo.fecha = f; }
+    else cuerpo.opcion = Number(v);
+    const b = $('#thOk', pn); b.disabled = true;
+    const r = await tPost(J, cuerpo);
+    b.disabled = false;
+    if (!r.ok) { $('#thErr', pn).textContent = (r.d && r.d.error) || `Error ${r.status}`; return; }
+    cerrarCapa(); pintarTorneos(J);
+    toast({ t: 'Hora fijada', sub: `${cuerpo.fecha ? fechaEpoch(cuerpo.fecha) : fechaEpoch(hs[cuerpo.opcion].t)}. Quedó en la auditoría.` });
+  });
+}
+/* ══════════════ un CRUCE de la llave: quién ganó, reiniciar, la canción y «se está jugando» ══════════════ */
+function formCruce(J, t, r, i) {
+  const rs = rondasT(t), c = (rs[r] || [])[i]; if (!c) return;
+  const ins = insDe(t), nA = c.a != null ? nomIns(t, ins[String(c.a)]) : null, nB = c.b != null ? nomIns(t, ins[String(c.b)]) : null;
+  const vivo = c.estado === 'jugando', hay = c.a != null && c.b != null, puede = puedeT(J) && t.estado !== 'cancelado';
+  const sig = r < rs.length - 1 ? rs[r + 1][i >> 1] : null;
+  const ganBtn = (k, n) => `<button type="button" class="t-gana ${c.ganador === k ? 'on' : ''}" data-t-gana="${k}" aria-pressed="${c.ganador === k}" ${!puede || !hay || c.ganador ? 'disabled' : ''}>${c.ganador === k ? ic('trophy', 's16') : ''}<span><small>${c.ganador === k ? 'GANÓ' : k === 'a' ? 'Ganó A' : 'Ganó B'}</small><b>${n ? esc(n) : 'Por definir'}</b></span></button>`;
+  const pn = abrirCapa(`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="tcTit">
+    <div class="modal-cab"><span class="ic" style="background:rgba(243,38,134,.12);color:var(--pink)">${ic('sword', 's20')}</span><div><h2 id="tcTit">${nombreRondaT(rs[r].length)} · cruce ${i + 1}</h2><p>${esc(t.nombre)}${sig && sig.ganador ? ' · <b>el cruce siguiente ya tiene ganador</b>' : ''}</p></div></div>
+    <div class="modal-cuerpo t-form">
+      <div class="t-ganan">${ganBtn('a', nA)}<span class="t-vs">VS</span>${ganBtn('b', nB)}</div>
+      ${!hay && !c.ganador ? `<p class="tenue g-nota">${ic('info', 's14')} Falta saber quién juega: se completa solo cuando terminan los cruces anteriores.</p>` : ''}
+      ${c.ganador && puede ? `<button type="button" class="btn chico" id="tcReini">${ic('refresh', 's14')}Reiniciar cruce</button><small class="tenue">Borra el ganador${r < rs.length - 1 ? ' y lo que dependía de él más adelante' : ''}. Sirve si algo falló o se cargó mal.</small>` : ''}
+      <label class="lc-check en-linea"><input type="checkbox" id="tcVivo" ${vivo ? 'checked' : ''} ${puede && !c.ganador ? '' : 'disabled'}><span><b>Se está jugando</b><span class="tenue"> · late en el launcher de todos</span></span></label>
+      <div class="lc-campo"><span class="lab">Canción elegida</span><div class="t-cancion"><span class="campo">${ic('music', 's14 tenue')}<input id="tcCan" maxlength="80" value="${esc(c.cancion || '')}" placeholder="Por ejemplo: Ievan Polkka" autocomplete="off"${puede ? '' : ' disabled'}></span>${puede ? `<button type="button" class="btn chico" id="tcCanOk">Guardar</button>` : ''}</div><small class="tenue">Vacío = sin canción elegida. En la llave aparece la nota musical.</small></div>
+      ${cambioTxt(c) ? `<p class="tenue t-cambio">${ic('history', 's14')}${cambioTxt(c)}</p>` : ''}
+      <span id="tcErr" style="color:var(--red)" role="alert"></span>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cerrar</button></div></div>`);
+  const err = m => { const e = $('#tcErr', pn); if (e) e.textContent = m; };
+  const volver = () => { const t2 = listaT(J).find(x => String(x.id) === String(t.id)); pintarTorneos(J); if (t2 && capas.innerHTML) formCruce(J, t2, r, i); };
+  const mandar = async (cuerpo, listo, cerrar) => {
+    $$('button, input', pn).forEach(x => { x.dataset.antes = x.disabled ? '1' : ''; x.disabled = true; });
+    const res = await tPost(J, Object.assign({ torneo: t.id, ronda: r, idx: i }, cuerpo));
+    if (!pn.isConnected) return res;
+    $$('button, input', pn).forEach(x => { x.disabled = x.dataset.antes === '1'; });
+    if (!res.ok) { err((res.d && res.d.error) || `Error ${res.status}`); return res; }
+    if (cerrar) { cerrarCapa(); pintarTorneos(J); } else volver();
+    toast({ t: listo, sub: 'Quedó en la auditoría.', tipo: J.env === 'test' ? 'test' : 'ok' });
+    return res;
+  };
+  pn.addEventListener('click', async e => {
+    const g = e.target.closest('[data-t-gana]');
+    if (g && !g.disabled) { const k = g.dataset.tGana, n = k === 'a' ? nA : nB;
+      confirmar({ titulo: `¿Ganó ${esc(n)}?`, icono: 'trophy', peligro: false, ok: 'Sí, ganó', txt: `Pasa a ${r < rs.length - 1 ? `la ${nombreRondaT(rs[r + 1].length).toLowerCase()}` : 'ser el campeón: el torneo termina'}. Si fue un error, se reinicia el cruce.`,
+        alAceptar: async () => { const res = await tPost(J, { accion: 'resultado', torneo: t.id, ronda: r, idx: i, ganador: k });
+          if (!res.ok) { toast({ t: 'El juego no lo dejó', sub: errTxt(res), tipo: 'err', ms: 9000 }); return; }
+          pintarTorneos(J); toast({ t: `Ganó ${esc(n)}`, sub: r === rs.length - 1 ? 'Es el campeón. El torneo terminó.' : 'Avanzó en la llave. Quedó en la auditoría.' }); } });
+      return; }
+    if (e.target.closest('#tcReini')) {
+      const res = await mandar({ accion: 'reiniciar' }, 'Cruce reiniciado', true);
+      if (res.ok || !pideForzar(res)) return;
+      confirmar({ titulo: 'Hay resultados que dependen de este cruce', icono: 'alert', ok: 'Reiniciar igual', txt: `${errTxt(res)}<br>Si sigue, también se borran los resultados de adelante que salían de este cruce.`,
+        alAceptar: async () => { const r2 = await tPost(J, { accion: 'reiniciar', torneo: t.id, ronda: r, idx: i, forzar: true });
+          if (!r2.ok) { toast({ t: 'El juego no lo dejó', sub: errTxt(r2), tipo: 'err', ms: 9000 }); return; }
+          pintarTorneos(J); toast({ t: 'Cruce reiniciado', sub: 'También lo que dependía de él. Quedó en la auditoría.' }); } });
+      return; }
+    if (e.target.closest('#tcCanOk')) { const v = $('#tcCan', pn).value.trim(); mandar({ accion: 'cancion', cancion: v || null }, v ? 'Canción guardada' : 'Sin canción elegida'); }
+  });
+  pn.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'tcCan') { e.preventDefault(); const b = $('#tcCanOk', pn); if (b) b.click(); } });
+  pn.addEventListener('change', e => { if (e.target.id === 'tcVivo') mandar({ accion: 'jugando', si: e.target.checked }, e.target.checked ? 'Se está jugando: late en el launcher' : 'Ya no se está jugando'); });
+}
+document.addEventListener('change', e => { if (e.target.dataset && e.target.dataset.accionCambio === 't-tercero') cambioTercero(e.target); });
+/* se relee sola cada 20 s mientras se mira (inscripciones y votos que llegan), sin pisar un formulario abierto */
+setInterval(() => { const J = S.jc; if (J && J.t && J.tab === 'torneos' && !capas.innerHTML && document.visibilityState === 'visible') cargarTorneos(J, true); }, 20000);
+
 /* ══════════════ salir con cambios sin publicar ══════════════ */
 const hayCambios = () => !!((S.jc && suciasJc(S.jc).length) || novSucio());
 function mismaPagina(h) {
@@ -3019,6 +3398,7 @@ document.addEventListener('click', async e => {
       if (a.dataset.accion.startsWith('jc-')) accionJc(a);
       else if (a.dataset.accion.startsWith('g-')) accionG(a);
       else if (a.dataset.accion.startsWith('nov-')) accionNov(a);
+      else if (a.dataset.accion.startsWith('t-')) accionT(a);
   }
 });
 document.addEventListener('keydown', e => {

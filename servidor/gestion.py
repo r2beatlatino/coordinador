@@ -22,6 +22,8 @@ CÓMO
   (`documentacion/CONTRATO_PANEL.md`, `RUTAS_CONTRATO1`): capacidades, salud, conectados, buscar, ficha, aviso,
   echar y moneda. En `R2_PANEL_GESTION` el tipo va delante de la URL: «gunbound=contrato1:http://…/interno/panel».
   La acción asignable «moneda» lleva un cupo POR MONEDA (oro, cash…), guardado en `permisos_juego.monedas`.
+- ★ 20-nov: la acción asignable «torneos» no tiene ruta acá: la usa `torneos.py` (su propia puerta del juego,
+  `R2_PANEL_TORNEOS`). Se asigna como las demás, por moderador y por juego.
 """
 import json
 import os
@@ -45,9 +47,10 @@ ASIGNABLES = {
     "gorila": ("Monedas gorila", None),
     "chat": ("Leer el chat público guardado", None),
     "moneda": ("Dar o quitar monedas del juego", "moneda"),     # ★ contrato1: con cupo por moneda
+    "torneos": ("Manejar los torneos", None),                     # ★ 20-nov: torneos.py (crear, estados, la llave)
 }
 # lo que se puede asignar en cada tipo de servidor
-ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "gorila", "chat"),
+ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "gorila", "chat", "torneos"),
                  "contrato1": ("moneda",)}
 _MONEDA_ID = re.compile(r"^[a-z0-9_]{1,20}$")
 CUPOS = ("rcoin", "exp")

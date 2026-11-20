@@ -29,7 +29,7 @@ RUN groupadd -g 10013 r2 && useradd -u 10013 -g 10013 -M -d /app -s /usr/sbin/no
 
 WORKDIR /app
 COPY --chown=root:root servidor/__init__.py servidor/portero.py servidor/vinculos.py servidor/social.py servidor/firma_ed25519.py \
-     servidor/lanzamientos.py servidor/coordinador.py servidor/contenido.py servidor/gestion.py servidor/portero_panel.html servidor/portero_panel.js /app/servidor/
+     servidor/lanzamientos.py servidor/coordinador.py servidor/contenido.py servidor/gestion.py servidor/torneos.py servidor/portero_panel.html servidor/portero_panel.js /app/servidor/
 # ★ 19-nov: el panel del Coordinador (la página, sin datos ni arte de los juegos) y el catálogo de los juegos
 COPY --chown=root:root servidor/panel /app/servidor/panel
 COPY --chown=root:root juegos.json /app/juegos.json

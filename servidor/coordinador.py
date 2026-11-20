@@ -45,6 +45,9 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     GET  /coordinador/api/gestion/permisos             (ADMIN) los permisos y cupos de cada moderador por juego
     POST /coordinador/api/gestion {juego, entorno, ruta, cuerpo}   una acción (lista cerrada; cupos del moderador)
     POST /coordinador/api/gestion/permisos {uid, juego, acciones, cupo_rcoin, cupo_exp, reiniciar_dado?}  (ADMIN)
+    GET  /coordinador/api/torneos?juego=&entorno=live|test   ★ 20-nov: los torneos de ese servidor (torneos.py)
+    POST /coordinador/api/torneos {juego, entorno, accion, …}  crear · editar · estado · fijar_hora · resultado ·
+         reiniciar · cancion · jugando · tercero · quitar (ADMIN, o moderador con la acción asignable «torneos»)
     GET  /coordinador/api/equipo                       admins y moderadores con sus juegos (sólo ADMIN)
     POST /coordinador/api/oauth {proveedor, destino?}  · canjear {ticket} · salir
     POST /coordinador/api/accion {accion, uid, pase, detalle}   aprobar | quitar | banear | desbanear (por pase)
@@ -64,6 +67,8 @@ VARIABLES
     R2_PANEL_GESTION    ★ 20-nov fase C «pase=http://…/api/interno/panel;…» el panel de cada servidor (ver gestion.py).
     R2_PANEL_CONTENIDO  ★ 20-nov «pase=http://…/api/interno/contenido;…» el contenido dinámico de cada servidor
                         (con la ficha interna R2_CUENTAS_FICHA_INTERNA). R2_NOVEDADES_FUENTE: el pase con las noticias.
+    R2_PANEL_TORNEOS    ★ 20-nov «pase=http://…/api/interno/torneos;…» los torneos de cada servidor (ver torneos.py;
+                        el contrato es documentacion/TORNEOS.md del R2Beat 2013). Con la misma ficha interna.
     R2_PANEL_SALUD      «pase=url;…» el `/salud` de cada servidor por la red de adentro (ej. GunBound: {"en_linea": n}).
     R2_JUEGOS_CATALOGO  otro `juegos.json` (por omisión, el de la raíz del repo / de la imagen).
 """
@@ -82,6 +87,7 @@ from . import contenido as CT
 from . import gestion as GE
 from . import lanzamientos as LZ
 from . import social as SO
+from . import torneos as TO
 from . import vinculos as V
 
 PREFIJO = "coordinador"
@@ -705,7 +711,7 @@ def auditoria(P, viewer, limite=60):
     for f in filas:
         if not admin:
             # ★ 20-nov fase C: también lo que se hizo desde la gestión de SUS juegos («gestión · rcoin»…)
-            de_gestion = str(f["accion"] or "").startswith("gestión · ")
+            de_gestion = str(f["accion"] or "").startswith(("gestión · ", "torneos · "))   # ★ y los torneos
             if (f["accion"] not in MOVIMIENTOS and not de_gestion) or not f["juego"] or not P.puede_en(viewer, f["juego"]):
                 continue
             if f["uid"] and P.rol_de(f["uid"]) is not None:
@@ -898,6 +904,8 @@ def atender(P, H, metodo, p, d):
             entornos = {e: bool(pases.get(e)) and pases.get(e) in GE.fuentes() for e in ("live", "test")}
             return H._mandar(200, dict(GE.permisos(P, viewer, jid), gestionable=any(entornos.values()), entornos=entornos,
                                        tipo=GE.tipo_de(_yo(), P, jid)))
+        if api == ["torneos"]:                                       # ★ 20-nov (torneos.py)
+            return H._mandar(*TO.leer(_yo(), P, viewer, q.get("juego"), q.get("entorno") or "live"))
         if len(api) >= 4 and api[0] == "gestion":
             return H._mandar(*GE.pedir(_yo(), P, viewer, api[1], api[2], "GET", "/".join(api[3:]), query=q))
         return H._mandar(404, {"error": "no existe"})
@@ -915,6 +923,8 @@ def atender(P, H, metodo, p, d):
         return H._mandar(*CT.guardar_novedades(_yo(), P, viewer, d))
     if api == ["gestion", "permisos"]:                               # ★ 20-nov fase C (gestion.py)
         return H._mandar(*GE.poner_permisos(_yo(), P, viewer, d))
+    if api == ["torneos"]:                                           # ★ 20-nov (torneos.py)
+        return H._mandar(*TO.accion(_yo(), P, viewer, d))
     if api == ["gestion"]:
         return H._mandar(*GE.pedir(_yo(), P, viewer, str(d.get("juego") or ""), str(d.get("entorno") or ""), "POST",
                                    str(d.get("ruta") or ""), cuerpo=d.get("cuerpo")))
