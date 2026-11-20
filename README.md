@@ -29,6 +29,8 @@ Su repo lleva un `enenos.json` (qué soporta) y la línea «Parte de Eñeños ·
 Este repo (y los hijos) más **el respaldo cifrado** que guarda Benja alcanzan para levantar Eñeños desde cero.
 La guía, escrita para alguien sin ningún contexto: **[`RECONSTRUIR.md`](RECONSTRUIR.md)**.
 
+**Qué falta:** la lista de checks en [`PENDIENTES.md`](PENDIENTES.md).
+
 ## Lo que nunca entra acá
 
 Es un repo **público**: ni bases de datos, ni `.env`, ni llaves, ni listas de cuentas. Lo frena
@@ -38,3 +40,7 @@ Es un repo **público**: ni bases de datos, ni `.env`, ni llaves, ni listas de c
 git config core.hooksPath .githooks      # una vez, al clonar
 python pruebas/probar_repo.py            # el catálogo y la guardia, con sus controles
 ```
+
+## Licencia
+
+[AGPL-3.0](LICENSE), como [R2beat-2013](https://github.com/r2beatlatino/R2beat-2013).
