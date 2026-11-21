@@ -11,6 +11,8 @@
 #   queda anotado en `prueba/fallido` y no se reintenta hasta que llegue otro.
 # ⚠ Reemplazar el contenedor corta a los que están jugando EN EL DE PRUEBA (prod no se toca).
 # ⛔ Prod NO se actualiza con esto: prod sale de `master` y lo aprueba Benja.
+# ★ 21-nov: con el PANEL encima (prueba_panel/ → $DIR/panel): los controles del Coordinador y el contenido del launcher,
+#   con la base de PRUEBA (nada de prod). Sin $DIR/panel/Dockerfile, queda develop solo, como antes.
 set -euo pipefail
 
 CONJUNTO="${CONJUNTO:-/opt/enenos}"
@@ -29,8 +31,14 @@ cd "$REPO"
 git fetch -q origin "$RAMA"
 AHORA="$(git rev-parse --short "origin/$RAMA")"
 CORRE="$(docker image inspect -f '{{index .Config.Labels "enenos.commit"}}' "$IMAGEN" 2>/dev/null || true)"
+# ★ 21-nov: el PANEL (prueba_panel/): encima de develop van los módulos de PROD, sacados de la imagen del juego de prod
+#   (JUEGO_IMAGEN). Si prod cambió de imagen, la de prueba se rearma aunque develop no haya cambiado.
+PANEL="$DIR/panel"
+PROD_IMAGEN="$(grep -E '^JUEGO_IMAGEN=' "$CONJUNTO/.env" 2>/dev/null | cut -d= -f2-)"
+CORRE_PROD="$(docker image inspect -f '{{index .Config.Labels "enenos.privado"}}' "$IMAGEN" 2>/dev/null || true)"
+[ -f "$PANEL/Dockerfile" ] && [ -n "$PROD_IMAGEN" ] || PROD_IMAGEN=""
 if [ "${1:-}" != "--forzar" ]; then
-    [ "$AHORA" = "$CORRE" ] && exit 0                                    # nada nuevo
+    [ "$AHORA" = "$CORRE" ] && [ "$PROD_IMAGEN" = "$CORRE_PROD" ] && exit 0   # nada nuevo
     [ "$AHORA" = "$(cat "$DIR/fallido" 2>/dev/null)" ] && exit 0         # ya falló: espera otro commit
 fi
 echo "$(date '+%F %T') prueba ($RAMA): ${CORRE:-nada} → $AHORA"
@@ -39,6 +47,22 @@ if ! docker build -q --label "enenos.commit=$AHORA" -f despliegue/Dockerfile -t 
     echo "$(date '+%F %T') ⛔ no se pudo armar $AHORA (¿fallaron sus pruebas?). Sigue el anterior (${CORRE:-ninguno})."
     echo "$AHORA" > "$DIR/fallido"
     exit 1
+fi
+if [ -n "$PROD_IMAGEN" ]; then
+    # ⛔ estos archivos NO están en ningún repo público: salen de la imagen de prod, al armar (ver prueba_panel/)
+    rm -rf "$PANEL/servidor" && mkdir -p "$PANEL/servidor"
+    TMPC="$(docker create "$PROD_IMAGEN")"
+    for f in api_web.py asistencia.py clasificacion.py geoip_paises.bin launcher_api.py launcher_contenido.py              npc_charla.py panel_admin.py portero.py portero_panel.html portero_panel.js respaldo.py ruleta.py              ruleta_mayor.json ruleta_ropa.json tienda_launcher.py contenido_interno.py; do
+        docker cp -q "$TMPC:/app/servidor/$f" "$PANEL/servidor/" || echo "$(date '+%F %T') ⚠ $f no está en $PROD_IMAGEN"
+    done
+    docker rm -f "$TMPC" >/dev/null
+    if ! docker build -q --build-arg BASE="${IMAGEN}-nueva" --label "enenos.privado=$PROD_IMAGEN"             -t "${IMAGEN}-nueva" "$PANEL" ; then
+        echo "$(date '+%F %T') ⛔ el panel no se pudo poner encima de $AHORA ($PROD_IMAGEN). Sigue el anterior."
+        echo "$AHORA" > "$DIR/fallido"
+        exit 1
+    fi
+    rm -rf "$PANEL/servidor"
+    echo "$(date '+%F %T') panel: los módulos de $PROD_IMAGEN encima de $AHORA"
 fi
 docker tag "${IMAGEN}-nueva" "$IMAGEN"
 docker rmi -f "${IMAGEN}-nueva" >/dev/null 2>&1 || true

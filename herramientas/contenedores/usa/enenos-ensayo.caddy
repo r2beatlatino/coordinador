@@ -8,6 +8,7 @@
 #   127.0.0.1). El Caddy de la pila no lo alcanza (está en la red de Docker), éste sí:
 #   · /eda-prueba/lista.jws  su lista FIRMADA (eda_web/prueba.jws, la arma eda_ensayo.sh), sin caché
 #   · /eda-prueba/pase       el canje del pase (`aud` eda-prueba) → POST /eda/pase del server de prueba
+#   · /api-prueba/api/…      ★ 21-nov la API del server de PRUEBA de R2Beat (127.0.0.1:48511), sin /api/interno
 #   Todo lo demás, a la pila como siempre.
 #   Probar antes de recargar:  caddy validate --config /etc/caddy/Caddyfile  ·  recargar: systemctl reload caddy
 ensayo.xn--eeos-gqab.link, auth.xn--eeos-gqab.link {
@@ -24,6 +25,19 @@ ensayo.xn--eeos-gqab.link, auth.xn--eeos-gqab.link {
 	handle /eda-prueba/pase {
 		rewrite * /eda/pase
 		reverse_proxy 127.0.0.1:35901
+	}
+	# ★ 21-nov la API del server de PRUEBA de R2Beat (con_panel.py: develop + el panel de prod, SU base): el launcher con
+	#   «Servidor de prueba» lee de acá el contenido de sus cajas. Sólo /api/…; lo interno (la ficha) no sale nunca.
+	handle_path /api-prueba/* {
+		handle /api/interno/* {
+			respond 404
+		}
+		handle /api/* {
+			reverse_proxy 127.0.0.1:48511
+		}
+		handle {
+			respond 404
+		}
 	}
 	handle {
 		reverse_proxy 127.0.0.1:8088

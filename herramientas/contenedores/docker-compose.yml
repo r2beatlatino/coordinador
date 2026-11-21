@@ -332,6 +332,8 @@ services:
       - "${JUEGO_PUBLICAR:-0.0.0.0}:49075:49075"
       - "${JUEGO_PUBLICAR:-0.0.0.0}:49085:49085"
       - "${JUEGO_PUBLICAR:-0.0.0.0}:49095:49095"
+      # ★ 21-nov: la API del panel de PRUEBA (con_panel.py), SÓLO para el Caddy del sistema: /api-prueba/ del ensayo
+      - "127.0.0.1:48511:48510"
     logging: *registro
 
 
