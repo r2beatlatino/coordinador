@@ -179,6 +179,37 @@ def _http(url, ruta, query, cuerpo, quien, admin):
         return 503, {"error": "El servidor del juego no contesta ahora. Pruebe en un rato."}
 
 
+def echar_de_los_juegos(eid, pases, quien, motivo=""):
+    """★ 21-nov (Benja: «banear no desconecta al usuario»): el baneo vive en Cuenta Eñeños (no le da más pases), pero
+    el que YA estaba adentro seguía jugando hasta salir. Después de banear, en cada server baneado que se gestiona se
+    buscan los personajes de ESA persona (por su Eñeños ID) y se echa a los que están conectados — con el mismo
+    «echar» del panel (R2Beat: `usuarios?q=` + `usuario/N/echar`; contrato: `buscar?q=` + `echar {id}`).
+    -> {pase: cuántos echó | "no contesta"}. Los pases sin gestión se saltean (nada que echar)."""
+    eid = int(eid)
+    fu = fuentes()
+    out = {}
+    for p in pases:
+        if p not in fu:
+            continue
+        tipo, url = fu[p]
+        ruta_b = "usuarios" if tipo == "r2beat" else "buscar"
+        cod, d = _http(url, ruta_b, {"q": str(eid)}, None, quien, True)
+        if cod != 200:
+            out[p] = "no contesta"
+            continue
+        n = 0
+        for f in (d.get("filas") or []) if isinstance(d, dict) else []:
+            if not isinstance(f, dict) or f.get("enenos_id") != eid or not f.get("conectado"):
+                continue
+            if tipo == "r2beat":
+                c2, _ = _http(url, f"usuario/{int(f.get('uid') or 0)}/echar", None, {"motivo": str(motivo)[:200]}, quien, True)
+            else:
+                c2, _ = _http(url, "echar", None, {"id": f.get("id"), "motivo": str(motivo)[:200]}, quien, True)
+            n += c2 == 200
+        out[p] = n
+    return out
+
+
 def _limpiar(v):
     """Saca lo privado (IP, login…) de una respuesta, en cualquier nivel."""
     if isinstance(v, dict):

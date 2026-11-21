@@ -618,6 +618,27 @@ def pases_pedidos(P, viewer, d):
     return list(dict.fromkeys(out)), None
 
 
+_echando = None                    # (el último hilo de `_echar_baneado`: las pruebas lo esperan)
+
+
+def _echar_baneado(P, viewer, eid, pases, motivo):
+    """★ 21-nov: el baneado que está ADENTRO se desconecta (`gestion.echar_de_los_juegos`), en su hilo: el baneo
+    contesta enseguida aunque haya varios servers (toda la red) y alguno tarde."""
+    global _echando
+    quien = "coordinador:" + (P._login_de(viewer) or f"uid {viewer}")
+
+    def correr():
+        try:
+            res = GE.echar_de_los_juegos(eid, pases, quien, motivo)
+            if res:
+                P._log(f"panel: baneo de uid={eid} -> echado de los juegos: {res}")
+        except Exception as e:                                           # noqa: BLE001
+            P._log(f"panel: ⚠ baneo de uid={eid}: no pude echarlo de los juegos ({e!r})")
+
+    _echando = threading.Thread(target=correr, daemon=True, name="echar-baneado")
+    _echando.start()
+
+
 def accion(P, viewer, d):
     acc = str(d.get("accion") or "")
     if acc not in ACCIONES:
@@ -637,6 +658,8 @@ def accion(P, viewer, d):
         motivo = d.get("motivo") if d.get("motivo") is not None else d.get("detalle")
         if acc == "banear":
             codigo, datos = P.admin_banear(viewer, int(uid), pases, str(motivo or ""), d, red=red)
+            if codigo == 200:
+                _echar_baneado(P, viewer, int(uid), datos.get("pases") or [], str(motivo or ""))
         else:
             codigo, datos = P.admin_desbanear(viewer, int(uid), P.pases_de_la_red() if red else pases)
         if codigo != 200:
