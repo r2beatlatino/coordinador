@@ -12,3 +12,64 @@ services:
     ports: !override
       - "0.0.0.0:25910:25910"
       - "0.0.0.0:26400-26440:26400-26440/udp"
+
+  # ★ 19-nov el PANEL del Coordinador (coordinador.eñeños.link, Caddy del sistema → 127.0.0.1:48195 con /coordinador)
+  cuentas:
+    # ★ 20-nov: el login se cayó al llegar a 1024 archivos abiertos (fuga de conexiones, arreglada en coord-i): margen
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    environment:
+      R2_PANEL_URL: "https://coordinador.xn--eeos-gqab.link"
+      R2_PANEL_SALUD: "gunbound=http://gunbound:8371/salud;gunbound-prueba=http://gunbound-prueba:9371/salud"
+      R2_PANEL_CONTENIDO: "r2beat2013=http://r2beat2013:48190/api/interno/contenido;r2beat2013-prueba=http://r2beat2013-prueba:48510/api/interno/contenido"
+      R2_PANEL_GESTION: "r2beat2013=http://r2beat2013:48190/api/interno/panel;r2beat2013-prueba=http://r2beat2013-prueba:48510/api/interno/panel;gunbound=contrato1:http://gunbound:8371/interno/panel;gunbound-prueba=contrato1:http://gunbound-prueba:9371/interno/panel;eda=contrato1:http://eda:25911/interno/panel"
+      R2_PANEL_TORNEOS: "r2beat2013=http://r2beat2013:48190/api/interno/torneos"
+
+  # ★ 21-nov EÑEÑOSBIT 2027 (el R2Beat moderno, entrega del 21-nov: /opt/enenos/moderno/servidor_2026-11-21 y
+  #   D:\R2Beat docs/ENTREGA_MODERNO_AL_COORDINADOR.md). Sólo entra quien trae el pase aud r2beat-moderno (PASE=si);
+  #   la clave pública la pide UNA vez al arrancar a Cuenta Eñeños. ⚠ Docker se salta el ufw: publicar = abrir.
+  #   login 28004 · juego 28008 · cuentas 28101-28109. La imagen: MODERNO_IMAGEN (por omisión r2beat-moderno:1121).
+  r2beat-moderno:
+    image: ${MODERNO_IMAGEN:-r2beat-moderno:1121}
+    restart: unless-stopped
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    environment:
+      IP_JUEGO: "185.147.157.33"
+      R2_CUENTAS_URL: "http://cuentas:48195"
+    ports:
+      - "0.0.0.0:28004:28004"
+      - "0.0.0.0:28008:28008"
+      - "0.0.0.0:28101-28109:28101-28109"
+    volumes:
+      - moderno_datos:/datos_cuentas
+      - moderno_registros:/app/registros
+
+  # ★ 21-nov el SERVIDOR DE PRUEBA de Eñeñosbit 2027 (el botón «Servidor de prueba» del launcher: su lista es
+  #   /r2beat-moderno-prueba/lista.jws). La misma imagen que prod salvo que se pruebe otra (MODERNO_PRUEBA_IMAGEN), otros
+  #   puertos (38004 login · 38008 juego · 38101-38109 cuentas) y SUS cuentas. Pide el mismo pase que prod (aud
+  #   r2beat-moderno): el portero no conoce otro. ⚠ Docker se salta el ufw: publicar = abrir.
+  r2beat-moderno-prueba:
+    image: ${MODERNO_PRUEBA_IMAGEN:-r2beat-moderno:2026-11-21}
+    restart: unless-stopped
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    environment:
+      IP_JUEGO: "185.147.157.33"
+      R2_CUENTAS_URL: "http://cuentas:48195"
+      PUERTOS: "38004"
+      PUERTOS_JUEGO: "38008"
+      PUERTO_CUENTAS: "38101"
+    ports:
+      - "0.0.0.0:38004:38004"
+      - "0.0.0.0:38008:38008"
+      - "0.0.0.0:38101-38109:38101-38109"
+    volumes:
+      - moderno_prueba_datos:/datos_cuentas
+      - moderno_prueba_registros:/app/registros
+
+volumes:
+  moderno_datos:        # ★ 21-nov las cuentas de Eñeñosbit 2027 (cuenta.json): es lo único que hay que mudar
+  moderno_registros:    # ★ 21-nov los registros del server de Eñeñosbit 2027
+  moderno_prueba_datos:     # ★ 21-nov las cuentas del server de PRUEBA de Eñeñosbit 2027 (aparte de prod)
+  moderno_prueba_registros:

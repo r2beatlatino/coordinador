@@ -8,6 +8,8 @@
 #   127.0.0.1). El Caddy de la pila no lo alcanza (está en la red de Docker), éste sí:
 #   · /eda-prueba/lista.jws  su lista FIRMADA (eda_web/prueba.jws, la arma eda_ensayo.sh), sin caché
 #   · /eda-prueba/pase       el canje del pase (`aud` eda-prueba) → POST /eda/pase del server de prueba
+#   · /r2beat-moderno/lista.jws  ★ 21-nov la lista FIRMADA de Eñeñosbit 2027 (moderno_web/lista.jws), sin caché
+#   · /r2beat-moderno-prueba/lista.jws  ★ 21-nov la del servidor de PRUEBA (moderno_web/prueba.jws)
 #   · /api-prueba/api/…      ★ 21-nov la API del server de PRUEBA de R2Beat (127.0.0.1:48511), sin /api/interno
 #   Todo lo demás, a la pila como siempre.
 #   Probar antes de recargar:  caddy validate --config /etc/caddy/Caddyfile  ·  recargar: systemctl reload caddy
@@ -25,6 +27,23 @@ ensayo.xn--eeos-gqab.link, auth.xn--eeos-gqab.link {
 	handle /eda-prueba/pase {
 		rewrite * /eda/pase
 		reverse_proxy 127.0.0.1:35901
+	}
+	# ★ 21-nov la lista FIRMADA de Eñeñosbit 2027 (el R2Beat moderno): la arma /opt/enenos/moderno_lista.sh y la firma
+	#   moderno_firmar.py con la clave de la plataforma (repo coordinador). Dice qué bajar y a qué server entrar.
+	# ★ 21-nov la del SERVIDOR DE PRUEBA de Eñeñosbit 2027 (moderno_lista.sh PRUEBA=1 + moderno_firmar.py --prueba)
+	handle /r2beat-moderno-prueba/lista.jws {
+		header Cache-Control "no-store"
+		header Content-Type "application/jose"
+		root * /opt/enenos/moderno_web
+		rewrite * /prueba.jws
+		file_server
+	}
+	handle /r2beat-moderno/lista.jws {
+		header Cache-Control "no-store"
+		header Content-Type "application/jose"
+		root * /opt/enenos/moderno_web
+		rewrite * /lista.jws
+		file_server
 	}
 	# ★ 21-nov la API del server de PRUEBA de R2Beat (con_panel.py: develop + el panel de prod, SU base): el launcher con
 	#   «Servidor de prueba» lee de acá el contenido de sus cajas. Sólo /api/…; lo interno (la ficha) no sale nunca.
