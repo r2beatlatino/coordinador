@@ -9,6 +9,10 @@
 #   2. EL SERVER: cuando /opt/eda/prod (rama main) cambia y YA trae el ingreso con Cuenta Eñeños (PR #49 de
 #      r2beatlatino/EDA), arma `eda-server:ensayo-<commit>` con el mismo Dockerfile (corre sus pruebas al armar),
 #      lo pone en /opt/enenos/.env y reinicia sólo el EDA del ensayo. Si no contesta, vuelve a la imagen de antes.
+#   ★ 21-nov: y la lista del server de PRUEBA de EDA (develop → eda-prueba, red host, 35900): los MISMOS archivos,
+#      con su server y su canje (`/eda-prueba/pase`, que el Caddy del sistema lleva a 127.0.0.1:35901), en
+#      eda_web/prueba.jws → https://ensayo.eñeños.link/eda-prueba/lista.jws (el botón «Servidor de prueba» del launcher).
+#   SOLO_LISTA=1: hace sólo el paso 1 (para correrlo a mano sin que arme ni reinicie el server).
 #   No toca prod ni prueba de EDA, ni su repo.
 set -euo pipefail
 EDA=/opt/eda
@@ -16,15 +20,21 @@ ENS=/opt/enenos
 EST=$ENS/eda_web/.sigue_a_prod
 SERVIDOR="185.147.157.33:25910"
 CANJE="https://ensayo.xn--eeos-gqab.link/eda/pase"
+SERVIDOR_PRUEBA="185.147.157.33:35900"
+CANJE_PRUEBA="https://ensayo.xn--eeos-gqab.link/eda-prueba/pase"
 mkdir -p "$EST"
 log() { echo "$(date '+%F %T') [eda-ensayo] $*"; }
 
-# ── 1. la lista ──
+# ── 1. las listas (la del ensayo = prod, y la del server de PRUEBA) ──
 FUENTE=$EDA/manifiesto/eda.json
-if [ -f "$FUENTE" ]; then
+# armar_lista <server> <canje> <archivo en eda_web> <marca>: la firma con la clave de EDA si cambió la de EDA.
+#   Devuelve 0 = igual · 1 = la cambió · 2 = falló (y la de antes queda). ⚠ Dentro de un `||` el `set -e` NO corta
+#   (bash lo apaga en la función entera): por eso cada paso se comprueba a mano.
+armar_lista() {
+    local SRV="$1" CJ="$2" SALIDA="$ENS/eda_web/$3" MARCA="$EST/$4" H
     H=$(sha256sum "$FUENTE" | cut -c1-16)
-    if [ "$H" != "$(cat "$EST/lista" 2>/dev/null || true)" ]; then
-        python3 - "$FUENTE" "$SERVIDOR" "$CANJE" > "$EST/eda.json" <<'PY'
+    [ "$H" = "$(cat "$MARCA" 2>/dev/null || true)" ] && [ -f "$SALIDA" ] && return 0
+    python3 - "$FUENTE" "$SRV" "$CJ" > "$EST/eda.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 for k in ("aud", "iat"):
@@ -35,23 +45,31 @@ d["base"] = "https://cdn.xn--eeos-gqab.link/eda/" + d["base"].rstrip("/").rsplit
 assert d.get("files") and d.get("version"), "eda.json sin archivos o sin versión"
 json.dump(d, sys.stdout, ensure_ascii=False)
 PY
-        # (la firma necesita pycryptodome: la tiene la imagen de EDA, no el sistema. Un contenedor descartable, todo de lectura)
-        docker run --rm --network none --entrypoint python             -v "$EDA/prod/herramientas:/h:ro" -v "$EDA/claves:/k:ro" -v "$EST:/e:ro" eda-server:prod             /h/firmar_manifiesto.py firmar /e/eda.json /k/manifiesto-actual.pem > "$EST/nueva.jws"
-        python3 - "$EST/nueva.jws" "$SERVIDOR" <<'PY'
+    [ $? -eq 0 ] || { log "⛔ $3: no se pudo armar la lista"; return 2; }
+    # (la firma necesita pycryptodome: la tiene la imagen de EDA, no el sistema. Un contenedor descartable, todo de lectura)
+    docker run --rm --network none --entrypoint python         -v "$EDA/prod/herramientas:/h:ro" -v "$EDA/claves:/k:ro" -v "$EST:/e:ro" eda-server:prod         /h/firmar_manifiesto.py firmar /e/eda.json /k/manifiesto-actual.pem > "$EST/nueva.jws"         || { log "⛔ $3: no se pudo firmar"; return 2; }
+    python3 - "$EST/nueva.jws" "$SRV" "$CJ" <<'PY'
 import base64, json, sys
 a, b, c = open(sys.argv[1]).read().strip().split(".")
 d = json.loads(base64.urlsafe_b64decode(b + "=" * (-len(b) % 4)))
-assert d["servidor"] == sys.argv[2] and d["aud"] == "eda-launcher" and d["files"], "la lista nueva no es la del ensayo"
+assert d["servidor"] == sys.argv[2] and d["canje"] == sys.argv[3] and d["aud"] == "eda-launcher" and d["files"],     "la lista nueva no es la que se pidió"
 PY
-        cp "$ENS/eda_web/manifiesto.jws" "$ENS/eda_web/manifiesto.jws.antes"
-        mv "$EST/nueva.jws" "$ENS/eda_web/manifiesto.jws"
-        echo "$H" > "$EST/lista"
+    [ $? -eq 0 ] || { log "⛔ $3: la firmada no es la que se pidió: queda la de antes"; return 2; }
+    [ -f "$SALIDA" ] && cp "$SALIDA" "$SALIDA.antes"
+    mv "$EST/nueva.jws" "$SALIDA"
+    echo "$H" > "$MARCA"
+    log "lista $3 = la de prod $(python3 -c "import json;print(json.load(open('$FUENTE'))['version'])") (server $SRV)"
+    return 1                                                         # (1 = cambió)
+}
+if [ -f "$FUENTE" ]; then
+    r=0; armar_lista "$SERVIDOR" "$CANJE" manifiesto.jws lista || r=$?
+    if [ "$r" = 1 ]; then
         # ★ 18-nov (Benja: «que siempre funcione así durante parches»): la versión nueva, precalentada en la CDN
         python3 "$ENS/precalentar_cdn.py" --eda >> "$ENS/precalentar.log" 2>&1 || log "⚠ el precalentado de EDA tuvo fallas (ver precalentar.log)"
-        log "lista del ensayo = la de prod $(python3 -c "import json;print(json.load(open('$FUENTE'))['version'])") (server $SERVIDOR)"
     fi
+    armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba || true
 fi
-
+[ "${SOLO_LISTA:-}" = "1" ] && exit 0
 # ── 2. el server ──
 cd "$EDA/prod"
 grep -q "EDA_CUENTAS_CLAVE_PUBLICA" servidor/config.py || exit 0          # main todavía no trae Cuenta Eñeños

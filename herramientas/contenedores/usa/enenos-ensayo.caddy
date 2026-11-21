@@ -1,0 +1,47 @@
+# /etc/caddy/enenos-ensayo.caddy — lo importa el Caddyfile del SISTEMA del VPS de USA (el que tiene el 443).
+#
+# ★ 18-nov el ENSAYO (la pila /opt/enenos) — sin la nube: Caddy saca el certificado solo (TLS-ALPN por el 443).
+# ⚠ el tls con issuer acme es OBLIGATORIO: sin él, Caddy ve el certificado de ORIGEN de Cloudflare (*.eñeños.link,
+#   del sitio de EDA) y lo usa acá también, y sin la nube ningún cliente confía en él (SEC_E_UNTRUSTED_ROOT).
+#
+# ★ 21-nov el server de PRUEBA de EDA (develop → `eda-prueba`, red HOST: 35900 el juego, 35901 su HTTP sólo en
+#   127.0.0.1). El Caddy de la pila no lo alcanza (está en la red de Docker), éste sí:
+#   · /eda-prueba/lista.jws  su lista FIRMADA (eda_web/prueba.jws, la arma eda_ensayo.sh), sin caché
+#   · /eda-prueba/pase       el canje del pase (`aud` eda-prueba) → POST /eda/pase del server de prueba
+#   Todo lo demás, a la pila como siempre.
+#   Probar antes de recargar:  caddy validate --config /etc/caddy/Caddyfile  ·  recargar: systemctl reload caddy
+ensayo.xn--eeos-gqab.link, auth.xn--eeos-gqab.link {
+	tls {
+		issuer acme
+	}
+	handle /eda-prueba/lista.jws {
+		header Cache-Control "no-store"
+		header Content-Type "application/jose"
+		root * /opt/enenos/eda_web
+		rewrite * /prueba.jws
+		file_server
+	}
+	handle /eda-prueba/pase {
+		rewrite * /eda/pase
+		reverse_proxy 127.0.0.1:35901
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8088
+	}
+}
+
+# ★ 19-nov el PANEL del Coordinador Eñeños (repo r2beatlatino/coordinador, servidor/coordinador.py): todo va a Cuenta
+#   Eñeños con el prefijo /coordinador. Lo interno de Cuenta Eñeños no se alcanza desde acá: todo queda DENTRO de
+#   /coordinador. El ingreso con Discord/Google vuelve por auth (la vuelta ya registrada) y de ahí, con un ticket, acá.
+coordinador.xn--eeos-gqab.link {
+	tls {
+		issuer acme
+	}
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	rewrite * /coordinador{path}
+	reverse_proxy 127.0.0.1:48195
+}
