@@ -27,14 +27,15 @@ log() { echo "$(date '+%F %T') [eda-ensayo] $*"; }
 
 # ── 1. las listas (la del ensayo = prod, y la del server de PRUEBA) ──
 FUENTE=$EDA/manifiesto/eda.json
-# armar_lista <server> <canje> <archivo en eda_web> <marca>: la firma con la clave de EDA si cambió la de EDA.
+# armar_lista <server> <canje> <archivo en eda_web> <marca> [fuente]: la firma con la clave de EDA si cambió la fuente
+#   (por omisión la de EDA; la de PRUEBA es la publicada + los archivos de `exe/` que develop cambió).
 #   Devuelve 0 = igual · 1 = la cambió · 2 = falló (y la de antes queda). ⚠ Dentro de un `||` el `set -e` NO corta
 #   (bash lo apaga en la función entera): por eso cada paso se comprueba a mano.
 armar_lista() {
-    local SRV="$1" CJ="$2" SALIDA="$ENS/eda_web/$3" MARCA="$EST/$4" H
-    H=$(sha256sum "$FUENTE" | cut -c1-16)
+    local SRV="$1" CJ="$2" SALIDA="$ENS/eda_web/$3" MARCA="$EST/$4" FTE="${5:-$FUENTE}" H
+    H=$(sha256sum "$FTE" | cut -c1-16)
     [ "$H" = "$(cat "$MARCA" 2>/dev/null || true)" ] && [ -f "$SALIDA" ] && return 0
-    python3 - "$FUENTE" "$SRV" "$CJ" > "$EST/eda.json" <<'PY'
+    python3 - "$FTE" "$SRV" "$CJ" > "$EST/eda.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 for k in ("aud", "iat"):
@@ -58,7 +59,7 @@ PY
     [ -f "$SALIDA" ] && cp "$SALIDA" "$SALIDA.antes"
     mv "$EST/nueva.jws" "$SALIDA"
     echo "$H" > "$MARCA"
-    log "lista $3 = la de prod $(python3 -c "import json;print(json.load(open('$FUENTE'))['version'])") (server $SRV)"
+    log "lista $3 = $(python3 -c "import json;d=json.load(open('$FTE'));print(d['version'], d['base'].rstrip('/').rsplit('/',1)[-1])") (server $SRV)"
     return 1                                                         # (1 = cambió)
 }
 if [ -f "$FUENTE" ]; then
@@ -67,7 +68,16 @@ if [ -f "$FUENTE" ]; then
         # ★ 18-nov (Benja: «que siempre funcione así durante parches»): la versión nueva, precalentada en la CDN
         python3 "$ENS/precalentar_cdn.py" --eda >> "$ENS/precalentar.log" 2>&1 || log "⚠ el precalentado de EDA tuvo fallas (ver precalentar.log)"
     fi
-    armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba || true
+    # ★ 21-nov (Benja: «el launcher se actualizó pero el juego no»): el cliente del de PRUEBA = el publicado + lo que
+    #   develop cambió en exe/ (eda_prueba_cliente.py: carpeta de enlaces duros, la versión no cambia). Si falla, la
+    #   lista de prueba sigue con el cliente publicado.
+    if DIST=$(python3 "$ENS/eda_prueba_cliente.py" armar "$FUENTE" "$EDA/prueba" "$EDA/files-eda" "$EST/fuente-prueba.json" 2>&1); then
+        [ "$DIST" != "$(cat "$EST/prueba-distintos" 2>/dev/null || true)" ] && { log "cliente de prueba: de develop = ${DIST}"; echo "$DIST" > "$EST/prueba-distintos"; }
+        armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba "$EST/fuente-prueba.json" || true
+    else
+        log "⚠ cliente de prueba: ${DIST} — sigue el publicado"
+        armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba || true
+    fi
 fi
 [ "${SOLO_LISTA:-}" = "1" ] && exit 0
 # ── 2. el server ──

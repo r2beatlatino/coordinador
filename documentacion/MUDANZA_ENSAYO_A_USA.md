@@ -246,6 +246,14 @@ en `EDA_LOGIN=abierto` y nadie llegaba a él. Ahora es como el de GunBound:
 Probado con pases de verdad: `eda-prueba` → server de prueba = ticket · ⟲ `eda` → prueba = «audiencia» · ⟲ `eda-prueba` →
 prod = «audiencia». Las cuentas viejas del modo abierto del de prueba quedaron sin usar.
 
+★ **El cliente del de prueba sigue a develop** (Benja: «el launcher se actualizó pero el juego no»):
+`eda_prueba_cliente.py` (lo llama `eda_ensayo.sh` cada 5 min) parte de la versión publicada y pisa los archivos de
+`exe/` del commit de develop que sean distintos (sin los .md), en `/opt/eda/files-eda/<versión>-prueba-<huella>/`
+(enlaces duros: el Data.dat no se copia; ⛔ el enlace se borra antes de escribir, si no se pisa el de prod). La
+versión de la lista NO cambia (prod y prueba comparten la «última aceptada» del launcher); el launcher baja archivo
+por archivo lo distinto al ir y al volver. Para probar una dll en el de prueba: subirla COMPILADA a `exe/` en develop.
+`python3 eda_prueba_cliente.py control` (con sus controles al revés).
+
 ## 6 · Lo que queda
 
 - El **R2Beat moderno** (server + cliente de ~15 GB) lo arma la sesión de Fluidez en este mismo VPS, cuando Benja
