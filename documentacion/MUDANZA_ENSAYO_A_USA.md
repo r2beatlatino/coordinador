@@ -246,12 +246,16 @@ en `EDA_LOGIN=abierto` y nadie llegaba a él. Ahora es como el de GunBound:
 Probado con pases de verdad: `eda-prueba` → server de prueba = ticket · ⟲ `eda` → prueba = «audiencia» · ⟲ `eda-prueba` →
 prod = «audiencia». Las cuentas viejas del modo abierto del de prueba quedaron sin usar.
 
-★ **El cliente del de prueba sigue a develop** (Benja: «el launcher se actualizó pero el juego no»):
-`eda_prueba_cliente.py` (lo llama `eda_ensayo.sh` cada 5 min) parte de la versión publicada y pisa los archivos de
-`exe/` del commit de develop que sean distintos (sin los .md), en `/opt/eda/files-eda/<versión>-prueba-<huella>/`
-(enlaces duros: el Data.dat no se copia; ⛔ el enlace se borra antes de escribir, si no se pisa el de prod). La
-versión de la lista NO cambia (prod y prueba comparten la «última aceptada» del launcher); el launcher baja archivo
-por archivo lo distinto al ir y al volver. Para probar una dll en el de prueba: subirla COMPILADA a `exe/` en develop.
+★ **El cliente del de prueba sigue a develop** (Benja: «el launcher se actualizó pero el juego no» / «¿la dll no debió
+compilarse?»). El CI de EDA ya compila la dll en cada push a develop y la deja en la release **«cliente-develop»**
+(dll, `eda_d3d9.ini` y `cliente-develop.json` con md5 y sha256; `herramientas/dll_d3d9/canal.py` de EDA).
+`eda_prueba_cliente.py` (lo llama `eda_ensayo.sh` cada 5 min) parte de la versión publicada y pisa con eso lo que
+sea distinto (comprobado; uno que no cierra = no se usa nada y sigue lo publicado), en
+`/opt/eda/files-eda/<versión>-prueba-<huella>/` (enlaces duros: el Data.dat no se copia; ⛔ el enlace se borra antes de
+escribir, si no se pisa el de prod). Lo bajado queda por md5 en `eda_web/.sigue_a_prod/cache-develop/`. La versión de
+la lista NO cambia (prod y prueba comparten la «última aceptada» del launcher); el launcher baja por md5 lo distinto
+al ir y al volver. ⚠ `eda_d3d9.ini` es del jugador: si ya lo tiene, el launcher no se lo pisa (igual que en prod).
+21-nov 00:58: la dll 0.5.0 de develop (Puntos 5 y 6, md5 0f075db4…) ya está en la lista de prueba.
 `python3 eda_prueba_cliente.py control` (con sus controles al revés).
 
 ## 6 · Lo que queda

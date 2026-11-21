@@ -68,10 +68,10 @@ if [ -f "$FUENTE" ]; then
         # ★ 18-nov (Benja: «que siempre funcione así durante parches»): la versión nueva, precalentada en la CDN
         python3 "$ENS/precalentar_cdn.py" --eda >> "$ENS/precalentar.log" 2>&1 || log "⚠ el precalentado de EDA tuvo fallas (ver precalentar.log)"
     fi
-    # ★ 21-nov (Benja: «el launcher se actualizó pero el juego no»): el cliente del de PRUEBA = el publicado + lo que
-    #   develop cambió en exe/ (eda_prueba_cliente.py: carpeta de enlaces duros, la versión no cambia). Si falla, la
-    #   lista de prueba sigue con el cliente publicado.
-    if DIST=$(python3 "$ENS/eda_prueba_cliente.py" armar "$FUENTE" "$EDA/prueba" "$EDA/files-eda" "$EST/fuente-prueba.json" 2>&1); then
+    # ★ 21-nov (Benja: «el launcher se actualizó pero el juego no»): el cliente del de PRUEBA = el publicado + el que el
+    #   CI de EDA compila de develop (release «cliente-develop»: dll, ini y exe, comprobados). eda_prueba_cliente.py:
+    #   carpeta de enlaces duros, la versión no cambia. Si falla, la lista de prueba sigue con el cliente publicado.
+    if DIST=$(python3 "$ENS/eda_prueba_cliente.py" armar "$FUENTE"               "https://github.com/r2beatlatino/EDA/releases/download/cliente-develop/cliente-develop.json"               "$EDA/files-eda" "$EST/cache-develop" "$EST/fuente-prueba.json" 2>&1); then
         [ "$DIST" != "$(cat "$EST/prueba-distintos" 2>/dev/null || true)" ] && { log "cliente de prueba: de develop = ${DIST}"; echo "$DIST" > "$EST/prueba-distintos"; }
         armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba "$EST/fuente-prueba.json" || true
     else
