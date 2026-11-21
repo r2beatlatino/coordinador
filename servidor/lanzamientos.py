@@ -32,7 +32,7 @@ from datetime import datetime
 
 # clave -> {nombre, etiqueta, desde (ISO con huso), pases: los juegos del portero que cierra}
 LANZAMIENTOS = {
-    "eda": {"nombre": "EDA", "etiqueta": "BETA", "desde": "2026-11-21T19:00:00-05:00", "pases": ["eda"]},
+    "eda": {"nombre": "EDA", "etiqueta": "BETA", "desde": "2026-11-21T19:00:00-05:00", "pases": ["eda", "eda-prueba"]},
     "gunbound": {"nombre": "GunBound", "etiqueta": "BETA", "desde": "2026-11-22T12:00:00-05:00",
                  "pases": ["gunbound", "gunbound-prueba"]},
     "r2beat-moderno": {"nombre": "Eñeñosbit 2027", "etiqueta": "ALPHA", "desde": "2026-11-23T19:00:00-05:00",

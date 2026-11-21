@@ -156,6 +156,9 @@ JUEGOS = {
 }
 JUEGOS_DUENA = {
     "eda": {"nombre": "Espada del Alma", "abierto": False},
+    # ★ 21-nov: el server de PRUEBA de EDA (develop → eda-prueba) con su pase propio, como GunBound. Lo cierra el mismo
+    #   lanzamiento que a `eda` (lanzamientos.py): antes de la fecha, admins, moderadores y aprobados; después, todos.
+    "eda-prueba": {"nombre": "Espada del Alma (servidor de prueba)", "abierto": False},
     "r2beat2013": {"nombre": "R2Beat 2013", "abierto": True},
     # ★ 15-nov (dos servers por juego): el server de PRUEBA es «otro juego» para el pase (aud propio). Abierto a
     #   toda cuenta activa, como prod: cualquiera puede marcar «Servidor de prueba» en el launcher.

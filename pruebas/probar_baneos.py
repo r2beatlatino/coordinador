@@ -163,15 +163,15 @@ print("5 · varios juegos a la vez (por el panel del Coordinador)")
 cod, d = callado(CO.accion, P, JEFA, {"accion": "banear", "uid": OTRA, "juegos": ["gunbound", "eda"], "dias": 2,
                                       "motivo": "Multicuenta"})
 ok(cod == 200, f"la ADMIN banea en GunBound y EDA de una vez ({cod} {d.get('error')})")
-for pase in ("gunbound", "gunbound-prueba", "eda"):
+for pase in ("gunbound", "gunbound-prueba", "eda", "eda-prueba"):          # (★ 21-nov: EDA también tiene server de prueba)
     ok(not P.permitido(OTRA, pase), f"  {pase}: baneada")
 ok(P.permitido(OTRA, "r2beat2013"), "⟲ R2Beat, que no se marcó, sigue abierto")
 gb = next(j for j in d["persona"]["juegos"] if j["id"] == "gunbound")
 ok(all(x["baneada"] and x["restante_seg"] > 2 * 86400 - 60 and x["hasta"] for x in gb["pases"]),
    "la ficha de la persona trae `hasta` y `restante_seg` en cada servidor")
 aud = [a for a in P._propia().execute("SELECT accion, juego, detalle FROM auditoria WHERE uid = ? AND accion = 'banear' "
-                                      "ORDER BY id DESC LIMIT 3", (OTRA,))]
-ok({a["juego"] for a in aud} == {"gunbound", "gunbound-prueba", "eda"} and all(a["detalle"] == "por 2 días · Multicuenta" for a in aud),
+                                      "ORDER BY id DESC LIMIT 4", (OTRA,))]
+ok({a["juego"] for a in aud} == {"gunbound", "gunbound-prueba", "eda", "eda-prueba"} and all(a["detalle"] == "por 2 días · Multicuenta" for a in aud),
    "cada servidor a la auditoría, con la duración y el motivo")
 
 print("6 · el moderador: sólo sus juegos, con tope y sin permanente")

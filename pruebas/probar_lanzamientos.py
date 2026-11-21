@@ -118,13 +118,14 @@ try:
 
     print("2 · antes de la fecha")
     antes = t["eda"]["desde_t"] - 3600
-    for pase in ("eda", "gunbound", "gunbound-prueba", "r2beat-moderno"):
+    for pase in ("eda", "eda-prueba", "gunbound", "gunbound-prueba", "r2beat-moderno"):
         ok(LZ.cerrado_para(P, beto, pase, antes) is False, f"⟲ una cuenta común no entra a {pase}")
     ok(LZ.cerrado_para(P, jefa, "eda", antes) is True and LZ.cerrado_para(P, mode, "gunbound", antes) is True, "admin y moderador sí")
     ok(LZ.cerrado_para(P, beto, "r2beat2013", antes) is None and P.permitido(beto, "r2beat2013"), "⟲ r2beat2013 no tiene lanzamiento: sigue abierto")
 
     print("3 · después de la fecha")
     ok(LZ.cerrado_para(P, beto, "eda", t["eda"]["desde_t"] + 1) is True, "EDA abierto a toda cuenta (antes era sólo aprobadas)")
+    ok(LZ.cerrado_para(P, beto, "eda-prueba", t["eda"]["desde_t"] + 1) is True, "★ 21-nov: y su server de PRUEBA también (mismo lanzamiento)")
     os.makedirs(os.path.join(tmp, "config"), exist_ok=True)
     open(os.path.join(tmp, "config", "lanzamientos.json"), "w").write(json.dumps({"eda": {"desde": "2020-01-01T00:00:00-05:00"}}))
     ok(P.permitido(beto, "eda"), "un lanzamientos.json con la fecha pasada lo abre YA, sin publicar nada")
@@ -153,6 +154,7 @@ try:
     r = LZ.decidir(P, mode, iid, "aprobar", antes)
     ok(r[0] == 200 and r[1]["invitacion"]["estado"] == "aprobada", "un MODERADOR aprueba")
     ok(LZ.cerrado_para(P, ana, "eda", antes) is True, "… y jugador1 entra a EDA ANTES de la fecha")
+    ok(LZ.cerrado_para(P, ana, "eda-prueba", antes) is True, "★ … y a su server de prueba (la invitación de EDA vale para los dos)")
     ok(LZ.cerrado_para(P, ana, "gunbound", antes) is False, "⟲ sólo a EDA (GunBound sigue cerrado para ella)")
     ok(esperar_discord(2) and DISCORD[1][0] == "PATCH" and DISCORD[1][1].endswith("/messages/9001"), "el mensaje de Discord se EDITA")
     ok("Aprobada por mode" in json.dumps(DISCORD[1][2], ensure_ascii=False) and "accion=" not in json.dumps(DISCORD[1][2]),
