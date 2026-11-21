@@ -229,6 +229,23 @@ Lo que salió mal, y cómo se arregló:
 Después de la mudanza, en el Coordinador: **«Restablecer contraseña»** (sólo Admin; una provisoria al azar que se ve una
 vez, sesiones cerradas, auditoría sin la contraseña).
 
+## 5j · ✅ El server de PRUEBA de EDA, desde el launcher (21-nov)
+
+Benja: «aquí no está saliendo el botón testserver» (EDA). No existía: `eda-prueba` (develop, red host, 35900) estaba
+en `EDA_LOGIN=abierto` y nadie llegaba a él. Ahora es como el de GunBound:
+
+| pieza | qué |
+|---|---|
+| EDA (r2beatlatino/EDA#63) | `EDA_PORTERO_AUDIENCIA`: cada server acepta sólo SU pase (vacío = `eda`) |
+| `/opt/eda/prueba.env` | `EDA_LOGIN=pase` · `EDA_PORTERO_AUDIENCIA=eda-prueba` · `EDA_PREFIJO_CUENTA=en_` · `EDA_CUENTA_NUEVA=vacia` · la clave pública de Cuenta Eñeños (la misma que el EDA de la pila). Respaldo: `prueba.env.antes-pase-eda-prueba` |
+| Cuenta Eñeños (`coord-k`) | el pase `eda-prueba`, cerrado por el lanzamiento de EDA (la invitación vale para los dos; un baneo de EDA cubre los dos). Puerta: `/datos/manifiestos/eda-prueba.json` |
+| `eda_ensayo.sh` | firma también `eda_web/prueba.jws` (mismos archivos, server `185.147.157.33:35900`, canje `…/eda-prueba/pase`) |
+| Caddy del sistema (`enenos-ensayo.caddy`) | `/eda-prueba/lista.jws` y `/eda-prueba/pase` → `127.0.0.1:35901` (el Caddy de la pila no llega a la red host) |
+| launcher 3.0.25 | botón «Servidor de prueba» en las opciones de EDA |
+
+Probado con pases de verdad: `eda-prueba` → server de prueba = ticket · ⟲ `eda` → prueba = «audiencia» · ⟲ `eda-prueba` →
+prod = «audiencia». Las cuentas viejas del modo abierto del de prueba quedaron sin usar.
+
 ## 6 · Lo que queda
 
 - El **R2Beat moderno** (server + cliente de ~15 GB) lo arma la sesión de Fluidez en este mismo VPS, cuando Benja
