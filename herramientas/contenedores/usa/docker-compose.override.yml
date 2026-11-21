@@ -20,9 +20,9 @@ services:
       nofile: {soft: 65536, hard: 65536}
     environment:
       R2_PANEL_URL: "https://coordinador.xn--eeos-gqab.link"
-      R2_PANEL_SALUD: "gunbound=http://gunbound:8371/salud;gunbound-prueba=http://gunbound-prueba:9371/salud"
+      R2_PANEL_SALUD: "gunbound=http://gunbound:8371/salud;gunbound-prueba=http://gunbound-prueba:9371/salud;r2beat-moderno=http://r2beat-moderno:28190/salud;r2beat-moderno-prueba=http://r2beat-moderno-prueba:28190/salud"
       R2_PANEL_CONTENIDO: "r2beat2013=http://r2beat2013:48190/api/interno/contenido;r2beat2013-prueba=http://r2beat2013-prueba:48510/api/interno/contenido"
-      R2_PANEL_GESTION: "r2beat2013=http://r2beat2013:48190/api/interno/panel;r2beat2013-prueba=http://r2beat2013-prueba:48510/api/interno/panel;gunbound=contrato1:http://gunbound:8371/interno/panel;gunbound-prueba=contrato1:http://gunbound-prueba:9371/interno/panel;eda=contrato1:http://eda:25911/interno/panel"
+      R2_PANEL_GESTION: "r2beat2013=http://r2beat2013:48190/api/interno/panel;r2beat2013-prueba=http://r2beat2013-prueba:48510/api/interno/panel;gunbound=contrato1:http://gunbound:8371/interno/panel;gunbound-prueba=contrato1:http://gunbound-prueba:9371/interno/panel;eda=contrato1:http://eda:25911/interno/panel;eda-prueba=contrato1:http://172.17.0.1:35902/interno/panel"
       R2_PANEL_TORNEOS: "r2beat2013=http://r2beat2013:48190/api/interno/torneos"
 
   # ★ 21-nov EÑEÑOSBIT 2027 (el R2Beat moderno, entrega del 21-nov: /opt/enenos/moderno/servidor_2026-11-21 y

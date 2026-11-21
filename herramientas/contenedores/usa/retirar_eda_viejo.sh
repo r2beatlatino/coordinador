@@ -23,7 +23,7 @@ cat > /etc/cron.d/eda <<'CRON'
 # EDA: PRUEBA sigue a develop (eda-prueba). ★ 20-nov: el EDA viejo (eda-prod, atado al login de Chile) se RETIRÓ;
 #   la línea de prod sólo baja main a /opt/eda/prod, de donde /opt/enenos/eda_ensayo.sh arma el EDA de Miami.
 */5 * * * * root cp /opt/eda/prod/despliegue/actualizar.sh /tmp/eda-act-prueba.sh && flock -n /tmp/eda-prueba.lock bash /tmp/eda-act-prueba.sh prueba >> /opt/eda/actualizaciones.log 2>&1
-*/5 * * * * root flock -n /tmp/eda-prod.lock sh -c 'cd /opt/eda/prod && git fetch -q origin main && git reset -q --hard origin/main' >> /opt/eda/actualizaciones.log 2>&1
+*/5 * * * * root flock -w 240 /tmp/eda-prod.lock sh -c 'cd /opt/eda/prod && git fetch -q origin main && git reset -q --hard origin/main' >> /opt/eda/actualizaciones.log 2>&1
 CRON
 chmod 644 /etc/cron.d/eda
 cat /etc/cron.d/eda

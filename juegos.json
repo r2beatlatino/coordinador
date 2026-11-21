@@ -69,9 +69,9 @@
       "estado": "en_preparacion",
       "pases": {
         "live": "r2beat-moderno",
-        "test": null
+        "test": "r2beat-moderno-prueba"
       },
-      "nota": "El server lo está montando la sesión de fluidez. El repo se crea cuando esté.",
+      "nota": "Server de Fluidez en Miami desde el 21-nov: r2beat-moderno (28004) y su prueba r2beat-moderno-prueba (38004), los dos con el pase aud r2beat-moderno. «Jugando ahora» sale de su /salud (moderno_salud.py, adentro de la imagen).",
       "corto": "Eñeñosbit 2027",
       "noticias": "enenosbit",
       "panel": {

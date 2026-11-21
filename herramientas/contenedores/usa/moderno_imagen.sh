@@ -37,7 +37,11 @@ if [ -n "$PISA" ]; then
         mkdir -p "$DIR/$(dirname "$f")" && cp "$PISA/$f" "$DIR/$f"
     done
 fi
-# la del paquete + lo de la pila (etiquetas y el HEALTHCHECK del login), sin tocar su Dockerfile
+# ★ 21-nov el /salud para el Coordinador («jugando ahora»): corre al lado del server, sin tocar su código
+SALUD="$(dirname "$0")/moderno_salud.py"
+[ -f "$SALUD" ] || { log "⛔ falta $SALUD (va junto a este script)"; exit 1; }
+cp "$SALUD" "$DIR/vps/salud_enenos.py"
+# la del paquete + lo de la pila (etiquetas, el HEALTHCHECK del login y el /salud), sin tocar su Dockerfile
 cat "$DIR/vps/Dockerfile" > "$DIR/Dockerfile.enenos"
 cat >> "$DIR/Dockerfile.enenos" <<EOF
 
@@ -45,6 +49,8 @@ cat >> "$DIR/Dockerfile.enenos" <<EOF
 LABEL enenos.juego="r2beat-moderno" enenos.paquete="$(basename "$PAQ")" enenos.pisa="$(basename "${PISA:-ninguno}")" enenos.armada="$(date -u +%FT%TZ)"
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \\
   CMD python -c "import os,socket; socket.create_connection(('127.0.0.1', int(os.environ.get('PUERTOS','28004').split(',')[0])), 3).close()"
+# el /salud (SALUD_PUERTO, 28190) sólo por la red de la pila: ⛔ no va a «ports:» del compose
+CMD ["sh", "-c", "python3 -u /app/vps/salud_enenos.py & exec /app/vps/arrancar.sh"]
 EOF
 docker build -q -f "$DIR/Dockerfile.enenos" -t "$IMG" "$DIR" >/dev/null
 # el control: arranca, importa todo el server (las librerías de afuera incluidas) y trae los archivos que pisaron
@@ -68,4 +74,5 @@ if [ -n "$PISA" ]; then
         [ "$a" = "$b" ] || { log "⛔ ${f#./} no quedó en la imagen"; exit 1; }
     done
 fi
+docker run --rm --entrypoint python3 "$IMG" -c "import sys; sys.path.insert(0, '/app/vps'); import salud_enenos as s; print('salud: puertos', sorted(s.PUERTOS))"     || { log "⛔ el /salud no arranca en la imagen"; docker rmi "$IMG" >/dev/null; exit 1; }
 log "✅ $IMG lista ($(docker image inspect -f '{{.Size}}' "$IMG" | awk '{printf "%.0f MB", $1/1048576}'))"

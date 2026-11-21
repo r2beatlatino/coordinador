@@ -29,7 +29,7 @@ Las imágenes de cada juego (`r2beat2013`, `web`, EDA, GunBound) se arman **en e
 | **R2Beat 2013** | 🟢 en producción | [`r2beatlatino/R2beat-2013`](https://github.com/r2beatlatino/R2beat-2013) | `r2beat2013` / `r2beat2013-prueba` | El más completo. Su panel viejo (sólo R2Beat) es la base del panel del Coordinador. |
 | **GunBound** | 🟡 beta | [`r2beatlatino/GunBound`](https://github.com/r2beatlatino/GunBound) | `gunbound` / `gunbound-prueba` | Server propio en Python. Admin hoy: /salud y comandos de chat. |
 | **EDA · Espada del Alma** | 🟡 beta | [`r2beatlatino/EDA`](https://github.com/r2beatlatino/EDA) | `eda` / `eda-prueba` | Todo en Miami: entra con Cuenta Eñeños (launcher nuevo) y se actualiza solo desde main. El EDA viejo, atado al login de Chile, se retiró el 20-nov. Su prueba (eda-prueba, develop) tiene pase propio desde el 21-nov: botón «Servidor de prueba» en las opciones de EDA del launcher. |
-| **Eñeñosbit 2027** | 🔧 en preparación | — (todavía no) | `r2beat-moderno` / — | El server lo está montando la sesión de fluidez. El repo se crea cuando esté. |
+| **Eñeñosbit 2027** | 🔧 en preparación | — (todavía no) | `r2beat-moderno` / `r2beat-moderno-prueba` | Server de Fluidez en Miami desde el 21-nov: r2beat-moderno (28004) y su prueba r2beat-moderno-prueba (38004), los dos con el pase aud r2beat-moderno. «Jugando ahora» sale de su /salud (moderno_salud.py, adentro de la imagen). |
 | **Wolf Team** | 💭 en planes | [`r2beatlatino/Wolf-Team`](https://github.com/r2beatlatino/Wolf-Team) | — / — | Va a tardar. |
 <!-- juegos:fin -->
 
