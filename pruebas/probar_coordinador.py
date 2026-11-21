@@ -118,6 +118,12 @@ URL = f"http://127.0.0.1:{srv.server_address[1]}/cuentas"
 class Salud(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         cuerpo = json.dumps({"ok": True, "entorno": "prod", "juego": "gunbound", "en_linea": 7}).encode()
+        if self.path == "/interno/panel/salud":                   # ★ el CONTRATO (EDA): sólo con la ficha interna
+            if self.headers.get("X-Ficha-Interna") != "ficha-de-prueba-salud":
+                self.send_response(404)
+                self.end_headers()
+                return
+            cuerpo = json.dumps({"en_linea": True, "jugando": 3, "detalle": []}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(cuerpo)))
@@ -470,6 +476,29 @@ try:
     ok(js["wolfteam"]["tiene_servidor"] is False and js["wolfteam"]["servidores"] == {"live": None, "test": None},
        "Wolf Team (sin servidor): sin estado")
     os.environ.pop("R2_PANEL_SALUD")
+
+    print("· ★ 21-nov el estado de un servidor con el CONTRATO (EDA): su salud, con la ficha interna")
+    base = f"http://127.0.0.1:{salud.server_address[1]}"
+    os.environ["R2_PANEL_GESTION"] = f"eda=contrato1:{base}/interno/panel"
+    os.environ["R2_CUENTAS_FICHA_INTERNA"] = "ficha-de-prueba-salud"
+    CO._salud.clear()
+    js = {j["id"]: j for j in pedir("GET", "/coordinador/api/juegos", cookies=S_JEFA)[1]["juegos"]}
+    ok(js["eda"]["servidores"]["live"] == {"estado": "en_linea", "jugando": 3},
+       "EDA PROD: «en línea · 3», de su `salud` del contrato (antes: «sin datos»)")
+    ok(js["eda"]["servidores"]["test"] is None, "⟲ EDA TEST, sin servidor gestionado: nada")
+    os.environ["R2_CUENTAS_FICHA_INTERNA"] = "otra-ficha"
+    CO._salud.clear()
+    js = {j["id"]: j for j in pedir("GET", "/coordinador/api/juegos", cookies=S_JEFA)[1]["juegos"]}
+    ok(js["eda"]["servidores"]["live"] == {"estado": "sin_respuesta", "jugando": None},
+       "⟲ con otra ficha el servidor dice 404: «sin respuesta», sin número")
+    os.environ["R2_CUENTAS_FICHA_INTERNA"] = "ficha-de-prueba-salud"
+    os.environ["R2_PANEL_SALUD"] = f"eda={base}/salud"
+    CO._salud.clear()
+    js = {j["id"]: j for j in pedir("GET", "/coordinador/api/juegos", cookies=S_JEFA)[1]["juegos"]}
+    ok(js["eda"]["servidores"]["live"]["jugando"] == 7, "⟲ si R2_PANEL_SALUD lo nombra, manda ése (7, no 3)")
+    for k in ("R2_PANEL_SALUD", "R2_PANEL_GESTION", "R2_CUENTAS_FICHA_INTERNA"):
+        os.environ.pop(k)
+    CO._salud.clear()
 
     print("· la página")
     cod, d, h = pedir("GET", "/coordinador/api/catalogo")

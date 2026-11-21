@@ -381,22 +381,36 @@ _salud_lock = threading.Lock()
 
 
 def _fuentes_salud():
+    """{pase: (url, con_ficha)}. Primero `R2_PANEL_SALUD` (un /salud abierto, como el de GunBound). ★ 21-nov: un
+    servidor con el CONTRATO (`contrato1` en R2_PANEL_GESTION, como EDA) ya tiene su `GET salud`, pero detrás de la
+    ficha interna: sin esto la tarjeta decía «sin datos» aunque el panel sí lo gestionaba."""
     out = {}
     for parte in (os.environ.get("R2_PANEL_SALUD") or "").split(";"):
         if "=" in parte:
             p, u = parte.split("=", 1)
             if p.strip() and u.strip().startswith(("http://", "https://")):
-                out[p.strip()] = u.strip()
+                out[p.strip()] = (u.strip(), False)
+    for p, (tipo, u) in GE.fuentes().items():
+        if tipo == "contrato1" and p not in out:
+            out[p] = (u + "/salud", True)
     return out
 
 
-def _leer_salud(pase, url, ahora):
+def _leer_salud(pase, fuente, ahora):
+    url, con_ficha = fuente
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "enenos-coordinador"})
+        cab = {"User-Agent": "enenos-coordinador"}
+        if con_ficha:
+            ficha = (os.environ.get("R2_CUENTAS_FICHA_INTERNA") or "").strip()
+            if not ficha:
+                raise ValueError("sin ficha interna")
+            cab["X-Ficha-Interna"] = ficha
+        req = urllib.request.Request(url, headers=cab)
         with urllib.request.urlopen(req, timeout=SALUD_TIMEOUT) as r:
             d = json.loads(r.read(65536).decode("utf-8"))
-        n = d.get("en_linea", d.get("jugando"))
-        res = {"estado": "en_linea" if d.get("ok", True) else "sin_respuesta",
+        en = d.get("en_linea")                                      # GunBound: el número · contrato: True/False
+        n = d.get("jugando") if isinstance(en, bool) or en is None else en
+        res = {"estado": "en_linea" if d.get("ok", True) and en is not False else "sin_respuesta",
                "jugando": int(n) if isinstance(n, int) and not isinstance(n, bool) and n >= 0 else None}
     except Exception:                                               # noqa: BLE001 — no contesta = «sin respuesta»
         res = {"estado": "sin_respuesta", "jugando": None}
