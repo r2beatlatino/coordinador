@@ -24,6 +24,9 @@ CÓMO
   La acción asignable «moneda» lleva un cupo POR MONEDA (oro, cash…), guardado en `permisos_juego.monedas`.
 - ★ 20-nov: la acción asignable «torneos» no tiene ruta acá: la usa `torneos.py` (su propia puerta del juego,
   `R2_PANEL_TORNEOS`). Se asigna como las demás, por moderador y por juego.
+- ★ 21-nov (Benja: «quiero el permiso asignable» de restablecer contraseña): los permisos de TODA LA RED (la cuenta
+  Eñeños, no un juego) van en la fila `juego = "_red"` de la misma tabla. Hoy: «clave» (portero.admin_restablecer_clave,
+  nunca a una cuenta del equipo). `puede_red()` lo consulta.
 """
 import json
 import os
@@ -48,7 +51,10 @@ ASIGNABLES = {
     "chat": ("Leer el chat público guardado", None),
     "moneda": ("Dar o quitar monedas del juego", "moneda"),     # ★ contrato1: con cupo por moneda
     "torneos": ("Manejar los torneos", None),                     # ★ 20-nov: torneos.py (crear, estados, la llave)
+    "clave": ("Restablecer contraseña", None),                    # ★ 21-nov: de TODA LA RED (fila `_red`)
 }
+RED = "_red"                       # la «fila» de los permisos de toda la red (la cuenta Eñeños, no un juego)
+ASIGNABLES_RED = ("clave",)
 # lo que se puede asignar en cada tipo de servidor
 ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "gorila", "chat", "torneos"),
                  "contrato1": ("moneda",)}
@@ -213,6 +219,20 @@ def permisos(P, viewer, jid):
     return {"rol": "moderador", "acciones": list(BASE) + extra, "cupos": cupos, "poner": False}
 
 
+def puede_red(P, uid, accion):
+    """★ 21-nov: ¿esta cuenta del equipo puede `accion` de toda la red? ADMIN siempre; MODERADOR si se la asignaron."""
+    rol = P.rol_de(uid)
+    if rol == "admin":
+        return True
+    if rol != "moderador" or accion not in ASIGNABLES_RED or P.juegos_de_moderador(uid) is None:
+        return False
+    r = _con(P).execute("SELECT acciones FROM permisos_juego WHERE uid = ? AND juego = ?", (int(uid), RED)).fetchone()
+    try:
+        return bool(r) and accion in json.loads(r["acciones"])
+    except ValueError:
+        return False
+
+
 def _pide(metodo, ruta, tipo="r2beat"):
     for m, rx, accion in _RUTAS_DE.get(tipo, ()):
         if m == metodo and rx.match(ruta):
@@ -345,6 +365,7 @@ def ver_permisos(CO, P, viewer):
     return 200, {"permisos": out, "base": list(BASE),
                  "asignables": [{"id": k, "nombre": v[0], "cupo": v[1]} for k, v in ASIGNABLES.items()],
                  "asignables_de": {jid: list(ASIGNABLES_DE[t]) for jid, t in tipos.items()},
+                 "asignables_red": [{"id": k, "nombre": ASIGNABLES[k][0]} for k in ASIGNABLES_RED],
                  "gestionables": sorted(tipos)}
 
 
@@ -362,10 +383,17 @@ def poner_permisos(CO, P, viewer, d):
     if P.rol_de(uid) != "moderador":
         return 404, {"error": "Esa cuenta no es moderadora."}
     mios = P.juegos_de_moderador(uid)
-    if mios is None or jid not in mios:
+    if jid == RED:                                   # ★ 21-nov: lo de toda la red (no hace falta un juego asignado)
+        if mios is None:
+            return 409, {"error": "Es un moderador de formato viejo: asígnele sus juegos primero."}
+        acc = d.get("acciones") or []
+        if not isinstance(acc, list) or not all(isinstance(a, str) and a in ASIGNABLES_RED for a in acc):
+            return 400, {"error": "Acciones de toda la red: " + " · ".join(ASIGNABLES_RED)}
+        d = {"acciones": acc}                        # (sin cupos)
+    elif mios is None or jid not in mios:
         return 409, {"error": "Primero asígnele ese juego en el equipo."}
     acc = d.get("acciones") or []
-    validas = ASIGNABLES_DE.get(tipo_de(CO, P, jid) or "", ())
+    validas = ASIGNABLES_RED if jid == RED else ASIGNABLES_DE.get(tipo_de(CO, P, jid) or "", ())
     if not isinstance(acc, list) or not all(isinstance(a, str) and a in validas for a in acc):
         return 400, {"error": "Acciones de este juego: " + (" · ".join(validas) or "ninguna (todavía no se gestiona)")}
     cm = d.get("cupos_monedas") or {}

@@ -92,6 +92,32 @@ try:
     ok(c_otro == 200, "⟲ el otro sigue entrando con la suya")
     ok(P.admin_restablecer_clave(UID["jefa"], 99999999)[0] == 404, "una cuenta que no existe: 404")
     ok(P.admin_restablecer_clave(UID["jefa"], "x")[0] == 400, "sin cuenta válida: 400")
+
+    print("\n4 · ★ 21-nov: el permiso ASIGNABLE a un moderador (toda la red)")
+    from servidor import gestion as GE, coordinador as CO
+    ok(not GE.puede_red(P, UID["moderadora"], "clave"), "⟲ sin asignar: la moderadora no puede")
+    cod, _ = GE.poner_permisos(CO, P, UID["moderadora"], {"uid": UID["moderadora"], "juego": GE.RED, "acciones": ["clave"]})
+    ok(cod == 403, "⟲ una moderadora no se lo asigna a sí misma (403)")
+    cod, _ = GE.poner_permisos(CO, P, UID["jefa"], {"uid": UID["moderadora"], "juego": GE.RED, "acciones": ["rcoin"]})
+    ok(cod == 400, "⟲ en toda la red sólo se asigna lo de la red (rcoin: 400)")
+    cod, d = GE.poner_permisos(CO, P, UID["jefa"], {"uid": UID["moderadora"], "juego": GE.RED, "acciones": ["clave"]})
+    ok(cod == 200 and GE.puede_red(P, UID["moderadora"], "clave"), "la Admin se lo asigna: ahora puede")
+    ok(any(x["juego"] == GE.RED and x["acciones"] == ["clave"] for x in d["permisos"]) and d["asignables_red"][0]["id"] == "clave",
+       "el panel lo ve (fila de toda la red y su casilla)")
+    cod, d = P.admin_restablecer_clave(UID["moderadora"], UID["jugador"])
+    ok(cod == 200 and len(d.get("clave", "")) == 10, "la moderadora restablece la de un jugador")
+    ok("usuario" not in d, "⟲ y NO recibe el login del jugador (es privado)")
+    with contextlib.redirect_stdout(io.StringIO()):
+        c_entra = P.entrar("jugador", clave_txt=d.get("clave", ""), ip="10.2.9.7")[0]
+    ok(c_entra == 200, "el jugador entra con la provisoria")
+    antes = P._cuentas().execute("SELECT clave FROM cuentas WHERE uid = ?", (UID["jefa"],)).fetchone()[0]
+    ok(P.admin_restablecer_clave(UID["moderadora"], UID["jefa"])[0] == 403, "⟲ a una cuenta del EQUIPO (la Admin): 403")
+    ok(P.admin_restablecer_clave(UID["moderadora"], UID["moderadora"])[0] == 403, "⟲ ni a sí misma (es del equipo): 403")
+    ok(antes == P._cuentas().execute("SELECT clave FROM cuentas WHERE uid = ?", (UID["jefa"],)).fetchone()[0], "⟲ la de la Admin quedó intacta")
+    ok(P._propia().execute("SELECT COUNT(*) FROM auditoria WHERE accion = 'restablecer-clave' AND detalle LIKE '%moderador%'").fetchone()[0] == 1,
+       "queda en la auditoría como de moderador")
+    GE.poner_permisos(CO, P, UID["jefa"], {"uid": UID["moderadora"], "juego": GE.RED, "acciones": []})
+    ok(P.admin_restablecer_clave(UID["moderadora"], UID["jugador"])[0] == 403, "⟲ se lo quitan: ya no puede")
 finally:
     try:
         P.cerrar_conexiones()

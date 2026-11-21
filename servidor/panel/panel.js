@@ -489,7 +489,7 @@ async function pintarMods(datos) {
     return `<li>${ava(m.nombre, 'redondo')}
       <div class="t"><b><a href="#/persona/${esc(m.uid)}">${esc(m.nombre)}</a>${m.yo ? ' <span class="tenue" style="font-weight:500">(usted)</span>' : ''}</b>${resumenPermisos(m)}<span>${admin ? 'Admin' : 'Moderador'} · Eñeños-ID ${esc(m.uid)}${m.usuario ? ` · ${esc(m.usuario)}` : ''}${m.vias.length ? '' : ' · <span style="color:var(--gold)">sin Discord ni Google: no puede entrar</span>'}${vieja ? ' · <span class="tenue">formato viejo: todos los juegos, sin banear</span>' : ''}</span></div>
       <span class="mini-juegos" role="group" aria-label="Juegos de ${esc(m.nombre)}">${d.juegos.map(j => `<button type="button" class="mj ${tiene(j.id) ? 'on' : ''}" style="--g:${okColor(j.color)}" data-accion="mod-juego" data-i="${i}" data-j="${esc(j.id)}" aria-pressed="${tiene(j.id)}" ${admin ? 'disabled title="Un Admin ve todos los juegos"' : ''}><span class="p"></span>${esc(j.nombre)}</button>`).join('')}
-      ${admin || vieja || !S.permisos ? '' : `<button type="button" class="btn chico" data-accion="mod-permisos" data-i="${i}" ${(m.juegos || []).some(j => S.permisos.gestionables.includes(j)) ? '' : 'disabled title="Ninguno de sus juegos tiene gestión todavía"'}>${ic('shieldok', 's14')}Permisos</button>`}
+      ${admin || vieja || !S.permisos ? '' : `<button type="button" class="btn chico" data-accion="mod-permisos" data-i="${i}" ${(m.juegos || []).some(j => S.permisos.gestionables.includes(j)) || ((S.permisos.asignables_red || []).length && (m.juegos || []).length) ? '' : 'disabled title="Ninguno de sus juegos tiene gestión todavía"'}>${ic('shieldok', 's14')}Permisos</button>`}
       ${admin ? '' : `<button type="button" class="btn icono chico fantasma" data-accion="quitar-mod" data-i="${i}" aria-label="Sacar a ${esc(m.nombre)} del equipo" title="Sacar del equipo">${ic('x', 's14')}</button>`}</span></li>`;
   };
   const todos = [...d.admins, ...d.moderadores];
@@ -548,7 +548,7 @@ function pintarPersona(p) {
         <div class="ids"><span>Eñeños-ID <b>${esc(p.uid)}</b></span>${p.usuario ? `<span>usuario <b>${esc(p.usuario)}</b></span>` : ''}${p.creada ? `<span>alta <b>${fechaTxt(p.creada)}</b></span>` : ''}${p.visto ? `<span>visto ${haceSeg(p.visto)}</span>` : ''}</div>
         <div class="persona-vinc" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${p.vinculos.length ? p.vinculos.map(v => `<span class="chip" style="height:26px;padding:0 10px">${logoProv(v.proveedor)}${PROV[v.proveedor] || esc(v.proveedor)} vinculado${v.nombre ? ` · ${esc(v.nombre)}` : ''}</span>`).join('') : '<span class="tenue" style="font-size:13px">Sin Discord ni Google vinculado.</span>'}</div>
       </div>
-      ${esAdmin() && p.usuario ? `<div style="align-self:flex-start"><button type="button" class="btn chico fantasma" data-accion="persona-clave">${ic('lock', 's14')}Restablecer contraseña</button></div>` : ''}
+      ${p.puede_clave ? `<div style="align-self:flex-start"><button type="button" class="btn chico fantasma" data-accion="persona-clave">${ic('lock', 's14')}Restablecer contraseña</button></div>` : ''}
     </div></section>
     <div class="titulo-sec"><h2>Permisos por juego</h2><span class="tenue">${p.acciones.length === 4 ? 'Aprobar, quitar, banear y desbanear, por servidor.' : 'Aprobar y quitar, por servidor.'}</span>${p.acciones.includes('banear') && p.juegos.some(j => j.pases.length) ? `<button type="button" class="btn chico" data-accion="banear-varios" style="margin-left:auto">${ic('ban', 's14')}Banear en varios juegos…</button>` : ''}</div>
     ${p.juegos.length ? p.juegos.map(j => `<section class="caja" style="margin-bottom:14px"><div class="caja-cab"><h3>${etqJuego(j.id)} ${esc(j.nombre)}</h3>${j.invitacion ? `<span class="sub">invitación anticipada: ${esc(j.invitacion)}</span>` : ''}</div>
@@ -565,7 +565,7 @@ function restablecerClave() {
   const p = S.persona; if (!p) return;
   confirmar({
     titulo: `¿Restablecer la contraseña de ${esc(p.nombre)}?`, ok: 'Restablecer', icono: 'lock',
-    txt: `Se genera una contraseña provisoria al azar para el usuario <b>${esc(p.usuario)}</b> y se cierra su sesión en el launcher. La contraseña de ahora deja de funcionar.`,
+    txt: `Se genera una contraseña provisoria al azar${p.usuario ? ` para el usuario <b>${esc(p.usuario)}</b>` : ''} y se cierra su sesión en el launcher. La contraseña de ahora deja de funcionar.`,
     alAceptar: async () => {
       const r = await api('restablecer-clave', { uid: p.uid });
       if (!r.ok) { toast({ t: 'No se pudo', sub: errTxt(r), tipo: 'err' }); return; }
@@ -573,7 +573,7 @@ function restablecerClave() {
         titulo: 'Contraseña provisoria', ok: 'Listo', icono: 'lock', peligro: false, soloOk: true,
         txt: `Pásele estos datos al jugador. <b>Se muestran una sola vez</b>: al cerrar esta ventana ya no se pueden volver a ver.`,
         extra: `<div class="clave-prov" style="display:grid;gap:8px;margin-top:12px">
-          <div>Usuario: <code style="font-size:15px">${esc(r.d.usuario)}</code></div>
+          ${r.d.usuario ? `<div>Usuario: <code style="font-size:15px">${esc(r.d.usuario)}</code></div>` : '<div class="tenue" style="font-size:12.5px">El usuario es el de siempre del jugador (no se muestra al equipo).</div>'}
           <div style="display:flex;gap:8px;align-items:center">Contraseña: <code style="font-size:18px;letter-spacing:1px">${esc(r.d.clave)}</code>
             <button type="button" class="btn chico" data-accion="lg-copiar" data-txt="${esc(r.d.clave)}">${ic('copy', 's14')}Copiar</button></div>
           <div class="tenue" style="font-size:12.5px">Que entre con ella y la cambie en el launcher. Quedó en la auditoría (sin la contraseña).</div></div>`,
@@ -2581,9 +2581,11 @@ function resumenPermisos(m) {
   const P = S.permisos; if (!P || m.rol === 'admin' || m.juegos === null) return '';
   const nom = id => (P.asignables.find(a => a.id === id) || { nombre: id }).nombre;
   const fs = P.permisos.filter(x => x.uid === m.uid && (m.juegos || []).includes(x.juego) && (x.acciones.length || x.cupo_rcoin || x.cupo_exp));
-  if (!fs.length) return (m.juegos || []).some(j => P.gestionables.includes(j)) ? '<div class="g-perm-res tenue">En los juegos: sólo lo de base</div>' : '';
+  const red = P.permisos.find(x => x.uid === m.uid && x.juego === '_red' && x.acciones.length);       // ★ 21-nov: toda la red
+  const lred = red ? `<div>${ic('lock', 's14')} Toda la red: ${red.acciones.map(a => esc(nom(a))).join(' · ')}</div>` : '';
+  if (!fs.length) return lred ? `<div class="g-perm-res">${lred}</div>` : (m.juegos || []).some(j => P.gestionables.includes(j)) ? '<div class="g-perm-res tenue">En los juegos: sólo lo de base</div>' : '';
   const mon = x => (x.acciones.includes('moneda') ? Object.entries(x.monedas || {}).filter(([, v]) => v.cupo || v.dado).map(([k, v]) => ` <i>· ${esc(nomMonedaJuego(x.juego, k))} dado ${miles(v.dado)} de ${miles(v.cupo)}</i>`).join('') : '');
-  return `<div class="g-perm-res">${fs.map(x => `<div>${etqJuego(x.juego)} ${x.acciones.map(a => esc(nom(a))).join(' · ') || 'sólo lo de base'}${x.acciones.includes('rcoin') ? ` <i>· Rcoin dado ${miles(x.dado_rcoin)} de ${miles(x.cupo_rcoin)}</i>` : ''}${x.acciones.includes('exp') ? ` <i>· EXP dada ${miles(x.dado_exp)} de ${miles(x.cupo_exp)}</i>` : ''}${mon(x)}</div>`).join('')}</div>`;
+  return `<div class="g-perm-res">${lred}${fs.map(x => `<div>${etqJuego(x.juego)} ${x.acciones.map(a => esc(nom(a))).join(' · ') || 'sólo lo de base'}${x.acciones.includes('rcoin') ? ` <i>· Rcoin dado ${miles(x.dado_rcoin)} de ${miles(x.cupo_rcoin)}</i>` : ''}${x.acciones.includes('exp') ? ` <i>· EXP dada ${miles(x.dado_exp)} de ${miles(x.cupo_exp)}</i>` : ''}${mon(x)}</div>`).join('')}</div>`;
 }
 /* ★ contrato: las monedas de un juego (para los cupos) las dice el juego. Se pregunta a PROD, y si no, a TEST */
 const conMonedas = jid => ((S.permisos && S.permisos.asignables_de && S.permisos.asignables_de[jid]) || []).includes('moneda');
@@ -2624,6 +2626,15 @@ function formPermisos(i) {
     const a = c.acciones || [], extra = [a.includes('aviso') ? 'mandar avisos' : '', a.includes('echar') ? 'desconectar' : ''].filter(Boolean);
     return 'mirar el tablero y las fichas' + (extra.length ? (extra.length > 1 ? ', ' + extra[0] + ' y ' + extra[1] : ' y ' + extra[0]) : '');
   };
+  /* ★ 21-nov (Benja: «quiero el permiso asignable»): lo de TODA LA RED (la cuenta Eñeños, no un juego): fila `_red` */
+  const asRed = P.asignables_red || [];
+  const seccionRed = () => { const x = de('_red');
+    return `<section class="g-perm" data-juego="_red"><h3>${ic('lock', 's14')} Cuenta Eñeños · toda la red</h3>
+      <p class="tenue g-nota">${ic('info', 's14')} Vale para la cuenta entera (todos los juegos). Nunca sobre una cuenta del equipo, y el usuario (login) no se le muestra.</p>
+      <div class="g-perm-acc">${asRed.map(a => `<label class="radio"><input type="checkbox" value="${esc(a.id)}" ${x.acciones.includes(a.id) ? 'checked' : ''}><span><b>${esc(a.nombre)}</b><span>genera una provisoria al azar y cierra sus sesiones; queda en la auditoría</span></span></label>`).join('')}</div>
+      <div class="g-perm-pie">${x.cambiado ? `<span class="tenue">Cambiado por ${esc(x.quien || '—')} · ${fechaTxt(x.cambiado)}</span>` : '<span class="tenue">Sin cambios todavía.</span>'}
+        <button type="button" class="btn chico prim" data-perm="guardar">Guardar toda la red</button></div></section>`; };
+  const nomSec = j => j === '_red' ? 'Cuenta Eñeños' : juegoCat(j).nombre;
   const seccion = j => { const x = de(j), nj = juegoCat(j).nombre, as = asigDe(j);
     const algoDado = x.dado_rcoin || x.dado_exp || Object.values(x.monedas || {}).some(v => v.dado);
     return `<section class="g-perm" data-juego="${esc(j)}"><h3>${etqJuego(j)} ${esc(nj)}</h3>
@@ -2654,7 +2665,7 @@ function formPermisos(i) {
   const estadoCap = {};
   const pn = abrirCapa(`<aside class="cajon g-cajon-perm" role="dialog" aria-modal="true" aria-labelledby="pmTit"><div class="cajon-cab">${ava(m.nombre, 'm redondo')}<div style="min-width:0"><h2 id="pmTit">Permisos de ${esc(m.nombre)}</h2><p>Moderador · Eñeños-ID ${esc(m.uid)}. Lo que puede hacer en cada juego, además de lo de base.</p></div>
     <button type="button" class="btn icono chico fantasma cerrar" data-accion="cerrar-capa" aria-label="Cerrar">${ic('x', 's16')}</button></div>
-    <div class="cajon-cuerpo">${js.length ? js.map(seccion).join('') : vacio('Ningún juego para gestionar', `Asígnele un juego que ya tenga gestión en el Coordinador${nombres.length ? ` (hoy: ${esc(nombres.join(', '))})` : ''}.`)}
+    <div class="cajon-cuerpo">${asRed.length && (m.juegos || []).length ? seccionRed() : ''}${js.length ? js.map(seccion).join('') : vacio('Ningún juego para gestionar', `Asígnele un juego que ya tenga gestión en el Coordinador${nombres.length ? ` (hoy: ${esc(nombres.join(', '))})` : ''}.`)}
       ${otros.length ? `<p class="tenue g-nota">${ic('info', 's14')} ${otros.map(j => esc(juegoCat(j).nombre)).join(', ')}: todavía sin gestión en el Coordinador.</p>` : ''}</div></aside>`);
   const repintarMon = j => {
     const s = $(`.g-perm[data-juego="${CSS.escape(j)}"]`, pn); if (!s) return;
@@ -2697,7 +2708,7 @@ function formPermisos(i) {
       b.disabled = false;
       if (!r.ok) { toast({ t: 'No se pudo guardar', sub: errTxt(r), tipo: 'err' }); return; }
       S.permisos = r.d;
-      toast({ t: reiniciar ? `El cupo de ${esc(m.nombre)} empieza de cero` : `Permisos de ${esc(m.nombre)} guardados`, sub: `${esc(juegoCat(j).nombre)} · vale desde su próximo pedido. Quedó en la auditoría.` });
+      toast({ t: reiniciar ? `El cupo de ${esc(m.nombre)} empieza de cero` : `Permisos de ${esc(m.nombre)} guardados`, sub: `${esc(nomSec(j))} · vale desde su próximo pedido. Quedó en la auditoría.` });
       if (capas.innerHTML) formPermisos(i);
       if ($('#listaMods')) pintarMods(S.equipo);
       pintarAuditoria();

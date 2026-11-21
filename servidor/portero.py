@@ -2017,10 +2017,15 @@ _LETRAS_PROVISORIA = "abcdefghjkmnpqrstuvwxyz23456789"     # (sin l/1/i/o/0: se 
 
 
 def admin_restablecer_clave(uid_admin, uid):
-    """ADMIN: una contraseña PROVISORIA al azar para la cuenta `uid`, y se cierran sus sesiones abiertas.
-    -> (200, {ok, uid, usuario, clave}) · 403 si no es admin · 404 si la cuenta no existe."""
-    if rol_de(uid_admin) != "admin":
-        return 403, {"error": "Sólo un Admin puede restablecer contraseñas."}
+    """ADMIN (o un MODERADOR con el permiso «clave» de toda la red, ★ 21-nov): una contraseña PROVISORIA al azar para la
+    cuenta `uid`, y se cierran sus sesiones abiertas. ⛔ Un moderador nunca a una cuenta del equipo, y no recibe el
+    login (es privado: el jugador ya sabe su usuario).
+    -> (200, {ok, uid, usuario?, clave}) · 403 sin permiso · 404 si la cuenta no existe."""
+    rol = rol_de(uid_admin)
+    if rol != "admin":
+        from servidor import gestion as GE
+        if rol != "moderador" or not GE.puede_red(sys.modules[__name__], uid_admin, "clave"):
+            return 403, {"error": "Su cuenta no tiene el permiso de restablecer contraseñas."}
     if not es_duena():
         return 409, {"error": "Las contraseñas no las guarda este servidor."}
     try:
@@ -2030,6 +2035,8 @@ def admin_restablecer_clave(uid_admin, uid):
     r = _cuentas().execute("SELECT uid, usuario FROM cuentas WHERE uid = ?", (uid,)).fetchone()
     if not r:
         return 404, {"error": "Esa cuenta no existe."}
+    if rol != "admin" and rol_de(uid) is not None:
+        return 403, {"error": "Esa cuenta es del equipo: sólo un Admin le restablece la contraseña."}
     clave_txt = "".join(secrets.choice(_LETRAS_PROVISORIA) for _ in range(10))
     envuelta = envolver_hash(_hash_de_entrada(clave_txt, None))
     with _escribir:
@@ -2039,8 +2046,12 @@ def admin_restablecer_clave(uid_admin, uid):
         cp = _propia()
         cp.execute("DELETE FROM sesiones WHERE uid = ?", (uid,))
         cp.commit()
-    _auditar(uid_admin, "restablecer-clave", uid, None, "contraseña provisoria; sesiones cerradas")
-    return 200, {"ok": True, "uid": uid, "usuario": r["usuario"], "clave": clave_txt}
+    _auditar(uid_admin, "restablecer-clave", uid, None,
+             "contraseña provisoria; sesiones cerradas" + ("" if rol == "admin" else " (moderador, permiso de la red)"))
+    out = {"ok": True, "uid": uid, "clave": clave_txt}
+    if rol == "admin":
+        out["usuario"] = r["usuario"]
+    return 200, out
 
 
 def admin_estado_cuenta(usuario, nuevo_estado, motivo="", quien="consola"):

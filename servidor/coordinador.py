@@ -52,6 +52,7 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     POST /coordinador/api/oauth {proveedor, destino?}  · canjear {ticket} · salir
     POST /coordinador/api/accion {accion, uid, pase, detalle}   aprobar | quitar | banear | desbanear (por pase)
     POST /coordinador/api/restablecer-clave {uid}            ★ 20-nov ADMIN: contraseña provisoria al azar (se ve una vez)
+                                                             ★ 21-nov o un MODERADOR con el permiso «clave» de la red
          ★ 20-nov banear / desbanear: además `pases: [...]`, `juegos: [...]` (con todos sus servidores), `red: true`
          (sólo ADMIN), y para banear `horas: n` | `dias: n` | `meses: n` (30 d) | `permanente: true` (sólo ADMIN) + `motivo` (obligatorio,
          ≤ 200). Un moderador: sólo en sus juegos y hasta portero.BANEO_TOPE_MODERADOR_SEG.
@@ -553,6 +554,8 @@ def persona(P, viewer, uid, ahora=None):
     d["juegos"] = js
     d["acciones"] = acciones
     d["sancion"] = limites_sancion(P, viewer)
+    # ★ 21-nov: el botón «Restablecer contraseña» (ADMIN, o un moderador con ese permiso de la red; nunca al equipo)
+    d["puede_clave"] = bool(P.es_duena() and (admin or (P.rol_de(uid) is None and GE.puede_red(P, viewer, "clave"))))
     return 200, {"persona": d}
 
 
