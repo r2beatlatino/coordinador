@@ -573,7 +573,7 @@ function restablecerClave() {
         titulo: 'Contraseña provisoria', ok: 'Listo', icono: 'lock', peligro: false, soloOk: true,
         txt: `Pásele estos datos al jugador. <b>Se muestran una sola vez</b>: al cerrar esta ventana ya no se pueden volver a ver.`,
         extra: `<div class="clave-prov" style="display:grid;gap:8px;margin-top:12px">
-          ${r.d.usuario ? `<div>Usuario: <code style="font-size:15px">${esc(r.d.usuario)}</code></div>` : '<div class="tenue" style="font-size:12.5px">El usuario es el de siempre del jugador (no se muestra al equipo).</div>'}
+          <div>Usuario: <code style="font-size:15px">${esc(r.d.usuario)}</code></div>
           <div style="display:flex;gap:8px;align-items:center">Contraseña: <code style="font-size:18px;letter-spacing:1px">${esc(r.d.clave)}</code>
             <button type="button" class="btn chico" data-accion="lg-copiar" data-txt="${esc(r.d.clave)}">${ic('copy', 's14')}Copiar</button></div>
           <div class="tenue" style="font-size:12.5px">Que entre con ella y la cambie en el launcher. Quedó en la auditoría (sin la contraseña).</div></div>`,
@@ -2582,7 +2582,7 @@ function resumenPermisos(m) {
   const nom = id => (P.asignables.find(a => a.id === id) || { nombre: id }).nombre;
   const fs = P.permisos.filter(x => x.uid === m.uid && (m.juegos || []).includes(x.juego) && (x.acciones.length || x.cupo_rcoin || x.cupo_exp));
   const red = P.permisos.find(x => x.uid === m.uid && x.juego === '_red' && x.acciones.length);       // ★ 21-nov: toda la red
-  const lred = red ? `<div>${ic('lock', 's14')} Toda la red: ${red.acciones.map(a => esc(nom(a))).join(' · ')}</div>` : '';
+  const lred = red ? `<div>${ic('lock', 's14')} Cuenta Eñeños: ${red.acciones.map(a => esc(nom(a))).join(' · ')}</div>` : '';
   if (!fs.length) return lred ? `<div class="g-perm-res">${lred}</div>` : (m.juegos || []).some(j => P.gestionables.includes(j)) ? '<div class="g-perm-res tenue">En los juegos: sólo lo de base</div>' : '';
   const mon = x => (x.acciones.includes('moneda') ? Object.entries(x.monedas || {}).filter(([, v]) => v.cupo || v.dado).map(([k, v]) => ` <i>· ${esc(nomMonedaJuego(x.juego, k))} dado ${miles(v.dado)} de ${miles(v.cupo)}</i>`).join('') : '');
   return `<div class="g-perm-res">${lred}${fs.map(x => `<div>${etqJuego(x.juego)} ${x.acciones.map(a => esc(nom(a))).join(' · ') || 'sólo lo de base'}${x.acciones.includes('rcoin') ? ` <i>· Rcoin dado ${miles(x.dado_rcoin)} de ${miles(x.cupo_rcoin)}</i>` : ''}${x.acciones.includes('exp') ? ` <i>· EXP dada ${miles(x.dado_exp)} de ${miles(x.cupo_exp)}</i>` : ''}${mon(x)}</div>`).join('')}</div>`;
@@ -2629,11 +2629,11 @@ function formPermisos(i) {
   /* ★ 21-nov (Benja: «quiero el permiso asignable»): lo de TODA LA RED (la cuenta Eñeños, no un juego): fila `_red` */
   const asRed = P.asignables_red || [];
   const seccionRed = () => { const x = de('_red');
-    return `<section class="g-perm" data-juego="_red"><h3>${ic('lock', 's14')} Cuenta Eñeños · toda la red</h3>
-      <p class="tenue g-nota">${ic('info', 's14')} Vale para la cuenta entera (todos los juegos). Nunca sobre una cuenta del equipo, y el usuario (login) no se le muestra.</p>
-      <div class="g-perm-acc">${asRed.map(a => `<label class="radio"><input type="checkbox" value="${esc(a.id)}" ${x.acciones.includes(a.id) ? 'checked' : ''}><span><b>${esc(a.nombre)}</b><span>genera una provisoria al azar y cierra sus sesiones; queda en la auditoría</span></span></label>`).join('')}</div>
+    return `<section class="g-perm" data-juego="_red"><h3>${ic('lock', 's14')} Cuenta Eñeños (cualquier juego)</h3>
+      <p class="tenue g-nota">${ic('info', 's14')} Permisos sobre la cuenta del jugador, no sobre un juego. Marcarlo no cambia nada: le da un botón que usa de a un jugador por vez. Nunca sobre alguien del equipo.</p>
+      <div class="g-perm-acc">${asRed.map(a => `<label class="radio"><input type="checkbox" value="${esc(a.id)}" ${x.acciones.includes(a.id) ? 'checked' : ''}><span><b>${esc(a.nombre)}</b><span>de UN jugador a la vez, desde su ficha: ve su usuario y le da una provisoria al azar. Todo queda en la auditoría</span></span></label>`).join('')}</div>
       <div class="g-perm-pie">${x.cambiado ? `<span class="tenue">Cambiado por ${esc(x.quien || '—')} · ${fechaTxt(x.cambiado)}</span>` : '<span class="tenue">Sin cambios todavía.</span>'}
-        <button type="button" class="btn chico prim" data-perm="guardar">Guardar toda la red</button></div></section>`; };
+        <button type="button" class="btn chico prim" data-perm="guardar">Guardar cuenta Eñeños</button></div></section>`; };
   const nomSec = j => j === '_red' ? 'Cuenta Eñeños' : juegoCat(j).nombre;
   const seccion = j => { const x = de(j), nj = juegoCat(j).nombre, as = asigDe(j);
     const algoDado = x.dado_rcoin || x.dado_exp || Object.values(x.monedas || {}).some(v => v.dado);

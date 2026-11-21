@@ -556,7 +556,22 @@ def persona(P, viewer, uid, ahora=None):
     d["sancion"] = limites_sancion(P, viewer)
     # ★ 21-nov: el botón «Restablecer contraseña» (ADMIN, o un moderador con ese permiso de la red; nunca al equipo)
     d["puede_clave"] = bool(P.es_duena() and (admin or (P.rol_de(uid) is None and GE.puede_red(P, viewer, "clave"))))
+    # ★ 21-nov (Benja, opción 2): el moderador CON ese permiso ve el USUARIO (login) en la ficha — para el jugador que
+    #   olvidó también su usuario. Sólo acá (no en las listas ni en la búsqueda), y cada vista queda en la auditoría
+    #   (una por hora por moderador y cuenta, para no llenarla con cada recarga).
+    if d["puede_clave"] and not admin:
+        d["usuario"] = r["usuario"]
+        _auditar_vista_usuario(P, viewer, uid)
     return 200, {"persona": d}
+
+
+def _auditar_vista_usuario(P, viewer, uid):
+    quien = P._login_de(viewer) or f"uid {viewer}"
+    hace_1h = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 3600))
+    ya = P._propia().execute("SELECT 1 FROM auditoria WHERE quien = ? AND accion = 'ver-usuario' AND uid = ? AND cuando >= ?",
+                             (quien, int(uid), hace_1h)).fetchone()
+    if not ya:
+        P._auditar(viewer, "ver-usuario", int(uid), None, "el moderador vio el usuario (login) en la ficha (permiso «clave»)")
 
 
 def limites_sancion(P, viewer):

@@ -2018,8 +2018,8 @@ _LETRAS_PROVISORIA = "abcdefghjkmnpqrstuvwxyz23456789"     # (sin l/1/i/o/0: se 
 
 def admin_restablecer_clave(uid_admin, uid):
     """ADMIN (o un MODERADOR con el permiso «clave» de toda la red, ★ 21-nov): una contraseña PROVISORIA al azar para la
-    cuenta `uid`, y se cierran sus sesiones abiertas. ⛔ Un moderador nunca a una cuenta del equipo, y no recibe el
-    login (es privado: el jugador ya sabe su usuario).
+    cuenta `uid`, y se cierran sus sesiones abiertas. ⛔ Un moderador nunca a una cuenta del equipo. (★ 21-nov, Benja:
+    el moderador con este permiso SÍ recibe el login, para el jugador que olvidó también su usuario.)
     -> (200, {ok, uid, usuario?, clave}) · 403 sin permiso · 404 si la cuenta no existe."""
     rol = rol_de(uid_admin)
     if rol != "admin":
@@ -2048,10 +2048,7 @@ def admin_restablecer_clave(uid_admin, uid):
         cp.commit()
     _auditar(uid_admin, "restablecer-clave", uid, None,
              "contraseña provisoria; sesiones cerradas" + ("" if rol == "admin" else " (moderador, permiso de la red)"))
-    out = {"ok": True, "uid": uid, "clave": clave_txt}
-    if rol == "admin":
-        out["usuario"] = r["usuario"]
-    return 200, out
+    return 200, {"ok": True, "uid": uid, "usuario": r["usuario"], "clave": clave_txt}
 
 
 def admin_estado_cuenta(usuario, nuevo_estado, motivo="", quien="consola"):

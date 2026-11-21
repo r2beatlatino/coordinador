@@ -106,7 +106,7 @@ try:
        "el panel lo ve (fila de toda la red y su casilla)")
     cod, d = P.admin_restablecer_clave(UID["moderadora"], UID["jugador"])
     ok(cod == 200 and len(d.get("clave", "")) == 10, "la moderadora restablece la de un jugador")
-    ok("usuario" not in d, "⟲ y NO recibe el login del jugador (es privado)")
+    ok(d.get("usuario") == "jugador", "★ y recibe el usuario del jugador (Benja, opción 2: para quien olvidó los dos)")
     with contextlib.redirect_stdout(io.StringIO()):
         c_entra = P.entrar("jugador", clave_txt=d.get("clave", ""), ip="10.2.9.7")[0]
     ok(c_entra == 200, "el jugador entra con la provisoria")
@@ -116,8 +116,21 @@ try:
     ok(antes == P._cuentas().execute("SELECT clave FROM cuentas WHERE uid = ?", (UID["jefa"],)).fetchone()[0], "⟲ la de la Admin quedó intacta")
     ok(P._propia().execute("SELECT COUNT(*) FROM auditoria WHERE accion = 'restablecer-clave' AND detalle LIKE '%moderador%'").fetchone()[0] == 1,
        "queda en la auditoría como de moderador")
+    print("\n5 · la ficha: el usuario, sólo para el moderador con el permiso, y auditado")
+    cod, f = CO.persona(P, UID["moderadora"], UID["jugador"])
+    ok(cod == 200 and f["persona"].get("usuario") == "jugador" and f["persona"]["puede_clave"], "con el permiso: ve el usuario y el botón")
+    CO.persona(P, UID["moderadora"], UID["jugador"])
+    vistas = P._propia().execute("SELECT COUNT(*) FROM auditoria WHERE accion = 'ver-usuario' AND uid = ?", (UID["jugador"],)).fetchone()[0]
+    ok(vistas == 1, f"la vista queda en la auditoría (una por hora: 2 recargas = {vistas})")
+    cod, f = CO.persona(P, UID["moderadora"], UID["jefa"])
+    ok(cod == 403, "⟲ la ficha de alguien del equipo: ni la ve (403)")
+    ok("usuario" not in CO.resumen_persona(P, UID["moderadora"], P._cuentas().execute(
+        "SELECT uid, usuario, estado, creada, apodo, visto FROM cuentas WHERE uid = ?", (UID["jugador"],)).fetchone()),
+       "⟲ en las listas y la búsqueda sigue sin el usuario")
     GE.poner_permisos(CO, P, UID["jefa"], {"uid": UID["moderadora"], "juego": GE.RED, "acciones": []})
     ok(P.admin_restablecer_clave(UID["moderadora"], UID["jugador"])[0] == 403, "⟲ se lo quitan: ya no puede")
+    cod, f = CO.persona(P, UID["moderadora"], UID["jugador"])
+    ok("usuario" not in f["persona"] and not f["persona"]["puede_clave"], "⟲ y sin el permiso ya no ve el usuario ni el botón")
 finally:
     try:
         P.cerrar_conexiones()
