@@ -1618,8 +1618,14 @@ class _Manejador(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         for k, v in extra:
             self.send_header(k, v)
-        self.end_headers()
-        self.wfile.write(cuerpo)
+        try:
+            self.end_headers()
+            self.wfile.write(cuerpo)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # ★ 22-nov: el que preguntó ya colgó (casi siempre el launcher que se cierra en medio de la espera larga
+            #   del chat, `social/esperar`). No hay a quién contestarle: antes esto subía, el `except` de do_POST
+            #   intentaba un 500 al mismo socket muerto y dejaba DOS tracebacks — 724 en un día, todos ruido.
+            self.close_connection = True
 
     # ---- ★ el panel ----
     _SEGURIDAD = (("X-Frame-Options", "DENY"), ("Referrer-Policy", "no-referrer"),
