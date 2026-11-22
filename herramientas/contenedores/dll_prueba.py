@@ -164,7 +164,7 @@ def main():
         # se precalienta la CDN y se comprueba que entrega ESA dll
         if info.get("url"):
             try:
-                with urllib.request.urlopen("%s/%s/%s" % (info["url"].rstrip("/"), r["nueva"], RUTA), timeout=120) as u:
+                with urllib.request.urlopen(urllib.request.Request("%s/%s/%s" % (info["url"].rstrip("/"), r["nueva"], RUTA), headers={"User-Agent": "Mozilla/5.0 (enenos-dll)"}), timeout=120) as u:
                     cdn = hashlib.md5(u.read()).hexdigest()
                 log("CDN: %s" % ("entrega la dll nueva ✅" if cdn == md5 else "⚠ entrega OTRA cosa (md5 %s)" % cdn[:8]))
             except OSError as e:
