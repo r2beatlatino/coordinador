@@ -4,7 +4,7 @@
 #   Lee el manifest de la release del cliente (/opt/enenos/releases/<release>/manifest.json, el que arma
 #   make_manifest.py) y arma la lista: los MISMOS archivos (path, md5, size), de dónde bajarlos (la CDN) y A QUÉ SERVER
 #   ENTRAR → /opt/enenos/moderno_web/.trabajo/lista.json, SIN firmar. La firma es la de PUBLICACIÓN de la PLATAFORMA
-#   (kid 140674dc…, la de GunBound), cuya privada NO vive en el VPS: la pone `moderno_firmar.py` en la PC de Benja,
+#   (kid 140674dc…, la de GunBound), cuya privada NO vive en el VPS: la pone `moderno_firmar.py` en la PC de Eñeños,
 #   que la sube a /opt/enenos/moderno_web/lista.jws → https://ensayo.eñeños.link/r2beat-moderno/lista.jws (el Caddy
 #   del sistema, enenos-ensayo.caddy). La anterior queda como lista.jws.antes.
 #
@@ -57,6 +57,6 @@ print(json.dumps({"juego": "r2beat-moderno", "version": version, "release": rel,
                  ensure_ascii=False))
 PY
 chmod 644 "$TRAB/$NOMBRE.json"
-log "✅ $TRAB/$NOMBRE.json ($REL → $SERVIDOR): falta FIRMARLA en la PC de Benja con la clave de la PLATAFORMA"
+log "✅ $TRAB/$NOMBRE.json ($REL → $SERVIDOR): falta FIRMARLA en la PC de Eñeños con la clave de la PLATAFORMA"
 log "   (python herramientas/contenedores/usa/moderno_firmar.py$([ "$NOMBRE" = prueba ] && echo " --prueba"), que también la sube a $OUT/$NOMBRE.jws)"
 

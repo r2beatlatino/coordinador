@@ -9,12 +9,12 @@ Cloudflare ANTES de que lleguen los jugadores. Corre EN el VPS de USA. Es el `he
     python3 precalentar_cdn.py --r2beat <release>   sólo esa release del 2013
     python3 precalentar_cdn.py --gunbound | --eda   sólo ese juego
 
-⛔ REGLA (Benja, 18-nov: «que siempre funcione así durante parches»): cada vez que se publica algo —una release del
+⛔ REGLA (Eñeños, 18-nov: «que siempre funcione así durante parches»): cada vez que se publica algo —una release del
    2013, una versión de GunBound o de EDA, el launcher— se precalienta ANTES de anunciarlo. La tarea de EDA
    (`eda_ensayo.sh`) lo hace sola al cambiar la lista.
 
 POR QUÉ: la primera vez que alguien pide un archivo, Cloudflare lo trae del VPS de Miami mientras se lo da (lento: lo
-vio Benja, «no llega a 200 Mbps», y el VPS tenía 317 conexiones de Cloudflare). Con la caché en niveles prendida, esta
+vio Eñeños, «no llega a 200 Mbps», y el VPS tenía 317 conexiones de Cloudflare). Con la caché en niveles prendida, esta
 pasada llena el nivel alto (el nodo junto al VPS) y los demás nodos (Río, el de Bolivia) se sirven de ahí por la red
 de Cloudflare, no del VPS. Y el VPS entrega cada archivo UNA vez, en un horario tranquilo.
 

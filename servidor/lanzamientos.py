@@ -2,7 +2,7 @@
 """lanzamientos — el «CONTENIDO DINÁMICO» de Cuenta Eñeños: cuándo se abre cada juego y las invitaciones anticipadas.
 18-nov-2026.
 
-Benja: «su botón para jugar / descargar estará cerrado y se liberará en estas fechas: EDA sábado 21, 7 pm Perú (8 pm
+Eñeños: «su botón para jugar / descargar estará cerrado y se liberará en estas fechas: EDA sábado 21, 7 pm Perú (8 pm
 Bolivia); GunBound domingo 12 del mediodía (Perú); Eñeñosbit 2027 lunes, misma hora que EDA. Una cuenta atrás a cada
 uno. EDA = beta, GunBound = beta, Eñeñosbit 2027 = alpha. Y un botón para solicitar invitación anticipada, que haga que
 un bot en Discord, en el canal de eventos, mande la solicitud con el Ñ2-ID y botones aprobar / rechazar.»
@@ -11,15 +11,15 @@ QUÉ HACE
 - `LANZAMIENTOS`: por juego, la fecha, la etiqueta (BETA / ALPHA) y qué pases cubre. Se pueden cambiar SIN publicar
   nada: `config/lanzamientos.json` al lado de `portero.db` pisa lo de acá (se lee en cada pedido, por fecha del archivo).
 - `cerrado_para(uid, pase)` (lo usa `portero.permitido`): ANTES de la fecha sólo entran los admins / moderadores y los
-  APROBADOS (por invitación o a mano en el panel); DESPUÉS, toda cuenta activa (Benja: «EDA se abre a todas las cuentas»).
+  APROBADOS (por invitación o a mano en el panel); DESPUÉS, toda cuenta activa (Eñeños: «EDA se abre a todas las cuentas»).
 - `GET /lanzamientos` (sesión opcional) -> {ahora, juegos: {clave: {nombre, etiqueta, desde, libre, permitido,
   invitacion}}}: lo que pinta el launcher (la cuenta atrás la calcula él con `ahora` del server, no con su reloj).
 - `POST /invitacion {juego}` (con sesión): pide la invitación anticipada. Una pendiente por juego; si la rechazaron,
   se puede volver a pedir a las 24 h. Avisa en Discord.
-- Discord: un WEBHOOK del canal de eventos (`R2_DISCORD_EVENTOS_WEBHOOK`; Benja eligió «lo más fácil»). El mensaje
+- Discord: un WEBHOOK del canal de eventos (`R2_DISCORD_EVENTOS_WEBHOOK`; Eñeños eligió «lo más fácil»). El mensaje
   trae el Ñ2-ID y los enlaces ✅ Aprobar / ❌ Rechazar, que abren el PANEL (`/cuentas/admin#invitacion=…`).
   ⛔ El enlace NO aprueba solo: Discord abre los enlaces para la vista previa, y la cookie del panel es SameSite=Strict
-  (no viaja desde Discord). Se decide en el panel, con la sesión de admin / moderador (Benja: «admins y moderadores»),
+  (no viaja desde Discord). Se decide en el panel, con la sesión de admin / moderador (Eñeños: «admins y moderadores»),
   por POST. Al decidir, el mensaje de Discord se EDITA («✅ Aprobada por …»).
 """
 import json
@@ -174,7 +174,7 @@ def ficha(P, iid):
 
 
 def pendientes(P, limite=200):
-    """★ 18-nov (Benja: «pedí acceso a los tres, pero en el panel sólo me salió uno»): TODAS las pendientes, para
+    """★ 18-nov (Eñeños: «pedí acceso a los tres, pero en el panel sólo me salió uno»): TODAS las pendientes, para
     decidirlas desde el panel sin abrir un enlace por cada una. Las más viejas primero."""
     filas = P._propia().execute("SELECT id FROM invitaciones WHERE estado = 'pendiente' ORDER BY id LIMIT ?", (int(limite),)).fetchall()
     return [f for f in (ficha(P, r["id"]) for r in filas) if f]

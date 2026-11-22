@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_amigos_viejos — la mudanza de los AMIGOS del R2Beat viejo a Eñeños ID (social.importar_amistades). 18-nov-2026.
 
-Benja: «quienes estén agregados en el R2Beat viejo deberán estar ya agregados como amigos en Eñeños ID». En el viejo
+Eñeños: «quienes estén agregados en el R2Beat viejo deberán estar ya agregados como amigos en Eñeños ID». En el viejo
 la amistad es de PERSONAJE y se guarda en los dos sentidos; en Eñeños es de PERSONA. Una `datos.db` vieja de mentira
 con un caso de cada regla, y cada uno con su CONTROL (⟲):
   · Ana↔Beto (guardada en los dos sentidos) = UNA amistad «amigos»

@@ -1,7 +1,7 @@
 #!/bin/sh
-# ★ 20-nov (Benja: «desconectar EDA de Chile… todo Miami»): se RETIRA el EDA viejo (eda-prod, el que validaba el pase
+# ★ 20-nov (Eñeños: «desconectar EDA de Chile… todo Miami»): se RETIRA el EDA viejo (eda-prod, el que validaba el pase
 #   con el JWKS de r2beatlatino.com = Chile, y su /admin que iba a Chile). Queda un solo EDA: el de /opt/enenos
-#   (Cuenta Eñeños), que se actualiza solo desde GitHub main. Sus datos: SÓLO respaldo (Benja: «empiezan de cero»).
+#   (Cuenta Eñeños), que se actualiza solo desde GitHub main. Sus datos: SÓLO respaldo (Eñeños: «empiezan de cero»).
 set -eu
 R=/root/respaldo_eda_viejo_$(date +%Y%m%d_%H%M)
 mkdir -p "$R"

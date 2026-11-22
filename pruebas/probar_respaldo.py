@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory() as tmp:
         {"nombre": "eda base", "tipo": "sqlite", "ruta": "vol/eda/porteria.db"},
         {"nombre": "eda estado", "tipo": "carpeta", "ruta": "vol/eda", "ignorar": ["*.db", "*.log"]},
     ]}))
-    priv, pub = llave(tmp, "benja")
+    priv, pub = llave(tmp, "enenos")
     priv_otra, _ = llave(tmp, "otra")
 
     # control: el .db solo (sin su -wal) NO tiene las filas — por eso hay que usar la API de respaldo

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """con_panel — el arranque del server de PRUEBA de R2Beat CON el panel (★ 21-nov-2026).
 
-Benja: «el servidor de prueba debería tener las mismas funciones que ya tiene el Coordinador en prod, pero sin los
+Eñeños: «el servidor de prueba debería tener las mismas funciones que ya tiene el Coordinador en prod, pero sin los
 datos de prod». El server de prueba corre `develop` del repo PÚBLICO, que deja afuera a propósito lo de prod
 (`api_web`, `panel_admin`, `launcher_*`, `ruleta`, …: decisión del 11-nov). `actualizar_prueba.sh` le copia ENCIMA esos
 módulos sacados de la imagen de PROD (no van a GitHub) y arranca con esto en vez de `correr_servidor.py`:

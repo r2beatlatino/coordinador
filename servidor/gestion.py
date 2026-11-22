@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """gestion — ★ 20-nov-2026, FASE C del panel del Coordinador: la GESTIÓN de cada juego (tablero, fichas, acciones).
 
-Benja: *«la gestión de X juego»* · y para los moderadores *«con cupo y permisos asignables para X acción también»*.
+Eñeños: *«la gestión de X juego»* · y para los moderadores *«con cupo y permisos asignables para X acción también»*.
 
 CÓMO
 - El panel le habla al server del juego por la red de adentro, con la ficha interna: `R2_PANEL_GESTION` =
@@ -17,14 +17,14 @@ CÓMO
   pasa del cupo aunque mande dos a la vez) y se DEVUELVE si el juego dice que no. El moderador sólo SUMA o RESTA
   («poner» un valor fijo es de ADMIN: podría saltarse el cupo). Restar no gasta cupo.
 - PRIVACIDAD: a un moderador nunca le llega una IP, un login ni con quién comparte IP (`_SIN_PRIVADOS`).
-- ★ 20-nov (Benja: «GunBound y EDA… haz ambos a la vez; cuando maduren se editarán sus secciones»): DOS TIPOS de
+- ★ 20-nov (Eñeños: «GunBound y EDA… haz ambos a la vez; cuando maduren se editarán sus secciones»): DOS TIPOS de
   servidor. «r2beat» = el panel viejo de R2Beat (`RUTAS`). «contrato1» = el CONTRATO común de los juegos nuevos
   (`documentacion/CONTRATO_PANEL.md`, `RUTAS_CONTRATO1`): capacidades, salud, conectados, buscar, ficha, aviso,
   echar y moneda. En `R2_PANEL_GESTION` el tipo va delante de la URL: «gunbound=contrato1:http://…/interno/panel».
   La acción asignable «moneda» lleva un cupo POR MONEDA (oro, cash…), guardado en `permisos_juego.monedas`.
 - ★ 20-nov: la acción asignable «torneos» no tiene ruta acá: la usa `torneos.py` (su propia puerta del juego,
   `R2_PANEL_TORNEOS`). Se asigna como las demás, por moderador y por juego.
-- ★ 21-nov (Benja: «quiero el permiso asignable» de restablecer contraseña): los permisos de TODA LA RED (la cuenta
+- ★ 21-nov (Eñeños: «quiero el permiso asignable» de restablecer contraseña): los permisos de TODA LA RED (la cuenta
   Eñeños, no un juego) van en la fila `juego = "_red"` de la misma tabla. Hoy: «clave» (portero.admin_restablecer_clave,
   nunca a una cuenta del equipo). `puede_red()` lo consulta.
 """
@@ -180,7 +180,7 @@ def _http(url, ruta, query, cuerpo, quien, admin):
 
 
 def echar_de_los_juegos(eid, pases, quien, motivo=""):
-    """★ 21-nov (Benja: «banear no desconecta al usuario»): el baneo vive en Cuenta Eñeños (no le da más pases), pero
+    """★ 21-nov (Eñeños: «banear no desconecta al usuario»): el baneo vive en Cuenta Eñeños (no le da más pases), pero
     el que YA estaba adentro seguía jugando hasta salir. Después de banear, en cada server baneado que se gestiona se
     buscan los personajes de ESA persona (por su Eñeños ID) y se echa a los que están conectados — con el mismo
     «echar» del panel (R2Beat: `usuarios?q=` + `usuario/N/echar`; contrato: `buscar?q=` + `echar {id}`).

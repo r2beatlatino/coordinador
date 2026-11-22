@@ -1,7 +1,7 @@
 # Reconstruir Eñeños desde cero
 
 > Para quien llega **sin ningún contexto** (una persona o una sesión nueva de Claude) con dos cosas:
-> **estos repos** y **el respaldo cifrado de Benja** (`enenos_respaldo_<fecha>.age`) más su clave.
+> **estos repos** y **el respaldo cifrado de Eñeños** (`enenos_respaldo_<fecha>.age`) más su clave.
 > ⚠ Esta guía se va completando a medida que el código del Coordinador se muda a este repo (ver «Estado»).
 
 ## 0 · Qué hay en cada lado
@@ -10,18 +10,18 @@
 |---|---|---|
 | este repo | el Coordinador: cuentas, panel, catálogo, contenedores, dominio, mudanza | público, GitHub |
 | los repos hijos (ver `juegos.json`) | el server de cada juego | público, GitHub |
-| **el respaldo** | las bases (cuentas + cada juego), la configuración viva y **los secretos** | **sólo Benja** |
+| **el respaldo** | las bases (cuentas + cada juego), la configuración viva y **los secretos** | **sólo Eñeños** |
 | los clientes de los juegos | instaladores y paks | aparte (no van en ninguno de los dos) |
 
 **Los secretos van en el respaldo y no se pueden perder**: la llave que firma el pase del Eñeños-ID y la que firma
 las listas de descarga. El launcher instalado de cada jugador confía en ellas; si se pierden hay que sacar un
 launcher nuevo y que todos lo reinstalen.
 
-## 1 · Generar el respaldo (Benja, a mano)
+## 1 · Generar el respaldo (Eñeños, a mano)
 
 Todo está en `herramientas/respaldo/` (cómo es por dentro: el encabezado de `respaldo.py`).
 
-**Una sola vez — la llave.** En la PC de Benja: `sh herramientas/respaldo/crear_llave.sh <carpeta>`. Deja la llave
+**Una sola vez — la llave.** En la PC de Eñeños: `sh herramientas/respaldo/crear_llave.sh <carpeta>`. Deja la llave
 PRIVADA cifrada con su contraseña (`enenos_respaldo_llave.age`: guardarla en dos lugares fuera de la PC) y la PÚBLICA
 en `herramientas/respaldo/llave_publica.txt` (va al repo: sólo sirve para cifrar).
 
@@ -47,7 +47,7 @@ python herramientas/respaldo/respaldo.py abrir --archivo <respaldo>.age --llave 
 `abrir` deja `<carpeta>/respaldo/datos/<la misma ruta que tenía en el VPS>` y comprueba cada cosa contra su
 `MANIFIESTO.json` (sha256, integridad y filas por tabla).
 
-**Los secretos de la PC de Benja** (no viven en el VPS): `herramientas/respaldo/respaldo_pc.bat` arma
+**Los secretos de la PC de Eñeños** (no viven en el VPS): `herramientas/respaldo/respaldo_pc.bat` arma
 `enenos_respaldo_pc_<fecha>.tar.gz.age` con lo de `respaldo_pc.json`: las llaves que firman las listas de descarga
 (`~/.enenos`), Cloudflare (`~/.cloudflare`), las llaves SSH de los VPS y la del grabador. Misma llave pública.
 Al reconstruir, cada cosa vuelve a su lugar en la carpeta del usuario.
@@ -98,5 +98,5 @@ repos y el archivo, y se anota acá la fecha del último simulacro que salió bi
 | repo padre + catálogo `juegos.json` + guardia | ✅ 19-nov |
 | repo GunBound público | ✅ 19-nov |
 | mudar el código de las cuentas y la casa a este repo | 🟡 19-nov copiado y con pruebas verdes; falta lo de `PENDIENTES.md` 1 y 2 |
-| «Generar backup» | 🟡 1.er respaldo real 20-nov 01:54 UTC, abierto y comprobado por Benja (24 cosas sanas); falta el botón y los secretos de la PC |
+| «Generar backup» | 🟡 1.er respaldo real 20-nov 01:54 UTC, abierto y comprobado por Eñeños (24 cosas sanas); falta el botón y los secretos de la PC |
 | guía completa + simulacro | ⏳ |

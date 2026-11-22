@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""vinculos — entrar, registrarse y VINCULAR el Eñeños ID con Google y Discord (16-nov-2026, Benja). Parte del portero
+"""vinculos — entrar, registrarse y VINCULAR el Eñeños ID con Google y Discord (16-nov-2026, Eñeños). Parte del portero
 (Cuenta Eñeños dueña, `R2_CUENTAS_DUENA=1`): sin esa variable, nada de esto existe.
 
 EL CAMINO (el launcher es de escritorio: la página del proveedor se abre en el NAVEGADOR del sistema, porque Google

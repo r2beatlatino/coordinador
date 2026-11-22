@@ -12,7 +12,7 @@ cdn.xn--eeos-gqab.link {
 			root * /opt/enenos/releases
 			file_server
 		}
-		# ★ 18-nov (Benja: «nuestra versión de EDA, el mismo orden»): los archivos del cliente de EDA (los de prod)
+		# ★ 18-nov (Eñeños: «nuestra versión de EDA, el mismo orden»): los archivos del cliente de EDA (los de prod)
 		handle_path /eda/* {
 			root * /opt/eda/files-eda
 			file_server

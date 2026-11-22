@@ -5,7 +5,7 @@
 > `datos.db`, el panel viejo…) sigue en ese repo. Las rutas `servidor/`, `pruebas/` y `herramientas/contenedores/` de acá
 > son las mismas que allá.
 
-> Benja: *«no hay mucho espacio, así que cambiaremos de VPS: usaremos el de USA (Miami), donde está EDA»* ·
+> Eñeños: *«no hay mucho espacio, así que cambiaremos de VPS: usaremos el de USA (Miami), donde está EDA»* ·
 > *«mudar todo»* · ⛔ *«no tocamos Chile»*. Los scripts: `herramientas/contenedores/usa/`.
 
 ## 1 · Dónde está cada cosa
@@ -13,7 +13,7 @@
 | | VPS de ensayo VIEJO | VPS de USA (el nuevo) |
 |---|---|---|
 | IP | 103.90.160.237 | 185.147.157.33 |
-| entrar | `ssh root@…` (con la llave de Benja, fuera del repo) | `ssh root@…` (con la llave de Benja, fuera del repo) |
+| entrar | `ssh root@…` (con la llave de Eñeños, fuera del repo) | `ssh root@…` (con la llave de Eñeños, fuera del repo) |
 | máquina | 4 núcleos · 3,4 GB · 8,5 GB libres | 2 núcleos · 3,9 GB · ~47 GB libres |
 | ya tenía | — | el **EDA real** (`eda-prod` 25900, `eda-prueba` 35900, red host) y el **Caddy del sistema** con `eñeños.link` (sólo por Cloudflare) |
 | estado (noche 18-nov) | **la pila ANDANDO**, es la que usa el DNS hoy | **la copia completa ANDANDO** (8 servicios + EDA del ensayo), esperando el DNS |
@@ -60,7 +60,7 @@ EDA real no registró errores y su base pasa `quick_check`. ⇒ **Entre máquina
 
 ## 5b · ✅ HECHA (18-nov, tarde)
 
-- **DNS** (Benja: «usa el token, solo dominio eñeños, y vps usa, no tocamos chile»): con el token de Cloudflare de Benja (fuera del repo)
+- **DNS** (Eñeños: «usa el token, solo dominio eñeños, y vps usa, no tocamos chile»): con el token de Cloudflare de Eñeños (fuera del repo)
   se cambiaron SÓLO `ensayo` y `auth` → 185.147.157.33, sin nube. `juego` (Chile) y `eda` quedaron igual.
 - `mudar_final.sh` corrió entero hasta el paso 4: el DNS del propio VPS todavía daba la IP vieja (caché) y salió sin
   prender el sitio, como estaba previsto. Se corrió `activar_dns.sh` a mano y se borró la llave temporal del viejo.
@@ -75,7 +75,7 @@ EDA real no registró errores y su base pasa `quick_check`. ⇒ **Entre máquina
 - Comprobado por internet: cuentas, `auth`, la lista de GunBound y la API del launcher dan 200 con certificado
   válido. Con la cuenta de prueba: entrar → pases de r2beat2013, gunbound y eda → personajes de GunBound (los datos
   del momento). Puertos 48004, 8372, 9372 y 25910 abiertos. EDA real: sano.
-- El VPS viejo (103.90.160.237) quedó con la pila APAGADA (no borrada). Se puede dar de baja cuando Benja confirme.
+- El VPS viejo (103.90.160.237) quedó con la pila APAGADA (no borrada). Se puede dar de baja cuando Eñeños confirme.
 
 ## 5c · La lista de EDA del ensayo se queda vieja (18-nov)
 
@@ -90,7 +90,7 @@ el de prod no trae el ingreso con Cuenta Eñeños (`EDA_CUENTAS_CLAVE_PUBLICA`, 
 
 ## 5d · El EDA del ensayo sigue a prod SOLO (18-nov, noche)
 
-Benja: «que eda ensayo use el mismo repo que usa el viejo launcher» · «su trabajo manda: sólo adaptar el server lo
+Eñeños: «que eda ensayo use el mismo repo que usa el viejo launcher» · «su trabajo manda: sólo adaptar el server lo
 necesario para nuestro dueño de cuentas».
 - **El código**: la rama `cuenta-enenos` (3 commits, apagados por omisión) va al repo de EDA como
   [r2beatlatino/EDA#49](https://github.com/r2beatlatino/EDA/pull/49) a `develop`, con el contexto para su agente de IA
@@ -113,7 +113,7 @@ necesario para nuestro dueño de cuentas».
   `/eda/<versión>/` (`herramientas/contenedores/usa/enenos-cdn.caddy`). El 2013 la usa por `PARCHES_URL_ARCHIVOS`,
   GunBound por la `base` de su lista firmada, EDA por la tarea `eda_ensayo.sh`, N2launcher por `PARCHES_LAUNCHER_URL`.
 - Lo de más de 512 MB (el plan gratis no lo guarda) va en PARTES de 256 MiB (el `graphics.xfs` de GunBound).
-- ⛔⛔ **REGLA (Benja: «que siempre funcione así durante parches»): cada publicación se PRECALIENTA antes de anunciarla**:
+- ⛔⛔ **REGLA (Eñeños: «que siempre funcione así durante parches»): cada publicación se PRECALIENTA antes de anunciarla**:
   `python3 /opt/enenos/precalentar_cdn.py` en el VPS de USA (sin argumentos: la release activa y la de prueba del 2013,
   GunBound y EDA; o `--r2beat <release>`, `--gunbound`, `--eda`). 12 a la vez: 8 GB en ~50 s. EDA lo hace solo
   (`eda_ensayo.sh`). Llena el nivel alto de Cloudflare: cualquier nodo del mundo (Río, Europa, Asia) se sirve de ahí la
@@ -122,12 +122,12 @@ necesario para nuestro dueño de cuentas».
 
 ## 5f · R2 = la descarga principal del 2013 de PROD (18-nov, noche)
 
-Benja: «R2 descarga principal — CDN del VPS secundaria; el launcher sigue en el VPS; que se actualice recién cuando
+Eñeños: «R2 descarga principal — CDN del VPS secundaria; el launcher sigue en el VPS; que se actualice recién cuando
 el cliente de prod se actualice; que no se choque con el del test server; que no se exceda de los 10 GB por accidente».
 
 - **Bucket `r2beat-2013`** (cuenta de la zona eñeños), dominio **`r2.eñeños.link`**, regla de caché de 1 año como la CDN
   (sin ella salía `DYNAMIC`: 43 Mbps por conexión; con ella, HIT a 164). Llaves S3 en el archivo de `R2_LLAVES_ARCHIVO` del VPS (600)
-  y en la PC de Benja, fuera del repo — salen del token de cuenta (id del token + sha256 del valor). ⛔ No se imprimen.
+  y en la PC de Eñeños, fuera del repo — salen del token de cuenta (id del token + sha256 del valor). ⛔ No se imprimen.
 - **Sólo la release de PROD, y sólo cuando está ENTERA allá**: el server de parches (`ensayo15`) pone
   `base` = R2 y `respaldo` = la CDN si `releases/r2.json` nombra la release de prod (`PARCHES_URL_R2` en el `.env`).
   La de PRUEBA, los envíos y una release recién activada siguen por la CDN (`pruebas/probar_parches_r2.py`).
@@ -144,7 +144,7 @@ el cliente de prod se actualice; que no se choque con el del test server; que no
 
 ## 5g · Las cuentas viejas → Eñeños ID, con sus AMIGOS (18-nov, noche)
 
-Benja: «haremos la transformación de cuentas viejas a Eñeños ID; quienes estén agregados en el R2Beat viejo deberán
+Eñeños: «haremos la transformación de cuentas viejas a Eñeños ID; quienes estén agregados en el R2Beat viejo deberán
 estar ya agregados como amigos». Hecho en el ensayo de USA (Cuenta Eñeños `ensayo19`), con la base de prod del 18-nov
 (respaldo por `.backup()` en `_trabajo/respaldos/prod_2026-11-18/`, ⛔ con `pass_hash`: no va al repo; la copia
 temporal se borró de los dos VPS). Respaldo de antes en el VPS de USA: `/root/conversion_1118/` (cuentas + portero).
@@ -156,7 +156,7 @@ temporal se borró de los dos VPS). Respaldo de antes en el VPS de USA: `/root/c
   personaje del casillero 1 — ⛔ salvo que sea igual a su LOGIN (el login es privado; se quitaron 985 así).
   Prueba: `pruebas/probar_amigos_viejos.py`.
 - **«Visto por última vez»** (`cuentas.visto`): la última vez en el launcher NUEVO (su latido) o en el JUEGO (la
-  presencia). Se guarda como mucho cada 5 min por persona; NADA de la historia vieja (Benja).
+  presencia). Se guarda como mucho cada 5 min por persona; NADA de la historia vieja (Eñeños).
 - **Agregar en el juego → también en el launcher** (por ahora R2Beat): el juego da `/api/interno/amistades?desde=`
   (`presencia.amistades`, con la ficha) y Cuenta Eñeños lo pide cada 5 s (`social.traer_amistades`, cursor en
   `sincro_amigos` = «fecha de alta|fila»: el número de fila SOLO se reusa al borrar — la prueba lo agarró).
@@ -167,7 +167,7 @@ temporal se borró de los dos VPS). Respaldo de antes en el VPS de USA: `/root/c
 
 ## 5h · ✅ EDA desconectado de Chile: el EDA viejo se RETIRÓ (20-nov)
 
-Benja: *«desconectar EDA de Chile, para que el diagrama ya sea todo Miami USA, y que el repo autoactualizar esté
+Eñeños: *«desconectar EDA de Chile, para que el diagrama ya sea todo Miami USA, y que el repo autoactualizar esté
 desconectado de Chile, sólo USA»*. Eligió **retirar** el EDA viejo (no pasarlo a Cuenta Eñeños) y que sus datos
 **empiecen de cero** (1 cuenta y 3 inventarios `r2b_<uid>`: quedan sólo en el respaldo).
 
@@ -195,7 +195,7 @@ entra a EDA** (era la condición de retirarlo).
 
 ## 5i · ✅ LA MUDANZA DE R2BEAT 2013: PROD = MIAMI (20-nov)
 
-Benja: *«a Chile no avisaremos, solamente mandaremos nuestro nuevo launcher como actualización»*, *«la web seguirá
+Eñeños: *«a Chile no avisaremos, solamente mandaremos nuestro nuevo launcher como actualización»*, *«la web seguirá
 prendida, el servicio apagado»*. Antes: el respaldo validado con el ensayo del día del reemplazo (copia temporal: 15
 chequeos, 0 mal) y el salto del launcher viejo probado de verdad (el 3.0.1 se actualiza solo al N2launcher y éste usa SU
 carpeta `Data`: no hereda el `net.json` que apuntaba a Chile).
@@ -231,7 +231,7 @@ vez, sesiones cerradas, auditoría sin la contraseña).
 
 ## 5j · ✅ El server de PRUEBA de EDA, desde el launcher (21-nov)
 
-Benja: «aquí no está saliendo el botón testserver» (EDA). No existía: `eda-prueba` (develop, red host, 35900) estaba
+Eñeños: «aquí no está saliendo el botón testserver» (EDA). No existía: `eda-prueba` (develop, red host, 35900) estaba
 en `EDA_LOGIN=abierto` y nadie llegaba a él. Ahora es como el de GunBound:
 
 | pieza | qué |
@@ -246,7 +246,7 @@ en `EDA_LOGIN=abierto` y nadie llegaba a él. Ahora es como el de GunBound:
 Probado con pases de verdad: `eda-prueba` → server de prueba = ticket · ⟲ `eda` → prueba = «audiencia» · ⟲ `eda-prueba` →
 prod = «audiencia». Las cuentas viejas del modo abierto del de prueba quedaron sin usar.
 
-★ **El cliente del de prueba sigue a develop** (Benja: «el launcher se actualizó pero el juego no» / «¿la dll no debió
+★ **El cliente del de prueba sigue a develop** (Eñeños: «el launcher se actualizó pero el juego no» / «¿la dll no debió
 compilarse?»). El CI de EDA ya compila la dll en cada push a develop y la deja en la release **«cliente-develop»**
 (dll, `eda_d3d9.ini` y `cliente-develop.json` con md5 y sha256; `herramientas/dll_d3d9/canal.py` de EDA).
 `eda_prueba_cliente.py` (lo llama `eda_ensayo.sh` cada 5 min) parte de la versión publicada y pisa con eso lo que
@@ -260,7 +260,7 @@ al ir y al volver. ⚠ `eda_d3d9.ini` es del jugador: si ya lo tiene, el launche
 
 ## 6 · Lo que queda
 
-- El **R2Beat moderno** (server + cliente de ~15 GB) lo arma la sesión de Fluidez en este mismo VPS, cuando Benja
+- El **R2Beat moderno** (server + cliente de ~15 GB) lo arma la sesión de Fluidez en este mismo VPS, cuando Eñeños
   le diga si va con su cuenta grabada o sólo con cuentas nuevas (lo pidió en SU sesión).
 - `/opt/R2Beat_steam` (15 GB) sigue en el VPS viejo; no se copió.
-- El VPS viejo es efímero: cuando Benja confirme que todo anda en USA, se puede apagar.
+- El VPS viejo es efímero: cuando Eñeños confirme que todo anda en USA, se puede apagar.

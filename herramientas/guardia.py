@@ -5,7 +5,7 @@
     python herramientas/guardia.py RUTA...   # mira esos archivos (lo usan las pruebas)
 
 Sale con error y la lista si encuentra algo. Lo corre el hook de pre-commit y GitHub Actions.
-Los datos de los usuarios y los secretos van SÓLO en el respaldo cifrado de Benja (ver RECONSTRUIR.md).
+Los datos de los usuarios y los secretos van SÓLO en el respaldo cifrado de Eñeños (ver RECONSTRUIR.md).
 """
 import re
 import subprocess
@@ -40,6 +40,9 @@ CONTENIDO = [
     (r"\bAKIA[0-9A-Z]{16}\b", "una llave de AWS/R2"),
     (r"\"ed25519_semilla\"\s*:\s*\"[0-9a-fA-F]{64}\"", "la semilla de una clave Ed25519 (portero_clave.json)"),
     (r"\$(argon2(id|i|d)?|pbkdf2[-\w]*|scrypt|2[aby])\$[^\s\"']{20,}", "un hash de contraseña"),
+    # ★ 22-nov: el nombre del dueño NO va en un repo público: se escribe «Eñeños». Armado con chr() para que la
+    #   guardia misma no lo lleve escrito.
+    ("(?i)" + "".join(map(chr, (98, 101, 110, 106, 97))), "el nombre del dueño (se escribe «Eñeños»)"),
 ]
 
 

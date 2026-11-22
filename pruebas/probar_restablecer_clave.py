@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_restablecer_clave — ★ 20-nov-2026: el Admin restablece la contraseña de un jugador desde el Coordinador.
 
-Benja: «quiero cambiar una contraseña de un jugador en el Coordinador». El server genera una provisoria al azar, se la
+Eñeños: «quiero cambiar una contraseña de un jugador en el Coordinador». El server genera una provisoria al azar, se la
 muestra una vez al Admin y cierra las sesiones del jugador. Cada chequeo con su CONTROL AL REVÉS (⟲).
 
     python pruebas/probar_restablecer_clave.py
@@ -106,7 +106,7 @@ try:
        "el panel lo ve (fila de toda la red y su casilla)")
     cod, d = P.admin_restablecer_clave(UID["moderadora"], UID["jugador"])
     ok(cod == 200 and len(d.get("clave", "")) == 10, "la moderadora restablece la de un jugador")
-    ok(d.get("usuario") == "jugador", "★ y recibe el usuario del jugador (Benja, opción 2: para quien olvidó los dos)")
+    ok(d.get("usuario") == "jugador", "★ y recibe el usuario del jugador (Eñeños, opción 2: para quien olvidó los dos)")
     with contextlib.redirect_stdout(io.StringIO()):
         c_entra = P.entrar("jugador", clave_txt=d.get("clave", ""), ip="10.2.9.7")[0]
     ok(c_entra == 200, "el jugador entra con la provisoria")

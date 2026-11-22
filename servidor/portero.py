@@ -3,7 +3,7 @@
 
 QUÉ ES
 ------
-Benja: *«una capa arriba de ambos juegos para los accountid»* · *«sin reiniciar el server de r2beat»* · *«solo las
+Eñeños: *«una capa arriba de ambos juegos para los accountid»* · *«sin reiniciar el server de r2beat»* · *«solo las
 cuentas aprobadas tendrán acceso a eda por ahora»*.
 
 La cuenta ES la de R2Beat (`users.uid` de `datos.db`): no se crean cuentas nuevas ni se muda a nadie. El portero
@@ -32,7 +32,7 @@ LAS RUTAS (con o sin el prefijo `/cuentas`, para que Caddy pueda pasarlas como q
     POST /pase {juego}     + Bearer      -> {pase, vence}            403 si no está aprobada o está baneada
     GET  /yo               + Bearer      -> {uid, juegos}
     GET  /manifiesto/<juego> + Bearer    -> el manifest del cliente {version, base, files[path,size,md5]}
-         ★ Benja (11-nov): «solo las aprobadas podrán descargar / jugar». Sin aprobación no hay manifest, o sea que el
+         ★ Eñeños (11-nov): «solo las aprobadas podrán descargar / jugar». Sin aprobación no hay manifest, o sea que el
          launcher no sabe QUÉ bajar ni DE DÓNDE: la `base` lleva un tramo secreto (`/files-eda/<release>-<azar>/`).
          ⚠ Es una puerta en la LISTA, no en cada archivo: el que ya tiene la `base` (un aprobado que la pasa) baja
          igual de la CDN. Cerrar cada archivo pide servirlos sin caché o un token de Cloudflare: se decide aparte.
@@ -148,7 +148,7 @@ def es_proxy(ip, redes=None):
         d = d.ipv4_mapped
     return any(d.version == r.version and d in r for r in (PROXIES if redes is None else redes))
 
-# Los juegos que el portero conoce. `abierto`: False = sólo las cuentas APROBADAS (Benja, 11-nov: así arranca EDA).
+# Los juegos que el portero conoce. `abierto`: False = sólo las cuentas APROBADAS (Eñeños, 11-nov: así arranca EDA).
 # ★ 15-nov (R2_CUENTAS_DUENA=1): cuando Cuenta Eñeños es la dueña, también da pases para `r2beat2013`, `parches` y `web`
 #   (abiertos a toda cuenta activa). Sin el interruptor queda sólo `eda`, igual que antes.
 JUEGOS = {
@@ -405,11 +405,11 @@ def emitir_pase(uid, juego, ahora=None, vida=PASE_SEGUNDOS):
     cab = {"alg": "EdDSA", "typ": "JWT", "kid": kid}
     carga = {"iss": EMISOR, "aud": juego, "sub": str(int(uid)), "iat": ahora, "exp": ahora + int(vida),
              "jti": jti}
-    # ★ 12-nov (Benja, por EDA: «que sus cuentas no lleven r2xxx sino sus nombres de r2beat»): el NOMBRE VISIBLE.
+    # ★ 12-nov (Eñeños, por EDA: «que sus cuentas no lleven r2xxx sino sus nombres de r2beat»): el NOMBRE VISIBLE.
     #   ⛔ El APODO del personaje del casillero 1 (público: sale en el ranking), NUNCA el login (privado). Opcional:
     #   sin apodo no va el claim y el otro juego usa su nombre interno. El otro juego lo recorta a lo que entre.
     nombre = _apodo_de(uid)
-    # ★ 16-nov (decisión de Benja): en las SUBIDAS al servidor de prueba se muestra «login · Eñeños ID» (Cuenta
+    # ★ 16-nov (decisión de Eñeños): en las SUBIDAS al servidor de prueba se muestra «login · Eñeños ID» (Cuenta
     #   Eñeños no tiene apodo). SÓLO en los pases del servidor de parches; los de los juegos siguen sin el login.
     if not nombre and juego in JUEGOS_CON_LOGIN:
         nombre = _login_de(uid) or ""
@@ -530,7 +530,7 @@ def estado_r2beat(uid):
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-#  ★ 20-nov — LOS BANEOS CON TIEMPO (Benja: «baneos en X juegos, por X horas, por X días, X motivo; el launcher
+#  ★ 20-nov — LOS BANEOS CON TIEMPO (Eñeños: «baneos en X juegos, por X horas, por X días, X motivo; el launcher
 #  baneado, al presionar Jugar, debe recibir un popup con el motivo de su ban + el tiempo»).
 #    · `baneos.hasta` = epoch en que vence; NULL = permanente (los de antes de esta columna quedan permanentes).
 #    · Un baneo VENCIDO deja de contar solo, al chequear (`baneo_vigente`): la fila queda (historial) y la
@@ -539,7 +539,7 @@ def estado_r2beat(uid):
 #    · Sólo un ADMIN banea PERMANENTE y en TODA LA RED. Un moderador: sólo en sus juegos y hasta BANEO_TOPE_MODERADOR_SEG.
 # ══════════════════════════════════════════════════════════════════════════════════════════════
 BANEO_MOTIVO_MAX = 200
-# ★ 20-nov (Benja: «que los mod puedan banear horas, días, meses, tiempo ajustable»): el tope de un MODERADOR se
+# ★ 20-nov (Eñeños: «que los mod puedan banear horas, días, meses, tiempo ajustable»): el tope de un MODERADOR se
 #   AJUSTA con R2_BANEO_TOPE_MODERADOR_DIAS (de fábrica 365 = 12 meses). Permanente o toda la red: sólo un ADMIN.
 BANEO_MES_SEG = 30 * 86400             # un «mes» de baneo = 30 días justos (así «vence en …» no depende del calendario)
 
@@ -605,7 +605,7 @@ def permitido(uid, juego, ahora=None):
     c = _propia()
     if baneo_vigente(uid, juego, ahora):
         return False
-    # ★ 18-nov (Benja): los juegos con FECHA de lanzamiento: antes, sólo admins / moderadores y aprobados (invitación);
+    # ★ 18-nov (Eñeños): los juegos con FECHA de lanzamiento: antes, sólo admins / moderadores y aprobados (invitación);
     #   después, toda cuenta activa — EDA incluido («se abre a todas las cuentas»). Ver lanzamientos.py
     lz = LZ.cerrado_para(sys.modules[__name__], uid, juego, ahora)
     if lz is not None:
@@ -937,7 +937,7 @@ def interno_comprobar_clave(uid, pass_sha256_upper, ficha_dada="", ahora=None):
     """POST interno `/cuentas/interno/cuenta/<uid>/comprobar-clave` `{pass_sha256_upper}` -> 200 `{"ok": true}`,
     401 si no es la contraseña de esa cuenta (o la cuenta no existe o no está activa), 429 con el freno.
 
-    ★ 15-nov (lo vio Benja en el ensayo): el juego vuelve a pedir la contraseña para BORRAR un personaje desde el
+    ★ 15-nov (lo vio Eñeños en el ensayo): el juego vuelve a pedir la contraseña para BORRAR un personaje desde el
     selector de adentro. Con pases el juego ya no guarda contraseñas: la comprueba Cuenta Eñeños. No abre sesión ni
     da pase: sólo dice sí o no. Con su propio freno POR CUENTA (los mismos intentos y la misma ventana que `entrar`).
     ⛔ No anota ni devuelve nada de la contraseña."""
@@ -1037,7 +1037,7 @@ def pedir_pase(token, juego, ip="", ahora=None):
 
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-#  ★ 12-nov: el PANEL de aprobaciones (Benja: «un panel admin en el dominio eñeños, no tan avanzado como el de R2,
+#  ★ 12-nov: el PANEL de aprobaciones (Eñeños: «un panel admin en el dominio eñeños, no tan avanzado como el de R2,
 #  sólo con la seguridad suficiente»). Página: `portero_panel.html` + `.js`, al lado de este archivo.
 #    · entran SÓLO los ADMIN de R2Beat: `admin.txt`, el MISMO que lee `panel_admin` (al lado de `gm.txt`: en
 #      `servidor/` o, en prod, en la raíz), mismo formato (uid, login o @apodo único). Se relee si cambia.
@@ -1158,8 +1158,8 @@ def admins():
     return _lista_de(_admins, ruta_admins())
 
 
-# ★ 12-nov — LOS MODERADORES (Benja: dos colaboradores de EDA que aprueben cuentas sin depender de él). Rol ACOTADO:
-#   entran al MISMO panel con su cuenta de R2Beat, pero sólo pueden BUSCAR, APROBAR y QUITAR (Benja: «2, tu
+# ★ 12-nov — LOS MODERADORES (Eñeños: dos colaboradores de EDA que aprueben cuentas sin depender de él). Rol ACOTADO:
+#   entran al MISMO panel con su cuenta de R2Beat, pero sólo pueden BUSCAR, APROBAR y QUITAR (Eñeños: «2, tu
 #   recomendación» = sin banear). No tocan cuentas con rol (admins ni moderadores) y no ven el login de los ADMIN (en
 #   la lista y en la auditoría sale «ADMIN»). `moderadores.txt` va AL LADO de `admin.txt`, mismo formato (uid, login
 #   o @apodo, `#` comenta) y ⛔ también gitignorado: son cuentas reales. Sacarlo de la lista corta su sesión al instante.
@@ -1179,7 +1179,7 @@ def moderadores():
 
 # ★ 19-nov (Coordinador, fase A) — LOS JUEGOS ASIGNADOS. En `moderadores.txt`, después de la identidad, la lista de
 #   juegos del catálogo (`juegos.json`): `110 eda,gunbound`. Compatible con lo de antes:
-#     · SIN lista  -> como siempre: ve todos los juegos y sólo APRUEBA / QUITA (Benja, 12-nov: «sin banear»);
+#     · SIN lista  -> como siempre: ve todos los juegos y sólo APRUEBA / QUITA (Eñeños, 12-nov: «sin banear»);
 #     · CON lista  -> sólo ve y toca ESOS juegos (también invitaciones y auditoría), y ahí además puede BANEAR /
 #                     DESBANEAR por juego. `-` = ninguno (está en el equipo pero sin juegos todavía).
 #   Los asigna un ADMIN desde «Moderadores y permisos» del Coordinador (`escribir_moderador`), y queda en la auditoría.
@@ -2016,7 +2016,7 @@ def admin_poner_clave(usuario, clave_nueva, quien="consola"):
     print(f"✔ cambiar-clave: uid {uid} ({r['usuario']}).")
 
 
-# ★ 20-nov (Benja: «quiero cambiar una contraseña de un jugador en el Coordinador»): sin consola ni contraseñas escritas
+# ★ 20-nov (Eñeños: «quiero cambiar una contraseña de un jugador en el Coordinador»): sin consola ni contraseñas escritas
 #   a mano. La genera el server al azar, se la muestra UNA vez al admin (que se la pasa al jugador) y el jugador la
 #   cambia después en el launcher. ⛔ No va a ningún log ni a la auditoría: la auditoría dice quién y a quién.
 _LETRAS_PROVISORIA = "abcdefghjkmnpqrstuvwxyz23456789"     # (sin l/1/i/o/0: se dicta por chat sin confundirse)
@@ -2024,7 +2024,7 @@ _LETRAS_PROVISORIA = "abcdefghjkmnpqrstuvwxyz23456789"     # (sin l/1/i/o/0: se 
 
 def admin_restablecer_clave(uid_admin, uid):
     """ADMIN (o un MODERADOR con el permiso «clave» de toda la red, ★ 21-nov): una contraseña PROVISORIA al azar para la
-    cuenta `uid`, y se cierran sus sesiones abiertas. ⛔ Un moderador nunca a una cuenta del equipo. (★ 21-nov, Benja:
+    cuenta `uid`, y se cierran sus sesiones abiertas. ⛔ Un moderador nunca a una cuenta del equipo. (★ 21-nov, Eñeños:
     el moderador con este permiso SÍ recibe el login, para el jugador que olvidó también su usuario.)
     -> (200, {ok, uid, usuario?, clave}) · 403 sin permiso · 404 si la cuenta no existe."""
     rol = rol_de(uid_admin)

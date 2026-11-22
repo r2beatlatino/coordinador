@@ -230,7 +230,7 @@ class Conjunto:
         valores = dict(COMPOSE_PROJECT_NAME=proyecto, R2_IP_PUBLICA=LOCAL, JUEGO_PUBLICAR=LOCAL, TZ="America/Lima",
                        JUEGO_PROXIES="127.0.0.1,::1,172.16.0.0/12", CUENTAS_PROXIES="127.0.0.1,::1,172.16.0.0/12",
                        **IMAGENES)
-        if con_env_archivo:                               # como lo va a usar Benja: un `.env` al lado del compose
+        if con_env_archivo:                               # como lo va a usar Eñeños: un `.env` al lado del compose
             with open(os.path.join(carpeta, ".env"), "w", encoding="utf-8") as f:
                 f.write("".join(f"{k}={v}\n" for k, v in valores.items()))
         else:

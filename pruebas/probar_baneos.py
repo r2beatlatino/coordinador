@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""probar_baneos — los BANEOS CON TIEMPO (20-nov-2026). Benja: «baneos en X juegos, por X horas, por X días, X motivo;
+"""probar_baneos — los BANEOS CON TIEMPO (20-nov-2026). Eñeños: «baneos en X juegos, por X horas, por X días, X motivo;
 el launcher baneado, al presionar Jugar, debe recibir un popup con el motivo de su ban + el tiempo».
 
 Se levanta el portero de verdad (HTTP, `R2_CUENTAS_DUENA=1`, bases temporales). Cada regla con su CONTROL AL REVÉS (⟲):
@@ -197,7 +197,7 @@ ok(cod == 200 and not P.permitido(CTRL, "gunbound") and not P.permitido(CTRL, "g
    f"el tope justo ({tope_d} días) en SU juego: sí, con sus dos servidores ({cod})")
 cod, d = callado(CO.accion, P, MOD, {"accion": "desbanear", "uid": CTRL, "juegos": ["gunbound"]})
 ok(cod == 200 and P.permitido(CTRL, "gunbound"), f"y lo desbanea antes de tiempo ({cod})")
-# ★ en MESES (Benja: «que los mod puedan banear horas, días, meses»): un mes = 30 días justos
+# ★ en MESES (Eñeños: «que los mod puedan banear horas, días, meses»): un mes = 30 días justos
 cod, d = callado(CO.accion, P, MOD, {"accion": "banear", "uid": CTRL, "juegos": ["gunbound"], "meses": 3, "motivo": "Trampas"})
 b = P.baneo_vigente(CTRL, "gunbound")
 ok(cod == 200 and b and 90 * 86400 - 60 < b["hasta"] - time.time() <= 90 * 86400,

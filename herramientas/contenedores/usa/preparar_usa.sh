@@ -1,5 +1,5 @@
 #!/bin/sh
-# ★ 18-nov — la MUDANZA del ensayo al VPS de USA (185.147.157.33), donde vive EDA (Benja: «mudar todo»; ⛔ Chile no).
+# ★ 18-nov — la MUDANZA del ensayo al VPS de USA (185.147.157.33), donde vive EDA (Eñeños: «mudar todo»; ⛔ Chile no).
 # Corre EN el VPS de USA, después de copiar /opt/enenos desde el ensayo (103.90.160.237). Deja la pila del ensayo
 # CONVIVIENDO con lo que ya había (el Caddy del sistema con eñeños.link y EDA de prod y prueba):
 #   · la web del ensayo NO toma 80/443: escucha en 127.0.0.1:8088 (HTTP) y el Caddy del sistema le pasa

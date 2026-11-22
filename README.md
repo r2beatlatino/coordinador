@@ -38,7 +38,7 @@ Su repo lleva un `enenos.json` (qué soporta) y la línea «Parte de Eñeños ·
 
 ## Si se pierde todo
 
-Este repo (y los hijos) más **el respaldo cifrado** que guarda Benja alcanzan para levantar Eñeños desde cero.
+Este repo (y los hijos) más **el respaldo cifrado** que guarda Eñeños alcanzan para levantar Eñeños desde cero.
 La guía, escrita para alguien sin ningún contexto: **[`RECONSTRUIR.md`](RECONSTRUIR.md)**.
 
 **Qué falta:** la lista de checks en [`PENDIENTES.md`](PENDIENTES.md).

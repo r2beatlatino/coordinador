@@ -246,7 +246,7 @@ services:
       # La cuenta de EDA se llama `<prefijo><Eñeños ID>`.
       EDA_PREFIJO_CUENTA: ${EDA_PREFIJO_CUENTA:-en_}
       # El Eñeños ID da el PASE para entrar, no personajes hechos: quien entra por primera vez nace sin personajes y
-      #   crea los suyos en la pantalla del juego (Benja, 15-nov). `personaje` = el de siempre ya hecho.
+      #   crea los suyos en la pantalla del juego (Eñeños, 15-nov). `personaje` = el de siempre ya hecho.
       EDA_CUENTA_NUEVA: ${EDA_CUENTA_NUEVA:-vacia}
       # ★ 20-nov: la puerta del panel del Coordinador (/interno/panel, contrato v1): sin esta ficha contesta 404
       R2_CUENTAS_FICHA_INTERNA: ${R2_CUENTAS_FICHA_INTERNA:-}
@@ -265,7 +265,7 @@ services:
     logging: *registro
 
   # ── R2Beat 2013 · el server de PRUEBA y la PUERTA del 48004 (§34) ─────────────────────────────
-  #  Benja (15-nov): cada juego corre DOS servers. Prod es el de arriba. El de PRUEBA sale del repo PÚBLICO,
+  #  Eñeños (15-nov): cada juego corre DOS servers. Prod es el de arriba. El de PRUEBA sale del repo PÚBLICO,
   #  rama `develop` (lo que mandan los amigos por PR), y se actualiza solo: `actualizar_prueba.sh` por cron cada
   #  5 minutos arma la imagen con SU Dockerfile (que corre sus pruebas: si fallan no se arma y sigue el anterior).
   #  · Mismas cuentas (Cuenta Eñeños), pase propio (`aud` = r2beat2013-prueba), base APARTE: romper el de prueba
@@ -303,7 +303,7 @@ services:
       R2_PUBLIC_IP: ${R2_IP_PUBLICA:-}
       R2_LOGIN: ${PRUEBA_LOGIN:-pase}
       R2_PASE_JUEGO: r2beat2013-prueba
-      # ★ 16-nov (Benja): en el server de PRUEBA todos con licencia SOL (Estrella|Luna|Sol = 7)
+      # ★ 16-nov (Eñeños): en el server de PRUEBA todos con licencia SOL (Estrella|Luna|Sol = 7)
       R2_LICENCIA_MINIMA: ${PRUEBA_LICENCIA_MINIMA:-7}
       # ★ 16-nov: el .npc para todos en el de prueba, y su presencia (para los amigos y Discord) en un puerto propio
       R2_COMANDOS_TODOS: ${PRUEBA_COMANDOS_TODOS:-npc,npcs}

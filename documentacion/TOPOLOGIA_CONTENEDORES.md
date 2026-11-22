@@ -6,7 +6,7 @@
 > son las mismas que allá.
 
 > **14-nov-2026 · ETAPA 1 ARMADA Y PROBADA EN LOCAL (WSL) · ⛔ NADA EN PROD.**
-> Pedido de Benja: cada juego en su contenedor de Docker, y un servicio central —**Cuenta Eñeños**— que sea el DUEÑO de
+> Pedido de Eñeños: cada juego en su contenedor de Docker, y un servicio central —**Cuenta Eñeños**— que sea el DUEÑO de
 > las cuentas (usuario, contraseña, uid). El launcher le habla sólo a ese servicio, recibe un **pase firmado** y con ese
 > pase entra a cualquier juego; cada juego comprueba la firma **solo**. Y todo tiene que poder **mudarse de máquina**.
 >
@@ -21,7 +21,7 @@
 | **Qué cambia para el jugador** | **nada todavía.** El servicio de cuentas es el portero de hoy, tal cual. El juego sigue comprobando la contraseña él mismo |
 | **Qué se tocó del server** | dos archivos, sólo para poder configurarlos desde afuera: `portero.py` y `api_web.py` aceptan `R2_PORTERO_HOST` / `R2_PORTERO_PROXIES` / `R2_API_HOST` / `R2_API_PROXIES`. **Sin esas variables se comportan igual que hoy** (lo comprueba la parte A de la prueba). No están en prod |
 | **Lo que falta** | las etapas 2 a 5 de la mudanza de cuentas (§4): que R2Beat acepte el pase y que Cuenta Eñeños pase a ser la dueña. Están diseñadas acá, **no construidas** |
-| **Lo que decide Benja** | qué va en qué máquina, y si prod entra a Docker (§8 y §9) |
+| **Lo que decide Eñeños** | qué va en qué máquina, y si prod entra a Docker (§8 y §9) |
 
 ## 1 · El dibujo
 
@@ -99,10 +99,10 @@ que ser el mismo.
 | `status.json` | el juego, cada 3 s | `R2_STATUS` | no: se rehace solo |
 | `servidor.log` + uno por cada arranque | el juego | `R2_LOG` | no por omisión (`--todo` los lleva) |
 | `respaldos/` | el respaldo diario de las 04:00 | `R2_RESPALDOS` | no por omisión |
-| `gm.txt` · `admin.txt` · `streamers.txt` | Benja a mano; `streamers.txt` también lo escribe el panel | `R2_GM_ARCHIVO` · `R2_ADMIN_ARCHIVO` · `R2_STREAMERS_ARCHIVO` | sí (van a `config/`) |
+| `gm.txt` · `admin.txt` · `streamers.txt` | Eñeños a mano; `streamers.txt` también lo escribe el panel | `R2_GM_ARCHIVO` · `R2_ADMIN_ARCHIVO` · `R2_STREAMERS_ARCHIVO` | sí (van a `config/`) |
 | `portero.db` (+ `-wal`, `-shm`) | cuentas: aprobados, baneos, sesiones, pases, auditoría | `R2_PORTERO_BASE` | **sí** |
 | `portero_clave.json` | cuentas, la primera vez | `R2_PORTERO_CLAVE` | **SÍ, es lo más importante** (§5) |
-| `moderadores.txt` · `manifiestos/<juego>.json` | Benja a mano | `R2_MODERADOR_ARCHIVO` · `R2_PORTERO_MANIFIESTOS` | sí |
+| `moderadores.txt` · `manifiestos/<juego>.json` | Eñeños a mano | `R2_MODERADOR_ARCHIVO` · `R2_PORTERO_MANIFIESTOS` | sí |
 
 Fuera de su volumen el server **no escribe nada** (`docker diff` vacío, y un intento de escribir en `/app` rebota).
 
@@ -293,7 +293,7 @@ python3 mudanza.py desde-carpeta --pieza cuentas    --carpeta /opt/r2beat/game20
 ```
 
 Sólo **lee** la carpeta (la prueba compara los archivos byte a byte antes y después). ⛔ Igual es «tocar la base de
-prod» en el sentido de la regla: se hace cuando Benja lo pida.
+prod» en el sentido de la regla: se hace cuando Eñeños lo pida.
 
 Lo que hace `mudanza.py` y por qué no es un `cp`:
 - cada `.db` se copia con la copia en caliente de SQLite (`backup()`), se abre, se le pide `integrity_check` y se
@@ -385,7 +385,7 @@ la base, y medir ahí RAM, CPU e IP del jugador. Prod puede seguir con systemd t
 topología no necesita que R2Beat esté en Docker, necesita que **acepte el pase**. Lo único que conviene que nazca en
 contenedor es Cuenta Eñeños.
 
-## 9 · Lo que tiene que decidir Benja
+## 9 · Lo que tiene que decidir Eñeños
 
 > **Decidido el 14-nov (noche):** los nombres nuevos van bajo **`eñeños.link`** (en lo técnico, el punycode
 > `xn--eeos-gqab.link`), no bajo `r2beatlatino.com` (punto 3) · las imágenes se guardan en **GitHub (`ghcr.io`),
@@ -516,10 +516,10 @@ Las dos sondas quedaron en `herramientas/sonda_direccion/` (abren la ventana del
 
 ## 12 · El reparto en repos (propuesta — no se movió nada)
 
-Benja, 14-nov: **un repo por juego** y un repo aparte para el **controlador** de la topología. Los de los juegos ya
+Eñeños, 14-nov: **un repo por juego** y un repo aparte para el **controlador** de la topología. Los de los juegos ya
 existen (`r2beatlatino/R2beat-2013` y `r2beatlatino/EDA`, públicos). El del controlador también: **`r2beatlatino/enenos-atlas`**,
-privado, rama `main`, por ahora sólo con su README (creado el 14-nov por orden de Benja). ⛔ Todavía no se le sube nada:
-el reparto se hace cuando Benja vea esta propuesta. Las imágenes van a `ghcr.io`, privadas.
+privado, rama `main`, por ahora sólo con su README (creado el 14-nov por orden de Eñeños). ⛔ Todavía no se le sube nada:
+el reparto se hace cuando Eñeños vea esta propuesta. Las imágenes van a `ghcr.io`, privadas.
 
 La regla del reparto: **el juego sabe construirse; el controlador sabe dónde corre cada cosa y cómo se muda.**
 
@@ -542,7 +542,7 @@ Lo que cambia al partir:
   `image: ghcr.io/r2beatlatino/<pieza>:<versión>`, y la versión de cada pieza va en el `.env`.
 - **Subir una versión nueva** = el repo del juego construye las dos arquitecturas y las deja en el registro; en la
   máquina, `docker compose pull <pieza>` y `docker compose up -d <pieza>`. **Volver atrás** = poner la versión de antes.
-  Es lo que pidió Benja: trabajar en local y que subir sea «bajar la imagen nueva».
+  Es lo que pidió Eñeños: trabajar en local y que subir sea «bajar la imagen nueva».
 - **El contrato entre los dos repos** pasa a ser lo que hoy está suelto en los comentarios: el volumen `/datos` y qué
   hay adentro, los nombres de las variables, los puertos y el chequeo de salud. Conviene escribirlo en la cabecera de
   cada Dockerfile; el controlador se fía de eso y de nada más.
@@ -563,12 +563,12 @@ charts de `servidor/notes/` y las tablas de `servidor/tablas-cliente/`, todo sac
 
 | opción | qué es | qué cuesta |
 |---|---|---|
-| ✅ **A · imagen privada — LA ELEGIDA** (Benja, 14-nov: «lo que haya que subir, se sube nomás») | la imagen lleva todo, el exe incluido, y vive en `ghcr.io` como paquete **privado**. El exe NO va al repo público | **nada de código.** Cada máquina guarda una llave del registro (un secreto más, que se puede revocar). La imagen se construye desde donde estén los archivos (esta PC), no desde un repo público. ⚠ Tras la primera subida, **mirar que el paquete haya quedado privado**: un error ahí publica el exe |
+| ✅ **A · imagen privada — LA ELEGIDA** (Eñeños, 14-nov: «lo que haya que subir, se sube nomás») | la imagen lleva todo, el exe incluido, y vive en `ghcr.io` como paquete **privado**. El exe NO va al repo público | **nada de código.** Cada máquina guarda una llave del registro (un secreto más, que se puede revocar). La imagen se construye desde donde estén los archivos (esta PC), no desde un repo público. ⚠ Tras la primera subida, **mirar que el paquete haya quedado privado**: un error ahí publica el exe |
 | **B · el exe por volumen** (la alternativa, si algún día la imagen no puede llevarlo) | la imagen no lo trae; se copia a mano al volumen de cada máquina (`R2_EXE` ya permite apuntarlo) | alguien tiene que acordarse en cada máquina nueva, y `mudanza.py` tendría que llevarlo. Si falta, **no hay error: todos quedan en nivel 1**; habría que hacer que el arranque se niegue sin él. Y la imagen igual no queda publicable (los charts, las tablas) |
 | **C · sacar el dato y dejar el exe afuera** | una herramienta lee los 99 números del exe y los deja en `servidor/tablas-cliente/` (y lo mismo con la dificultad de las canciones de `music_lt.txt`); el server lee eso primero | tocar el server (dos funciones: `cargar_umbrales_exp` y `cargar_niveles`), una prueba que compare el dato sacado con el del exe, y acordarse de regenerar el de las canciones cada vez que se importa música. A cambio, la imagen ya no trae ningún ejecutable y `servidor/` pasa a ser autosuficiente de verdad (hoy esos dos archivos fallan callados si faltan, §2). Va a prod como cualquier cambio del server |
 
 **Cómo queda:** se va con **A**. El permiso para subir paquetes ya está en esta PC (`write:packages`), pero subir la
-imagen es un paso que ordena Benja; no se hizo. **B** queda como alternativa: funciona, pero suma un paso manual que,
+imagen es un paso que ordena Eñeños; no se hizo. **B** queda como alternativa: funciona, pero suma un paso manual que,
 si se olvida, no avisa (antes de usarla habría que hacer que el arranque se niegue sin el exe). **C** sigue valiendo
 como limpieza para más adelante: no por el registro, sino porque arregla el «falla callado» y deja `servidor/` completo.
 
@@ -618,10 +618,10 @@ python3 pruebas/probar_contenedores.py --docker --plataforma linux/arm64
 > **Actualizado el 15-nov:** las imágenes ya se subieron a `ghcr.io` como paquetes **privados** con la etiqueta
 > **`2026-11-14`**. Queda abajo el registro de cómo se prepararon en la madrugada y los comandos de verificación.
 
-Benja ordenó subirlas (14-nov: «sube las imágenes»). En el primer intento de la madrugada, al ir a entrar al registro y subir, el
+Eñeños ordenó subirlas (14-nov: «sube las imágenes»). En el primer intento de la madrugada, al ir a entrar al registro y subir, el
 control de permisos de la sesión que hace este trabajo frenó la acción (la clasificó como comunicación hacia afuera
 sin autorizar). No se forzó: no se ejecutó nada, no quedó ninguna credencial en el WSL y en `ghcr.io` no hay ningún
-paquete. Falta que Benja lo corra él, o que habilite ese permiso en la sesión.
+paquete. Falta que Eñeños lo corra él, o que habilite ese permiso en la sesión.
 
 Lo que quedó hecho, todo en local:
 
@@ -666,7 +666,7 @@ sesión coordinadora el 14-nov a las 23:55). Todavía no lo usa nadie: los launc
 
 ## 16 · ¿Se puede pasar de 15 letras en la dirección de los canales? (investigado, **sin parchar nada**)
 
-Pregunta de Benja: si el exe «se puede parchar» por la dll para que la dirección de los canales acepte más de 15
+Pregunta de Eñeños: si el exe «se puede parchar» por la dll para que la dirección de los canales acepte más de 15
 letras (y así poner ahí un nombre de `eñeños.link`).
 
 ### Primero, con franqueza: **no hace falta**
@@ -692,7 +692,7 @@ basta con que el server sepa cuál es su IP… y hay una forma de que la sepa si
 
 | opción | qué es | qué cuesta | qué arriesga |
 |---|---|---|---|
-| ✅ **0 · no tocar el cliente** — LA ELEGIDA (Benja, 14-nov: «adelante») y **hecha en local, §17** | el server averigua su IP **resolviendo el nombre** que se le pone en `R2_PUBLIC_IP` (`juego.xn--eeos-gqab.link`) y anuncia la IP, que siempre mide 15 o menos | unas 10 líneas en `lobby.py` (resolver al arrancar y cada tanto; si el DNS falla, lo de hoy). Va con una subida del server | casi nada en el cliente: recibe una IP, como hoy. ⚠ Durante un cambio de DNS, el server VIEJO empezaría a anunciar la IP NUEVA: hay que decidir si eso se quiere (manda a todos a la máquina nueva) o si en la mudanza se fija la IP a mano |
+| ✅ **0 · no tocar el cliente** — LA ELEGIDA (Eñeños, 14-nov: «adelante») y **hecha en local, §17** | el server averigua su IP **resolviendo el nombre** que se le pone en `R2_PUBLIC_IP` (`juego.xn--eeos-gqab.link`) y anuncia la IP, que siempre mide 15 o menos | unas 10 líneas en `lobby.py` (resolver al arrancar y cada tanto; si el DNS falla, lo de hoy). Va con una subida del server | casi nada en el cliente: recibe una IP, como hoy. ⚠ Durante un cambio de DNS, el server VIEJO empezaría a anunciar la IP NUEVA: hay que decidir si eso se quiere (manda a todos a la máquina nueva) o si en la mudanza se fija la IP a mano |
 | **0-bis · ni siquiera eso** | dejar `R2_PUBLIC_IP` vacía: el server anuncia la IP por la que llegó cada cliente, que es la que su propio DNS le dio para el login | nada | sólo sirve si la máquina ve su IP pública (con la red de la máquina, §8). El VPS de Oracle no la ve, y la red de Docker tampoco: ahí hace falta la opción 0 |
 | **1 · un alias corto que la dll expande** | el server anuncia algo corto con una marca (`~juego`, 6 letras) y la dll, al resolver, lo cambia por el nombre largo. El gancho va en la tabla de importaciones (`gethostbyname`, casilla `0x873474`): no se escribe ni una instrucción del exe, igual que el gancho de `Sleep` que la dll ya tiene | unas 40 líneas en la dll y una subida de cdn. La regla alias → nombre queda escrita en la dll | **el orden de la subida:** primero la dll a TODOS, después el server; un cliente con la dll vieja recibe `~juego`, no lo resuelve y no entra a ningún canal. Y quien abra el exe sin nuestra dll queda afuera. `gethostbyname` tiene 4 llamadores (3 son para averiguar el nombre de la propia PC): el gancho sólo puede tocar lo que traiga la marca |
 | **2 · agrandar el campo** | que la ficha del canal tenga más de 16 bytes para la dirección | **no es un parche, es una cirugía:** los 56 bytes están horneados en el código de la lista (la cuenta de elementos divide por 56, el avance suma 56, las copias mueven 56) y los corrimientos +0x18, +0x34 y +0x36 en todos los que la usan: 4 escritores, 5 copias, 14 recorridos | altísimo. Un sitio sin tocar corrompe la lista de canales en silencio. **No la recomiendo** |
@@ -709,7 +709,7 @@ letras en los canales funciona; con 18 el server revienta antes de mandarlo).
 
 ## 17 · El nombre público: el server saca su IP del DNS (hecho en local el 15-nov · NO en prod)
 
-Aprobado por Benja el 14-nov («adelante»): es la opción 0 de §16. Código: `servidor/nombre_publico.py` (nuevo), tres
+Aprobado por Eñeños el 14-nov («adelante»): es la opción 0 de §16. Código: `servidor/nombre_publico.py` (nuevo), tres
 líneas en `servidor/lobby.py` y las constantes en `servidor/ajustes.py`. Prueba: `pruebas/probar_nombre_publico.py`
 (40 chequeos) y el paso B3b de `probar_contenedores.py`.
 
@@ -792,7 +792,7 @@ comportamiento no cambia en nada.
 
 ## 18 · El ensayo en el VPS efímero (15-nov-2026)
 
-Benja pidió usar el VPS `103.90.160.237` como prueba de que el sistema se puede mudar. Ese VPS es **efímero** (dura
+Eñeños pidió usar el VPS `103.90.160.237` como prueba de que el sistema se puede mudar. Ese VPS es **efímero** (dura
 30 días o menos). **No es prod.**
 
 | | |
@@ -842,7 +842,7 @@ Oracle), que es donde estaba la duda.
 - **`mudanza.py` buscaba `:local` aunque el conjunto usara otra etiqueta** (el conjunto corría con `:ensayo` en su `.env`
   y hubo que exportar `JUEGO_IMAGEN` / `CUENTAS_IMAGEN` a mano). Arreglado en `mudanza.py`: ahora busca en entorno,
   contenedor del proyecto, paquete con `--imagenes`, `.env` local y `:local`.
-- **Endurecer el `ssh` del VPS** (que entre sólo con llave): pendiente, lo decide Benja.
+- **Endurecer el `ssh` del VPS** (que entre sólo con llave): pendiente, lo decide Eñeños.
 
 ### Dónde quedó y cómo desarmarlo
 
@@ -852,7 +852,7 @@ Oracle), que es donde estaba la duda.
 
 ### El launcher y el juego de verdad contra el ensayo (15-nov, después)
 
-Benja pidió probarlo con el launcher y el juego reales. Se abrió el launcher nuevo (rama `launcher-tauri`, gemelo LOCAL
+Eñeños pidió probarlo con el launcher y el juego reales. Se abrió el launcher nuevo (rama `launcher-tauri`, gemelo LOCAL
 apuntado a `ensayo.xn--eeos-gqab.link`) con `prueba1`, se apretó JUGAR AHORA y arrancó el cliente INSTALADO
 (`C:\Game\R2beatTEST0\R2BeatMultiTest.exe`, el exe de prod).
 
@@ -1201,7 +1201,7 @@ API devolvía eso como nombre de la cuenta. Con pases, el launcher muestra el no
 **Con esto el circuito está completo en el ensayo:** Cuenta Eñeños (dueña) → pases → juego, API, parches y EDA, con
 el launcher y el exe de verdad. **Lo que falta para el reemplazo** (nada de esto se hizo): publicar las imágenes
 nuevas, cortar `/cuentas/interno/*` en Caddy, comparar `patchserver.py` con el de prod, una release de cliente de
-verdad en el servidor de parches del ensayo, la auto-actualización del launcher, y el visto bueno de Benja.
+verdad en el servidor de parches del ensayo, la auto-actualización del launcher, y el visto bueno de Eñeños.
 
 ## 24 · Cuenta Eñeños, dueña de las cuentas (parte 4: el panel administra las cuentas a través de Cuenta Eñeños)
 
@@ -1308,9 +1308,9 @@ La pestaña Cuentas del panel sigue mostrando `uid_<n>` como nombre de las cuent
 - Rearmar las cuatro imágenes con todo esto, llevarlas al ensayo y repetir los guiones 9, 10 y 12.
 - Publicar las imágenes (privadas) en ghcr.io.
 - Una release de cliente DE VERDAD en el servidor de parches del ensayo: el cliente instalado pesa 8 GB y esta PC
-  corta las subidas largas; lo natural es traerla de VPS a VPS, que lee de prod y por eso espera la orden de Benja.
+  corta las subidas largas; lo natural es traerla de VPS a VPS, que lee de prod y por eso espera la orden de Eñeños.
 - El número de versión del launcher nuevo (sigue diciendo 3.0.1).
-- Decidir A o B, y el visto bueno de Benja.
+- Decidir A o B, y el visto bueno de Eñeños.
 
 ## 26 · Cuenta Eñeños — parte 5: el Eñeños ID (identidad fija vs. personaje del juego)
 
@@ -1405,17 +1405,17 @@ apunta a un repo nuestro.
 
 **Lo que sigue faltando para el reemplazo:**
 
-- Una release de cliente DE VERDAD en el servidor de parches del ensayo (8 GB: de VPS a VPS; espera la orden de Benja).
+- Una release de cliente DE VERDAD en el servidor de parches del ensayo (8 GB: de VPS a VPS; espera la orden de Eñeños).
 - Una foto NUEVA de la base de prod para repetir el guion 13 con las fusiones reales (la de `legacy-server/` es del
-  16-sep, anterior a las fusiones). Es leer prod: espera la orden de Benja.
+  16-sep, anterior a las fusiones). Es leer prod: espera la orden de Eñeños.
 - El número de versión del launcher nuevo (sigue diciendo 3.0.1) y dar vuelta su constante el día del reemplazo.
 - EDA: pasarle la tabla de `portero traduccion` (número viejo → Eñeños ID) a quien lo maneje.
 - La pestaña Cuentas del panel muestra `uid_<n>` como nombre de las cuentas nacidas con pase.
-- El visto bueno de Benja, y recién ahí el plan de la subida (con respaldo, como manda `COMO_SE_SUBE_A_PROD.md`).
+- El visto bueno de Eñeños, y recién ahí el plan de la subida (con respaldo, como manda `COMO_SE_SUBE_A_PROD.md`).
 
-## 28 · La copia de prod del 15-nov, convertida a la forma nueva, en el VPS de ensayo (pedido de Benja)
+## 28 · La copia de prod del 15-nov, convertida a la forma nueva, en el VPS de ensayo (pedido de Eñeños)
 
-> Benja (15-nov): «tener la copia completa de la db —hoy— y ya editada en la forma nueva de trabajo en el VPS de ensayo».
+> Eñeños (15-nov): «tener la copia completa de la db —hoy— y ya editada en la forma nueva de trabajo en el VPS de ensayo».
 
 **De prod sólo se LEYÓ** (nada se escribió en `/opt/r2beat`, nada se reinició): un `.backup()` de SQLite de
 `datos.db` y `portero.db`, de a trozos y a prioridad baja (0,5 s), a una carpeta de `/tmp` que se borró al terminar.
@@ -1458,7 +1458,7 @@ ninguna de las contraseñas buscadas; las copias crudas de `/root` borradas; una
   (`FFF9`) pide la contraseña y la comprueba contra la base del juego; con pases ya no puede. Hay que hacer que
   esa comprobación la haga Cuenta Eñeños (un pedido interno más). Crear, elegir y cambiar de personaje no cambian.
 
-## 29 · Lo que encontró Benja al entrar al ensayo con su cuenta (15-nov, a la noche)
+## 29 · Lo que encontró Eñeños al entrar al ensayo con su cuenta (15-nov, a la noche)
 
 Con el acceso «Launcher de ENSAYO» (`D:\Game\R2beatENSAYO_datos\Launcher de ENSAYO.bat`: el launcher nuevo con su
 propia copia del cliente en `D:\Game\R2beatENSAYO` y sus propias preferencias; no toca el launcher ni el cliente de
@@ -1471,14 +1471,14 @@ siempre; `_trabajo/ensayo_migracion/19_probar_el_acceso_de_ensayo.py` lo prueba 
 
 Con su cuenta de verdad anduvo: entrar, el selector, elegir, crear y cambiar de personaje, cambiar de canal.
 
-⚠ Dos cosas aprendidas: (1) las pruebas automáticas abren el juego EN LA PANTALLA de Benja con una cuenta de prueba
+⚠ Dos cosas aprendidas: (1) las pruebas automáticas abren el juego EN LA PANTALLA de Eñeños con una cuenta de prueba
 vacía: lo que vio como «mi selector sin personajes» era esa prueba; avisar antes de correrlas. (2) El reporte de
 caída `0x5552C7` que manda el juego es el de SALIDA, preexistente e inofensivo (`CAJAS_NEGRAS_2026-10-22.md`): no
 explica un cierre.
 
 ## 30 · EDA, quinta pieza del VPS de ensayo (15-nov-2026 · probado · nada en prod ni en el VPS de EDA)
 
-> Benja: «fabriquemos el contenedor de EDA en el VPS de ensayo — ya vamos conectando más piezas».
+> Eñeños: «fabriquemos el contenedor de EDA en el VPS de ensayo — ya vamos conectando más piezas».
 
 EDA (Espada del Alma) es **otro juego y otro repo** (`r2beatlatino/EDA`; su server es Python y corre hoy en un VPS
 de USA). **A su repo no se le tocó nada:** su imagen se arma con SU `despliegue/Dockerfile`, de la rama `main` (la
@@ -1509,12 +1509,12 @@ de 26000 a 26040 (`EDA_MAX_CONEXIONES=40`). R2Beat, cuentas y parches no se rein
 **Lo que NO se probó todavía:** entrar al juego de EDA de verdad (abrir `EDA_limpio.exe` con el ticket) y jugar
 entre dos PCs por el relay. **Lo que falta decidir:** los personajes de EDA de prod (`/opt/eda/estado-prod` en el
 VPS de USA) se llaman `r2b_<número viejo>`; con el Eñeños ID pasan a `r2b_<Eñeños ID>`. Para llevarlos hay que
-renombrarlos con la tabla de `portero traduccion`. En el ensayo EDA arrancó vacío (Benja: «EDA es beta, todo se
+renombrarlos con la tabla de `portero traduccion`. En el ensayo EDA arrancó vacío (Eñeños: «EDA es beta, todo se
 puede rehacer»).
 
 ## 31 · EDA se adapta a nuestro diseño (15-nov-2026, a la noche · probado en el ensayo)
 
-> Benja: «puedes rehacer la forma como se conecta, para que se adapte a nuestro diseño y no nosotros a él. Total
+> Eñeños: «puedes rehacer la forma como se conecta, para que se adapte a nuestro diseño y no nosotros a él. Total
 > libertad, porque es beta y se puede rehacer.»
 
 En la §30 EDA quedó enchufado **tal cual era**, y lo nuestro se acomodó alrededor. Esto es lo que se dio vuelta:
@@ -1525,11 +1525,11 @@ En la §30 EDA quedó enchufado **tal cual era**, y lo nuestro se acomodó alred
 | EDA sólo recibía la clave de las cuentas por un JWKS (https o archivo) | la recibe **por configuración, con la misma variable que R2Beat** (`R2_CUENTAS_CLAVE_PUBLICA` → `EDA_CUENTAS_CLAVE_PUBLICA`): no sale a la red para arrancar ni para comprobar un pase | repo de EDA, rama local `cuenta-enenos` |
 | la cuenta de EDA era `r2b_<número de R2Beat>` | `en_<Eñeños ID>` (`EDA_PREFIJO_CUENTA`; por omisión sigue `r2b_`) | ídem |
 
-- **Las claves de publicación** viven en una carpeta privada de la PC de Benja (`ENENOS_CLAVES`; fuera de todo repo y de todo VPS):
+- **Las claves de publicación** viven en una carpeta privada de la PC de Eñeños (`ENENOS_CLAVES`; fuera de todo repo y de todo VPS):
   `publicacion_actual.pem` (kid `140674dc24472102`), `publicacion_reserva.pem` (kid `ad9f8409624a111a`; conviene
   moverla a un pendrive) y las dos públicas. Con la actual se firmó la lista del ensayo (`21_manifiesto_eda_ensayo.py`).
 - **La rama `cuenta-enenos` del repo de EDA** está sólo en `_trabajo/eda_repo/` (2 commits sobre `develop`): **no se
-  subió a GitHub** (ese repo es público y lo trabajan otras personas: el momento lo decide Benja). Las pruebas de
+  subió a GitHub** (ese repo es público y lo trabajan otras personas: el momento lo decide Eñeños). Las pruebas de
   su server: 322 bien, 9 nuevas, cada una con su revés.
 - **En el ensayo:** imagen `eda-server:ensayo2` (de esa rama). Guion 23: 19 de 19 (el ticket sale para `en_<Eñeños
   ID>`). Guion 24, con el launcher común: 6 de 6.
@@ -1538,9 +1538,9 @@ En la §30 EDA quedó enchufado **tal cual era**, y lo nuestro se acomodó alred
 CDN, su `manifiesto.jws`, la «puerta» `manifiestos/eda.json`) en vez de salir del servicio de parches como el de
 R2Beat; y en el launcher EDA sigue siendo un bloque de código aparte (`eda.rs`) en vez de una ficha.
 
-## 32 · El diseño: cada juego corre DOS servers, y el launcher elige (decisión de Benja, 15-nov-2026)
+## 32 · El diseño: cada juego corre DOS servers, y el launcher elige (decisión de Eñeños, 15-nov-2026)
 
-> Benja: «los contenedores de X juego correrán 2 servers, uno de prod y otro de develop. En el develop mis amigos
+> Eñeños: «los contenedores de X juego correrán 2 servers, uno de prod y otro de develop. En el develop mis amigos
 > podrán hacer PR y el contenedor se autoactualiza cada 5 minutos, como ya estaba haciendo EDA; la versión prod sí
 > requiere mi aprobación. En el launcher, en la configuración del juego, una opción "test server" para marcar y
 > jugar. Así podremos trabajar libremente en develop, romper las cosas sin temor.»
@@ -1548,13 +1548,13 @@ R2Beat; y en el launcher EDA sigue siendo un bloque de código aparte (`eda.rs`)
 | | **prod** | **prueba** (test server) |
 |---|---|---|
 | rama del repo del juego | `main` | `develop` |
-| quién lo cambia | sólo con la aprobación de Benja | los amigos, por PR a `develop` |
-| cuándo se actualiza | cuando Benja lo aprueba | solo, a los ~5 min de cada cambio en `develop` (y sólo si las pruebas del server pasan) |
+| quién lo cambia | sólo con la aprobación de Eñeños | los amigos, por PR a `develop` |
+| cuándo se actualiza | cuando Eñeños lo aprueba | solo, a los ~5 min de cada cambio en `develop` (y sólo si las pruebas del server pasan) |
 | sus datos | los de verdad | **los suyos, aparte**: romper el de prueba no toca nada de prod |
 | las cuentas | Cuenta Eñeños (las mismas personas) | Cuenta Eñeños (las mismas personas) |
 | en el launcher | lo de siempre | la casilla «Servidor de prueba» en la configuración de ese juego |
 
-⚠ Esto **corrige** lo que decía la primera tabla de la respuesta a Benja: la auto-actualización de EDA no se saca;
+⚠ Esto **corrige** lo que decía la primera tabla de la respuesta a Eñeños: la auto-actualización de EDA no se saca;
 se queda para el server de prueba. Lo que requiere aprobación es prod.
 
 **Lo que hay que construir (nada de esto está hecho):**
@@ -1569,23 +1569,23 @@ se queda para el server de prueba. Lo que requiere aprobación es prod.
 4. **En el launcher:** la ficha de cada juego trae sus dos entornos, y la casilla elige. Por decidir: si el server
    de prueba usa el MISMO cliente instalado o una copia aparte (si `develop` trae paks o una dll distintos, tiene
    que ser aparte).
-5. **prod con aprobación:** definir qué es «aprobar» en concreto (que Benja fusione a `main`, o que además apriete
+5. **prod con aprobación:** definir qué es «aprobar» en concreto (que Eñeños fusione a `main`, o que además apriete
    algo para que suba). ⛔ En R2Beat subir a prod reinicia el server y corta a los que están en carrera: el momento
    lo sigue eligiendo él.
 
 ## 33 · Dónde quedó todo al cierre del 15-nov-2026 (para retomar sin adivinar)
 
-**Lo último que se hizo esa noche** (pedidos de Benja, probados en el ensayo):
+**Lo último que se hizo esa noche** (pedidos de Eñeños, probados en el ensayo):
 
 - **EDA: quien entra por primera vez nace SIN personajes** y los crea él en el juego («Eñeños ID da pase a EDA,
   pero sin chars creados»). Variable `EDA_CUENTA_NUEVA` (`vacia` por omisión en el conjunto; `personaje` = lo de
-  antes). Rama local de EDA `cdd39a9`, compose `13991f41`, imagen `eda-server:ensayo3`. Benja entró al juego de EDA
+  antes). Rama local de EDA `cdd39a9`, compose `13991f41`, imagen `eda-server:ensayo3`. Eñeños entró al juego de EDA
   con su cuenta y creó la suya (`en_10006659`).
 - **Launcher: JUGAR se puede apretar aunque la cuenta no tenga personajes** («los chars en el launcher son
   informativos; la gestión está dentro del juego; si no, los nuevos no pueden entrar»). Rama `launcher-tauri`
   `878a8fa5`; el botón depende de la sesión, no de los personajes. `prueba_tablero.py` 72 (su control falla con el
   código viejo) y guion 27 del ensayo (cuenta recién registrada → botón prendido).
-- En `D:\Game\EDA` se apagaron los arreglos de Benja (`eda_d3d9.ini` → `[rui] activo=0`; el original quedó en
+- En `D:\Game\EDA` se apagaron los arreglos de Eñeños (`eda_d3d9.ini` → `[rui] activo=0`; el original quedó en
   `eda_d3d9.ini.con_rui_prendido`).
 
 **Las ramas** (ninguna subida a GitHub; nada en prod):
@@ -1606,26 +1606,26 @@ cuentas con Eñeños ID; último 10006745). `.env`: `R2_CUENTAS_DUENA=1`, `R2_LO
 **En esta PC:** acceso «Launcher de ENSAYO» del Escritorio → `D:\Game\R2beatENSAYO_datos\` (el `.bat` +
 `LauncherEnsayo.exe`, que NO se auto-actualiza: se reemplaza a mano) y el cliente en `D:\Game\R2beatENSAYO`.
 ⚠ Al cierre, el `LauncherEnsayo.exe` instalado era el anterior (`f6fb245e`): falta ponerle el `471b1216` (JUGAR
-sin personajes) cuando Benja lo tenga cerrado. Respaldo de prod del 15-nov en `_trabajo/respaldos/prod_2026-11-15/`
+sin personajes) cuando Eñeños lo tenga cerrado. Respaldo de prod del 15-nov en `_trabajo/respaldos/prod_2026-11-15/`
 del repo principal (⛔ trae los `pass_hash` reales).
 
 **Lo que falta, en orden de importancia:**
 
 1. **Cada juego, dos servers** (§32), empezando por EDA: servicios `<juego>` / `<juego>-prueba`, pase con
-   `aud=<juego>-prueba`, auto-actualización del de prueba, casilla «Servidor de prueba» en el launcher. Benja tiene
+   `aud=<juego>-prueba`, auto-actualización del de prueba, casilla «Servidor de prueba» en el launcher. Eñeños tiene
    que decidir: qué es «aprobar prod»; si el de prueba usa el mismo cliente o una copia; de dónde sale lo privado de
    R2Beat para armar su imagen de prueba sola.
 2. **EDA a medio dar vuelta** (§31): su cliente todavía se reparte por su CDN y no por nuestro servicio de parches,
    y en el launcher sigue siendo un bloque aparte (`eda.rs`) en vez de una ficha.
 3. **Sin probar todavía:** una cuenta nueva que aprieta JUGAR → selector vacío → crea su primer personaje de punta a
    punta en R2Beat; una partida de EDA entre dos casas por el relay. Sin explicar: el cierre raro de la primera
-   sesión de R2Beat de Benja en el ensayo (no se repitió).
+   sesión de R2Beat de Eñeños en el ensayo (no se repitió).
 4. **Del launcher, anotado para después:** botón INSTALAR por juego, elegir y recordar la carpeta, «¿ya está
    instalado?»; chat y campana; noticias/torneo/supporters escondidos; logo; número de versión (sigue en 3.0.1).
-5. **Decisiones de Benja:** subir la rama `cuenta-enenos` al repo de EDA; publicar todo y el día del reemplazo
+5. **Decisiones de Eñeños:** subir la rama `cuenta-enenos` al repo de EDA; publicar todo y el día del reemplazo
    (pasos en §26–§28); mover `publicacion_reserva.pem` a un pendrive; renovar («Roll») el token de Cloudflare.
 
-### 33.1 · Lo que decidió Benja sobre los dos servers (15-nov, después del cierre)
+### 33.1 · Lo que decidió Eñeños sobre los dos servers (15-nov, después del cierre)
 
 - **prod = rama `main`**, y es lo que abre **JUGAR** mientras la casilla «test server» de ese juego esté apagada.
 - **Un solo cliente instalado para los dos.** No dos copias: en la CDN hay **dos listas** (la de prod y la de
@@ -1634,25 +1634,25 @@ del repo principal (⛔ trae los `pass_hash` reales).
   archivos). Las listas pueden vivir en git: cada cambio de lista es un commit.
 - Las dos claves de publicación se quedan, por ahora, en su PC.
 - Sin decidir todavía: de dónde sale lo privado de R2Beat (exe, charts, tablas) para armar solo el server de prueba.
-- ★ **Corrección (lo marcó Benja):** lo privado de R2Beat **ya estaba resuelto** en el repo público
+- ★ **Corrección (lo marcó Eñeños):** lo privado de R2Beat **ya estaba resuelto** en el repo público
   `r2beatlatino/R2beat-2013` desde el 11-nov. Su `despliegue/` corre los dos entornos con un solo compose: prod
   (`master`, se actualiza a mano) y prueba (`develop`, `actualizar.sh` por cron cada 5 min, puertos +1000). La
   imagen corre `pruebas/probar_login.py` al armarse: si falla, no se arma y sigue el contenedor anterior. Las
   tablas, las notas y `shop_lt.txt` (de Softnyx) **no van en la imagen**: se suben una vez a una carpeta del VPS
   (`/opt/r2b2013/juego/`) y se montan sólo lectura; `arrancar.sh` las copia sin pisar las nuestras. Para el
   conjunto nuevo se copia ese modelo. ⚠ La rama de prod se llama `master`, no `main`. ⚠ Ese repo quedó en el
-  12-nov: no tiene pases ni Eñeños ID; refrescarlo (`publicar_2013.py`) lo decide Benja.
-- ✅ **Probado por Benja (15-nov, noche):** con el Launcher de ENSAYO nuevo (`471b1216`) y una cuenta sin
+  12-nov: no tiene pases ni Eñeños ID; refrescarlo (`publicar_2013.py`) lo decide Eñeños.
+- ✅ **Probado por Eñeños (15-nov, noche):** con el Launcher de ENSAYO nuevo (`471b1216`) y una cuenta sin
   personajes, JUGAR se prende, entra al juego y crea sus personajes normalmente. Se cierra el «sin probar» de la
   §33 punto 3 para R2Beat (queda la partida de EDA entre dos casas).
-- ✅ **Repo público actualizado (orden de Benja, 15-nov ~23:30):** `r2beatlatino/R2beat-2013` master = develop =
+- ✅ **Repo público actualizado (orden de Eñeños, 15-nov ~23:30):** `r2beatlatino/R2beat-2013` master = develop =
   `97ca743`, pruebas de GitHub en verde (server + Docker). Ya trae los pases y el Eñeños ID (apagados por omisión)
   y las variables de Cuenta Eñeños en su `despliegue/`, así que el server de prueba armado desde `develop` puede
   usar Cuenta Eñeños. Para eso `pase.py` dejó de importar `portero.py` (`9d69f332`): cada juego comprueba el pase solo.
 
-## 34 · Los dos servers de R2Beat, armados en el VPS de ensayo (16-nov-2026, pedido de Benja · probado · nada en prod)
+## 34 · Los dos servers de R2Beat, armados en el VPS de ensayo (16-nov-2026, pedido de Eñeños · probado · nada en prod)
 
-> Benja: «arma los 2 servers en el VPS de ensayo».
+> Eñeños: «arma los 2 servers en el VPS de ensayo».
 
 ```
                        ┌── pase aud=r2beat2013 ──────────► r2beat2013          (prod: login 47004 adentro, canales 48005…48095)
@@ -1690,7 +1690,7 @@ desde afuera; prod adopta su IP por la puerta; el de prueba corre lo último de 
 launcher de verdad: 6 de 6 (la casilla se ve, arranca desmarcada, se guarda, sobrevive a reabrir). EDA sigue 19/19.
 Las 6.730 cuentas de la copia de prod siguen intactas (el guion 18 da rojo sólo porque se sumaron 13 cuentas de prueba).
 
-**Sin probar todavía:** apretar JUGAR con la casilla marcada y jugar de verdad en el de prueba (lo prueba Benja).
+**Sin probar todavía:** apretar JUGAR con la casilla marcada y jugar de verdad en el de prueba (lo prueba Eñeños).
 
 **En el VPS:** imágenes `r2beat2013-juego:ensayo6`, `enenos-cuentas:ensayo6`, `enenos-puerta:ensayo6`,
 `r2b2013-server:prueba` (etiqueta `enenos.commit`). `.env`: `COMPOSE_PROFILES=eda,prueba`, `JUEGO_LOGIN_PUERTO=47004`,
@@ -1708,7 +1708,7 @@ Las 6.730 cuentas de la copia de prod siguen intactas (el guion 18 da rojo sólo
   del `master` público. Unir las dos («una sola copia») es la mudanza pendiente del repo público.
 - La misma forma para EDA (`eda` / `eda-prueba`).
 
-**Lo que encontró Benja al jugar en el de prueba (16-nov) — los dos eran de la PUERTA:**
+**Lo que encontró Eñeños al jugar en el de prueba (16-nov) — los dos eran de la PUERTA:**
 1. *«No me mandó al char select»*: el HOLA del selector (`FFF6`, de la dll) lleva la SESIÓN adelante, no un pase, y
    caía en prod. Además, ELEGIR/VOLVER (`FFF8`/`FFFA`) abren otra sesión en medio de la conexión. Ahora la puerta
    reconoce la sesión en `FFF6`…`FFFB` y anota toda sesión que da prueba (`5e28ce87`, `puerta:ensayo7`).
@@ -1718,9 +1718,9 @@ Las 6.730 cuentas de la copia de prod siguen intactas (el guion 18 da rojo sólo
 ⚠ Lección: la puerta tiene que entender del protocolo del login TODO lo que entiende el server para decidir de quién
 es una conexión. Si se agrega otra orden con la sesión adelante, va también en `CON_SESION`.
 
-## 35 · La prueba «de verdad»: el cliente y el server de PRUEBA distintos de prod (16-nov-2026, pedido de Benja)
+## 35 · La prueba «de verdad»: el cliente y el server de PRUEBA distintos de prod (16-nov-2026, pedido de Eñeños)
 
-> Benja: «quiero una prueba de que realmente funcione la lista de la CDN: el test server con la isla de nieve y
+> Eñeños: «quiero una prueba de que realmente funcione la lista de la CDN: el test server con la isla de nieve y
 > prod el estado actual; si no se subió el cliente al ensayo, lo subes. Que el test server y el cliente del test
 > server sean diferentes: le añades cambios a ambos».
 
@@ -1754,9 +1754,9 @@ llega al de prueba por `develop` del repo público y la auto-actualización del 
 ⚠ La cuota del servidor de parches del ensayo es 1.500 MB por permiso: una instalación desde cero (8,5 GB) no entra.
 En prod no pasa porque los archivos salen de la CDN sin permiso (`PARCHES_URL_ARCHIVOS`).
 
-## 36 · Los amigos SUBEN archivos del cliente al server de prueba (16-nov-2026, pedido de Benja · probado en el ensayo)
+## 36 · Los amigos SUBEN archivos del cliente al server de prueba (16-nov-2026, pedido de Eñeños · probado en el ensayo)
 
-> Benja: «arma el botón para que mis amigos suban archivos, y que sólo los autorizados, tipo EDA, puedan subir
+> Eñeños: «arma el botón para que mis amigos suban archivos, y que sólo los autorizados, tipo EDA, puedan subir
 > directamente; que otros tengan que ser aprobados, así como las PR que abran otras personas, por ser público».
 
 **Cómo se usa (launcher → Configuración → «SERVIDOR DE PRUEBA · SUBIR ARCHIVOS»):**
@@ -1770,7 +1770,7 @@ En prod no pasa porque los archivos salen de la CDN sin permiso (`PARCHES_URL_AR
 
 **Quién es autorizado:** el permiso cerrado `r2beat2013-subir` de Cuenta Eñeños, que se aprueba por cuenta igual que
 EDA: `docker compose exec cuentas python -m servidor.portero aprobar <usuario> r2beat2013-subir` (y `quitar`). En el
-ensayo están aprobadas las dos cuentas de Benja (Eñeños ID 10000570 y 10006659).
+ensayo están aprobadas las dos cuentas de Eñeños (Eñeños ID 10000570 y 10006659).
 
 **Cómo está hecho:** `herramientas/contenedores/parches/subidas.py` + `POST /subidas/{archivo,enviar,lista,revisar,
 descartar}` en el servidor de parches (con su permiso de descarga; el de autorizado viaja como pase
@@ -1792,9 +1792,9 @@ un cambio de la release de prod (rearmar prueba = prod nueva + lo aprobado); un 
 diferencia de un archivo antes de aprobar; y en prod, Cloudflare corta los pedidos de más de 100 MB (subir por el
 nombre sin nube, o en pedazos).
 
-## 37 · Subir archivos, segunda vuelta: botones propios, VOLVER ATRÁS y el JUEZ (16-nov-2026, pedido de Benja · probado en el ensayo)
+## 37 · Subir archivos, segunda vuelta: botones propios, VOLVER ATRÁS y el JUEZ (16-nov-2026, pedido de Eñeños · probado en el ensayo)
 
-Benja, después de subir la isla y la sala de Halloween (envío #3, entró bien): «que test server tenga su propio
+Eñeños, después de subir la isla y la sala de Halloween (envío #3, entró bien): «que test server tenga su propio
 botón; que subir archivos tenga su propio menú desplegable hacia la derecha; que si algo no gustó se pueda volver al
 estado anterior, o hasta 5 estados pasados; y pruebas de seguridad para que no puedan subir malware o archivos
 malintencionados: un juez que valide los archivos, que sea barato».
@@ -1828,16 +1828,16 @@ veía.
 ⚠ **Lo que un juez barato NO hace:** probar que un archivo es inofensivo. Un .pak bien formado puede traer contenido
 feo, y una dll aprobada puede ser un virus. Por eso es UNA capa de cinco: juez + aprobación (dos llaves para programas)
 + historial para volver + interruptor + topes. Lo que se podría sumar si hace falta: consultar el md5 de los programas
-en VirusTotal (sólo el hash, gratis, ⚠ es mandar algo afuera: decisión de Benja) o un ClamAV (≈1 GB de RAM: no es
+en VirusTotal (sólo el hash, gratis, ⚠ es mandar algo afuera: decisión de Eñeños) o un ClamAV (≈1 GB de RAM: no es
 barato para este VPS).
 
 **Probado:** `probar_subidas.py` 86 (los ataques en las secciones 8 a 14, cada uno con su revés) + dos listas,
 portero, cuenta dueña, login con pase en verde; `cargo test` 20 (con `prueba_rutas`). Por internet, guion 35:
-17 de 17 (juez, nombre, dos llaves, volver; deja la lista como estaba: el Halloween de Benja, `p3`).
+17 de 17 (juez, nombre, dos llaves, volver; deja la lista como estaba: el Halloween de Eñeños, `p3`).
 
-### 37.1 · Las reglas de la cola y PROBAR cualquier envío (16-nov, Benja)
+### 37.1 · Las reglas de la cola y PROBAR cualquier envío (16-nov, Eñeños)
 
-Benja: «sólo puede haber un máximo de 5; el que subió algo no puede tener 2 abiertos al mismo tiempo, sí puede
+Eñeños: «sólo puede haber un máximo de 5; el que subió algo no puede tener 2 abiertos al mismo tiempo, sí puede
 reemplazar lo que subió; límite por subida 500 MB entre archivo o archivos» y «el que envió puede ejecutar su
 modificación o la de otro, rotar lanzamiento/descarga entre los 5 que hay, pero no puede editar/borrar/cancelar el de
 otro; sí puede borrar/editar el de él mismo».
@@ -1855,7 +1855,7 @@ otro; sí puede borrar/editar el de él mismo».
 Probado: `probar_subidas.py` 105; guion 35 por internet 20/20 (otra cuenta prueba un pendiente, no lo puede cancelar,
 su dueño lo edita y lo cancela). Parches `ensayo9`, launcher `ea44d877`.
 
-### 37.2 · Subir es POR INVITACIÓN (16-nov, Benja: «test server pueden entrar; subir archivos, solicitar invitación»)
+### 37.2 · Subir es POR INVITACIÓN (16-nov, Eñeños: «test server pueden entrar; subir archivos, solicitar invitación»)
 
 Jugar en el servidor de prueba y PROBAR envíos siguen abiertos a toda cuenta. Subir y enviar, sólo con invitación
 (sin ella: 403). Se pide desde el menú del launcher («Solicitar invitación», con un motivo opcional; hasta 50
@@ -1864,9 +1864,9 @@ autorizados quedan invitados solos (la primera vez que muestran su pase). Vive e
 (`_subidas/invitaciones.json`, `/subidas/invitacion` y `/subidas/invitar`), sin tocar Cuenta Eñeños.
 Probado: `probar_subidas.py` 114; guion 35 por internet 24/24. Parches `ensayo10`.
 
-### 37.3 · Sin versiones: las 5 MODIFICACIONES del cliente (16-nov, Benja, con captura)
+### 37.3 · Sin versiones: las 5 MODIFICACIONES del cliente (16-nov, Eñeños, con captura)
 
-Benja: «nombre de la cuenta, no sólo su id: Eñeños ID + login + breve descripción (si ponen); ya no versionar sino
+Eñeños: «nombre de la cuenta, no sólo su id: Eñeños ID + login + breve descripción (si ponen); ya no versionar sino
 poder elegir y probar entre las 5 modificaciones; el que sube: modificar / borrar; el que ve: probar = empieza la
 descarga del cliente de esa subida». Y eligió mostrar el LOGIN (Cuenta Eñeños no tiene apodo).
 

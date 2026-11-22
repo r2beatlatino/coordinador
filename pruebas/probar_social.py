@@ -199,7 +199,7 @@ with P._escribir:
     c.commit()
 pedir("/social/enviar", {"para": beto, "texto": "nuevo"}, s_ana)
 textos = [r[0] for r in c.execute("SELECT texto FROM mensajes")]
-ok("viejo" in textos and "de ayer" in textos, "el mensaje de hace 3 días QUEDA (Benja: quitar «se borrará en 2 días»)")
+ok("viejo" in textos and "de ayer" in textos, "el mensaje de hace 3 días QUEDA (Eñeños: quitar «se borrará en 2 días»)")
 
 print("· quitar")
 c, d = pedir("/social/quitar", {"uid": beto}, s_ana)

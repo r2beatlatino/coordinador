@@ -1,7 +1,7 @@
 # El panel del Coordinador Eñeños — fase A
 
-> **19-nov-2026 · rama `panel-fase-a` · EN LOCAL, NO publicado.** El diseño es el prototipo aprobado por Benja
-> (`_trabajo/coordinador/prototipo/` en la PC de Benja); esto lo vuelve real **sólo** en tres pantallas: ENTRAR,
+> **19-nov-2026 · rama `panel-fase-a` · EN LOCAL, NO publicado.** El diseño es el prototipo aprobado por Eñeños
+> (`_trabajo/coordinador/prototipo/` en la PC de Eñeños); esto lo vuelve real **sólo** en tres pantallas: ENTRAR,
 > ELEGIR JUEGO y LA RED. ⛔ Ningún dato inventado: si algo todavía no existe, no se muestra.
 >
 > Código: `servidor/coordinador.py` (el backend, dentro del portero) + `servidor/panel/` (la página).
@@ -57,8 +57,8 @@ mod1 eda,r2beat2013    # dos juegos
 
 - Los ids son los de `juegos.json` (`r2beat2013`, `gunbound`, `eda`, `r2beat-moderno`, `wolfteam`). Un juego abarca su
   pase `live`, su `test` y los que empiecen con `<live>-` (`r2beat2013-subir` es de R2Beat).
-- ⚠ **Decisión a confirmar con Benja:** con juegos asignados el moderador **puede banear por juego** en esos juegos
-  (lo pide «ni puede banear ahí» del encargo). El del formato viejo sigue sin banear, como decidió Benja el 12-nov.
+- ⚠ **Decisión a confirmar con Eñeños:** con juegos asignados el moderador **puede banear por juego** en esos juegos
+  (lo pide «ni puede banear ahí» del encargo). El del formato viejo sigue sin banear, como decidió Eñeños el 12-nov.
 - Los cambia el ADMIN desde **La red → Moderadores y permisos** (agregar por Eñeños-ID, tocar las etiquetas de los
   juegos, sacar del equipo). El panel reescribe **sólo la línea de esa cuenta** (los comentarios y las demás quedan),
   de forma atómica, y cada cambio queda en la auditoría. Pasar a alguien del formato viejo al nuevo pide confirmación.
@@ -67,7 +67,7 @@ mod1 eda,r2beat2013    # dos juegos
 
 ### 2.1 · ★ Los baneos con tiempo (20-nov-2026 · EN LOCAL, rama `baneos-con-tiempo`, NO en prod)
 
-Benja: *«baneos en X juegos, por X horas, por X días, X motivo; el launcher baneado, al presionar "Jugar" en X juego,
+Eñeños: *«baneos en X juegos, por X horas, por X días, X motivo; el launcher baneado, al presionar "Jugar" en X juego,
 debe recibir un popup con el motivo de su ban + el tiempo»*.
 
 - **`baneos.hasta`** (epoch; `NULL` = permanente). La columna se agrega sola (`ALTER`) al abrir una `portero.db` de
@@ -82,7 +82,7 @@ debe recibir un popup con el motivo de su ban + el tiempo»*.
   no). Un ADMIN sin duración = permanente (como antes).
 - **Moderador con juegos**: sólo en sus juegos, siempre con duración y hasta `portero.BANEO_TOPE_MODERADOR_SEG`.
   ★ **El tope se ajusta** con `R2_BANEO_TOPE_MODERADOR_DIAS` (de fábrica **365 = 12 meses**; entre 1 y 3650; se
-  lee al arrancar). Benja, 20-nov: *«que los mod puedan banear horas, días, meses, tiempo ajustable»*.
+  lee al arrancar). Eñeños, 20-nov: *«que los mod puedan banear horas, días, meses, tiempo ajustable»*.
   El moderador de formato viejo sigue sin banear.
 - **El panel**: en la ficha de la persona, «Banear en varios juegos…» (casillas de juegos, «Toda la red» sólo admin,
   Horas / Días / Meses / Permanente, motivo con contador) y el «Banear» de cada servidor abre el mismo formulario para ese solo
@@ -159,7 +159,7 @@ juego. En el repo sólo van el logo de Eñeños Team y las fuentes (OFL / Apache
 | `R2_JUEGOS_CATALOGO` | `cuentas` | opcional: otro `juegos.json` (la imagen trae el del repo en `/app/juegos.json`) |
 | `WEB_COORDINADOR_NOMBRE` | `web` (Caddy) | `coordinador.xn--eeos-gqab.link` |
 
-## 5 · Para publicarlo (⛔ NO hecho: sólo cuando Benja lo pida)
+## 5 · Para publicarlo (⛔ NO hecho: sólo cuando Eñeños lo pida)
 
 1. **DNS** (Cloudflare): un registro `coordinador` → la IP del VPS donde corre `web`/`cuentas` (hoy el de USA),
    **sin nube** (gris) como `auth`, para que Caddy saque el certificado solo. (Con nube naranja también anda, pero

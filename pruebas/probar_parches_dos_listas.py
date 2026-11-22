@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_parches_dos_listas — el servidor de parches con DOS listas del cliente: prod y PRUEBA. 16-nov-2026.
 
-Benja: un solo cliente instalado; prod y el server de prueba usan listas distintas en la CDN (TOPOLOGIA §33.1).
+Eñeños: un solo cliente instalado; prod y el server de prueba usan listas distintas en la CDN (TOPOLOGIA §33.1).
 `GET /manifest` = la de prod; `GET /manifest?canal=prueba` = la de prueba (`PARCHES_RELEASE_PRUEBA`). Si no hay una
 de prueba configurada, sirve la de prod. Corre el `patchserver.py` DE VERDAD en un hilo, con dos releases de mentira.
 

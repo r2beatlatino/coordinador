@@ -53,7 +53,7 @@ def load_cfg(path):
     CFG.setdefault("launcher_version", "0")
     CFG.setdefault("launcher_bin", "")  # ruta al Launcher.exe que se sirve para auto-update
     CFG.setdefault("file_base_url", "")  # si se setea, el manifest sirve los archivos desde esta URL (CDN Cloudflare) en vez de /files local
-    # ★ 18-nov (Benja: «R2 descarga principal, CDN del VPS secundaria»): la release de PROD del 2013 se baja de
+    # ★ 18-nov (Eñeños: «R2 descarga principal, CDN del VPS secundaria»): la release de PROD del 2013 se baja de
     #   Cloudflare R2 (10 GB gratis) SÓLO si `releases_dir/r2.json` dice que está entera allá (lo escribe
     #   `usa/r2_al_dia.py` después de verificar cada archivo). El manifest lleva además `respaldo` = la CDN.
     CFG.setdefault("file_base_url_r2", "")
@@ -1195,7 +1195,7 @@ class Handler(BaseHTTPRequestHandler):
         canal = (q.get("canal") or [""])[0]
         envio = (q.get("envio") or [""])[0]
         if canal == "prueba" and envio.isdigit() and int(envio) > 0:
-            # ★ 16-nov (Benja): PROBAR un envío pendiente = la lista de prueba + sus archivos, aparte (vista previa)
+            # ★ 16-nov (Eñeños): PROBAR un envío pendiente = la lista de prueba + sus archivos, aparte (vista previa)
             import subidas as S
             try:
                 rel = subidas().release_de_envio(int(envio), int(r[1].get("uid") or 0))

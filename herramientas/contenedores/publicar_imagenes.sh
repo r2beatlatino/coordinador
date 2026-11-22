@@ -8,7 +8,7 @@
 #  Se corre DENTRO del WSL, parado en la raíz de ESTE repo (el coordinador):
 #
 #      bash herramientas/contenedores/publicar_imagenes.sh construir       2026-11-14   # sólo acá, no sube nada
-#      bash herramientas/contenedores/publicar_imagenes.sh subir           2026-11-14   # ⛔ SUBE. Sólo a la orden de Benja
+#      bash herramientas/contenedores/publicar_imagenes.sh subir           2026-11-14   # ⛔ SUBE. Sólo a la orden de Eñeños
 #      bash herramientas/contenedores/publicar_imagenes.sh bajar-y-probar  2026-11-14   # baja por digest y corre la prueba
 #
 #  ⛔ Las imágenes llevan el exe original del juego, sus charts y sus tablas: el paquete tiene que quedar PRIVADO.

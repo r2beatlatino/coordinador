@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_parches_r2 — la release de PROD del 2013 se baja de Cloudflare R2, con la CDN de respaldo. 18-nov-2026.
 
-Benja: «R2 descarga principal, CDN del VPS secundaria; que no se choque con el cliente del test server; que no se
+Eñeños: «R2 descarga principal, CDN del VPS secundaria; que no se choque con el cliente del test server; que no se
 exceda de los 10 GB por accidente». El server de parches pone `base` = R2 SÓLO para la release de prod y SÓLO si
 `releases/r2.json` (lo escribe `usa/r2_al_dia.py` después de verificar) dice que está entera allá. Todo lo demás —la
 de prueba, un envío, una release que todavía no se subió— sigue por la CDN como antes.

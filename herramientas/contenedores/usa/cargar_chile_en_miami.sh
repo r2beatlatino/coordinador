@@ -1,6 +1,6 @@
 #!/bin/bash
 # ★ 20-nov — LA MUDANZA en Miami: la base FINAL de Chile (sacada con el juego de Chile ya apagado) pasa a ser la del
-#   juego de Miami, y Cuenta Eñeños suma las cuentas nuevas y las enlaza. Benja: «manda Chile» (lo jugado sólo en
+#   juego de Miami, y Cuenta Eñeños suma las cuentas nuevas y las enlaza. Eñeños: «manda Chile» (lo jugado sólo en
 #   Miami por testers se pierde). Validado antes con el ensayo 13 sobre la copia de las 14:47 (15 bien, 0 mal).
 #   Entrada: /root/carga_chile/{datos.db,panel.db} — ⛔ traen pass_hash: se borran al terminar. (Los gm/admin.txt de
 #   Chile NO vienen: en Miami los roles los maneja el Coordinador y su config/ va vacía.)

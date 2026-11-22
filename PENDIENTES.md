@@ -1,7 +1,7 @@
 # Lo que falta en el Coordinador
 
 > La lista viva. Se marca **en el momento** en que algo queda hecho (con la fecha), no después.
-> Orden y decisiones de Benja, 19-nov-2026.
+> Orden y decisiones de Eñeños, 19-nov-2026.
 
 ## Para poder levantar Eñeños desde cero
 
@@ -17,26 +17,26 @@
   - [ ] la imagen `web` (Caddy) todavía la arma el repo del 2013 (junta su sitio Astro con el `Caddyfile` y `auth/`): separar el proxy de la casa del sitio del juego, para que el `Caddyfile` viva en un solo lugar
   - [ ] la parte B de `pruebas/probar_contenedores.py` (con Docker) corrida desde acá: pide `R2BEAT2013_REPO` y la imagen del juego (`--imagenes`)
   - [ ] `pruebas/probar_puerta_login.py` se salta sin `R2BEAT2013_REPO` (arma los paquetes con el generador del juego): correrla con él
-- [ ] **3 · «Generar backup»**: botón manual (sólo admin) + comando; UN archivo cifrado con la clave de Benja con las bases (cuentas + cada juego), la configuración y los secretos (llaves de firma, `.env`, OAuth, tokens)
+- [ ] **3 · «Generar backup»**: botón manual (sólo admin) + comando; UN archivo cifrado con la clave de Eñeños con las bases (cuentas + cada juego), la configuración y los secretos (llaves de firma, `.env`, OAuth, tokens)
   - [x] el comando (`herramientas/respaldo/`): bases en vivo con la API de SQLite, cifrado con `age` a la llave PÚBLICA, MANIFIESTO con sha256 y filas; prueba con controles (16 verdes, corrida en el VPS) — 19-nov
   - [x] la lista del VPS de Miami (`respaldo_vps.json`, 24 cosas, todas medidas ahí) — 19-nov
-  - [x] Benja creó SU llave (privada cifrada con su contraseña, fuera del repo; la pública en el repo) — 19-nov
-  - [x] el primer respaldo de verdad: 24 cosas, 18,3 MB cifrado, bajado a la PC de Benja (sha256 igual) y borrado del VPS — 20-nov 01:54 UTC
-  - [x] Benja lo abrió en su PC con `ver_respaldo.bat` y su contraseña: «✔ respaldo sano · 24 cosas» (el control de punta a punta) — 19-nov
-  - [x] los secretos de la PC de Benja (`respaldo_pc.bat`: llaves de las listas, Cloudflare, SSH, grabador) — 1.º armado 20-nov 02:03 UTC
-  - [x] Benja lo comprobó con `ver_respaldo.bat`: «✔ respaldo sano · 6 cosas» — 19-nov
+  - [x] Eñeños creó SU llave (privada cifrada con su contraseña, fuera del repo; la pública en el repo) — 19-nov
+  - [x] el primer respaldo de verdad: 24 cosas, 18,3 MB cifrado, bajado a la PC de Eñeños (sha256 igual) y borrado del VPS — 20-nov 01:54 UTC
+  - [x] Eñeños lo abrió en su PC con `ver_respaldo.bat` y su contraseña: «✔ respaldo sano · 24 cosas» (el control de punta a punta) — 19-nov
+  - [x] los secretos de la PC de Eñeños (`respaldo_pc.bat`: llaves de las listas, Cloudflare, SSH, grabador) — 1.º armado 20-nov 02:03 UTC
+  - [x] Eñeños lo comprobó con `ver_respaldo.bat`: «✔ respaldo sano · 6 cosas» — 19-nov
   - [ ] el botón en el panel (sólo admin)
 - [ ] **6 · La ficha `enenos.json`** de cada juego (qué sabe hacer su server, para que el panel muestre sólo lo que funciona)
   - [x] GunBound — 19-nov
   - [ ] R2beat-2013 — PR #3 listo (pruebas en verde), falta fusionarlo
-  - [x] EDA — 19-nov (PR #58, aprobado por Benja)
+  - [x] EDA — 19-nov (PR #58, aprobado por Eñeños)
 
 ## Pendientes (esperan otra cosa)
 
-- [ ] **5 · El panel nuevo** — el prototipo lo aprobó Benja (19-nov); se hace real por fases. Guía: `documentacion/PANEL_COORDINADOR.md`
+- [ ] **5 · El panel nuevo** — el prototipo lo aprobó Eñeños (19-nov); se hace real por fases. Guía: `documentacion/PANEL_COORDINADOR.md`
   - [x] **fase A** en local (rama `panel-fase-a`, sin push): ENTRAR sólo con Discord/Google vinculado a un Eñeños-ID con rol (ticket de un uso, 60 s) · ELEGIR JUEGO (de `juegos.json`) · LA RED (personas, invitaciones, lanzamientos, moderadores con juegos asignados, auditoría); `pruebas/probar_coordinador.py` 104 ✔ — 19-nov
-  - [ ] Benja confirma: el moderador con juegos asignados puede **banear por juego** en esos juegos (el del formato viejo sigue sin banear)
-  - [ ] publicar la fase A (⛔ cuando Benja lo pida): DNS `coordinador`, rearmar `cuentas` y `web`, `.env` (`R2_PANEL_URL`, `WEB_COORDINADOR_NOMBRE`, `R2_PANEL_SALUD`), el arte en `/datos/panel_arte/` — los pasos en PANEL_COORDINADOR.md §5
+  - [ ] Eñeños confirma: el moderador con juegos asignados puede **banear por juego** en esos juegos (el del formato viejo sigue sin banear)
+  - [ ] publicar la fase A (⛔ cuando Eñeños lo pida): DNS `coordinador`, rearmar `cuentas` y `web`, `.env` (`R2_PANEL_URL`, `WEB_COORDINADOR_NOMBRE`, `R2_PANEL_SALUD`), el arte en `/datos/panel_arte/` — los pasos en PANEL_COORDINADOR.md §5
   - [ ] fase B: adentro de cada juego (resumen, conectados, fichas, sanciones) — pide la API interna de cada juego
   - [x] contenido dinámico del launcher (asistencia, ruleta, avisos del lobby), fecha de lanzamientos desde el panel y Novedades: servidor + panel en local (rama `fase-b`, sin push) — 20-nov. Al publicar: el arte de las vistas previas en `panel_arte/` (lista en PANEL_COORDINADOR.md §5)
   - [ ] fase D: suspender en toda la red, auditoría completa, «Generar backup», conectar un juego

@@ -5,7 +5,7 @@ Arma una `datos.db` de mentira (4 cuentas: una normal, otra común, una BANNED y
 puerto al azar y le pega por HTTP como lo haría el launcher. Cada cosa con su CONTROL AL REVÉS:
 
   · la firma: el vector 1 del RFC 8032 y Node (otra implementación) aceptan nuestra firma ⟲ y rechazan una tocada;
-  · la cuenta NO aprobada no recibe pase NI manifest ⟲ la aprobada sí (Benja: «solo las aprobadas podrán descargar / jugar»);
+  · la cuenta NO aprobada no recibe pase NI manifest ⟲ la aprobada sí (Eñeños: «solo las aprobadas podrán descargar / jugar»);
   · el pase lo acepta `comprobar_pase` ⟲ con otro aud, vencido, tocado o con otra clave, no;
   · un ban del juego, uno de R2Beat y una cuenta fusionada cortan;
   · la sesión sobrevive a reiniciar el portero (vive en portero.db) ⟲ `salir` la mata;

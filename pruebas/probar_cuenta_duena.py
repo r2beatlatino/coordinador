@@ -407,7 +407,7 @@ try:
         ok(cp == 200 and carga is not None and carga["sub"] == str(eid_jr1) and carga["aud"] == j_abierto,
            f"pase para {j_abierto} sale para cualquier cuenta activa y verifica con la clave pública")
         if j_abierto in pt.JUEGOS_CON_LOGIN:
-            # ★ 16-nov (decisión de Benja): el pase del servidor de PARCHES lleva el login como nombre visible, para
+            # ★ 16-nov (decisión de Eñeños): el pase del servidor de PARCHES lleva el login como nombre visible, para
             #   firmar las subidas al servidor de prueba («login · Eñeños ID»). Sólo en `nombre`, nunca como `usuario`.
             ok(carga.get("nombre") == "Junior" and "usuario" not in carga,
                f"el pase de {j_abierto} lleva el login SÓLO como nombre visible (subidas)")

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """contenido — ★ 20-nov-2026, FASE B del panel del Coordinador: NOVEDADES y el CONTENIDO DINÁMICO de cada juego.
 
-Benja: *«zona de contenido dinámico del launcher nuevo (para todos los juegos que tengan esa opción): premios de las
+Eñeños: *«zona de contenido dinámico del launcher nuevo (para todos los juegos que tengan esa opción): premios de las
 casillas de asistencia, premios de la ruleta, nuevos avisos… y arriba una pastilla de Novedades: el acordeón de
 noticias (el que abre hacia abajo) y los parches de los juegos (el que abre hacia la izquierda)»*.
 
@@ -22,7 +22,7 @@ QUIÉN PUEDE
   viejo (sin lista de juegos) sólo mira.
 - Novedades: el moderador edita SÓLO las de sus juegos; las de otros juegos y las GENERALES (mantenimiento, launcher)
   quedan como están aunque mande otra cosa. Las generales: sólo ADMIN.
-- La fecha de un lanzamiento: sólo ADMIN (abrir un juego antes es decisión de Benja).
+- La fecha de un lanzamiento: sólo ADMIN (abrir un juego antes es decisión de Eñeños).
 ⛔ Todo cambio queda en DOS auditorías: la del Coordinador y la del panel viejo del juego («coordinador:<login>»).
 ⛔ Novedades lleva `base` (la huella de lo que el panel tenía): si otro guardó en el medio, 409 y no se pisa.
 """

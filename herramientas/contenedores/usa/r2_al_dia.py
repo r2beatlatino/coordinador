@@ -6,7 +6,7 @@ Corre EN el VPS de USA, por cron cada 10 min (`/etc/cron.d/enenos-r2`). 18-nov-2
     python3 r2_al_dia.py              si prod cambió: pone R2 al día; si no, nada
     python3 r2_al_dia.py --verificar  revisa R2 contra la release de prod aunque r2.json ya la nombre
 
-Benja: «R2 descarga principal — CDN del VPS secundaria; el launcher sigue en el VPS; que se actualice recién cuando
+Eñeños: «R2 descarga principal — CDN del VPS secundaria; el launcher sigue en el VPS; que se actualice recién cuando
 el cliente de prod se actualice; que no se choque con el del test server; que no se exceda de los 10 GB por accidente».
 
 CÓMO SE CONECTA: el server de parches pone `base` = R2 (y `respaldo` = la CDN) SÓLO si `releases/r2.json` nombra la
@@ -253,7 +253,7 @@ def main():
                     "fecha": time.strftime("%Y-%m-%d %H:%M:%S")})
     anotar("✔ R2 tiene %s entera (%d archivos; bucket %.2f GB de 10): prod baja de R2, con la CDN de respaldo"
            % (rel, len(files), usado / 1e9))
-    # ★ la regla del precalentado (Benja, 18-nov): cada publicación se precalienta — esta también
+    # ★ la regla del precalentado (Eñeños, 18-nov): cada publicación se precalienta — esta también
     import subprocess
     with open("/opt/enenos/precalentar.log", "a") as log:
         subprocess.run([sys.executable, "/opt/enenos/precalentar_cdn.py", "--r2beat", rel], stdout=log, stderr=log)

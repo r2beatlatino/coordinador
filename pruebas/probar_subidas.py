@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_subidas — los amigos suben archivos del cliente al server de PRUEBA (subidas.py + juez.py + patchserver).
 
-16-nov-2026. Benja: «que sólo los autorizados, tipo EDA, puedan subir directamente; que los otros tengan que ser
+16-nov-2026. Eñeños: «que sólo los autorizados, tipo EDA, puedan subir directamente; que los otros tengan que ser
 aprobados, así como las PR». Y después (§37): «que si algo no gustó se pueda volver al estado anterior, hasta 5
 atrás» y «pruebas de seguridad para que no puedan subir malware o archivos malintencionados».
 
@@ -107,7 +107,7 @@ def main():
     tok = {A: "a" * 32, B: "b" * 32, C: "c" * 32}
     for u, t in tok.items():
         ps.TOKENS[t] = {"uid": u, "user": str(u), "exp": time.time() + 3600, "used": 0, "ip": "127.0.0.1"}
-    ps.TOKENS[tok[B]]["nombre"] = "BenjaB"                   # lo que pone el pase de Cuenta Eñeños
+    ps.TOKENS[tok[B]]["nombre"] = "EñeñosB"                   # lo que pone el pase de Cuenta Eñeños
 
     def pedir(u, ruta, cuerpo=None, crudo=None, cab=None):
         datos = crudo if crudo is not None else (None if cuerpo is None else json.dumps(cuerpo).encode())
@@ -129,7 +129,7 @@ def main():
     MZ_DLL = b"MZ\x90\x00" + b"\x00" * 120 + b"una dll de prueba"
     blobs = lambda: sorted(n for n in os.listdir(os.path.join(rels, "_subidas", "blobs")) if not n.startswith("."))
 
-    print("0 · subir es POR INVITACIÓN; jugar y probar, para todos (Benja)")
+    print("0 · subir es POR INVITACIÓN; jugar y probar, para todos (Eñeños)")
     c, d = subir(A, "isla.pak", pak({"a.dds": b"DDS"}))
     ok(c == 403 and "invitación" in d.get("error", ""), "⟲ A sin invitación no puede subir (%s)" % d.get("error"))
     c, d = enviar(A, "sin invitación")
@@ -173,10 +173,10 @@ def main():
     c, d = subir(A, "d3d9.dll", b"MZ una dll" + b"\x00" * 64)
     ok(c == 200 and d["ejecutable"] is True and d["clase"] == "sensible", "una .dll entra como SENSIBLE (marcada)")
     antes = prueba()
-    c, p1 = enviar(A, "isla con muñeco de nieve", quien="Benja")     # ⟲ intenta firmar como otro
+    c, p1 = enviar(A, "isla con muñeco de nieve", quien="Eñeños")     # ⟲ intenta firmar como otro
     ok(c == 200 and p1["estado"] == "pendiente" and p1["ejecutables"] == ["d3d9.dll"] and len(p1["archivos"]) == 3
        and p1["dos_llaves"], "enviado: #%s PENDIENTE, 3 archivos, la dll marcada (dos llaves)" % p1.get("id"))
-    ok(p1["quien"] == "cuenta %d" % A, "⟲ el nombre lo pone el SERVER, no el launcher («Benja» se ignora): %r" % p1.get("quien"))
+    ok(p1["quien"] == "cuenta %d" % A, "⟲ el nombre lo pone el SERVER, no el launcher («Eñeños» se ignora): %r" % p1.get("quien"))
     ok(prueba() == antes, "⟲ la lista de prueba NO cambió (todavía no la aprobó nadie)")
     ok(pedir(A, "/subidas/lista", {})[1]["borrador"] == [], "y su borrador quedó vacío")
 
@@ -221,7 +221,7 @@ def main():
     m = prueba()
     ok(c == 200 and p2["estado"] == "aplicada" and p2.get("directa") and m["version"] == p2["release"],
        "se aplica en el acto (sin pendiente): %s" % p2.get("release"))
-    ok(p2["quien"] == "BenjaB", "y lo firma con el nombre de su pase (%r)" % p2.get("quien"))
+    ok(p2["quien"] == "EñeñosB", "y lo firma con el nombre de su pase (%r)" % p2.get("quien"))
     ok(de(m, "isla.pak")["md5"] == md5(ISLA_B) and de(m, "Pack/sala nueva.pak"),
        "y se arma SOBRE la anterior (sigue la sala que subió A)")
 
@@ -234,7 +234,7 @@ def main():
     ok(c == 200 and r["estado"] == "rechazada" and prueba()["version"] == p2["release"], "rechazada: la lista no cambia")
     ok(md5(FEA) not in blobs() and md5(ISLA_B) in blobs(), "⟲ y su archivo se borró (lo aplicado sigue)")
 
-    print("7 · topes (Benja): 1 pendiente por cuenta —el nuevo REEMPLAZA—, 5 en total, 500 MB por envío")
+    print("7 · topes (Eñeños): 1 pendiente por cuenta —el nuevo REEMPLAZA—, 5 en total, 500 MB por envío")
     X1, X2 = pak({"x1.dds": b"DDS uno"}), pak({"x2.dds": b"DDS dos"})
     subir(A, "x1.pak", X1)
     c, q1 = enviar(A, "primero")
@@ -283,7 +283,7 @@ def main():
     c, d = pedir(A, "/subidas/archivo", crudo=b"", cab={"X-Ruta": "vacio.pak"})
     ok(c == 400, "⟲ un archivo vacío no entra")
 
-    print("7b · PROBAR cualquier pendiente; editar/cancelar SÓLO el propio (Benja)")
+    print("7b · PROBAR cualquier pendiente; editar/cancelar SÓLO el propio (Eñeños)")
     O = otros[0]
     VA, VO = pak({"va.dds": b"DDS de A"}), pak({"vo.dds": b"DDS de O"})
     subir(A, "isla.pak", VA)
@@ -442,7 +442,7 @@ def main():
     est = pedir(A, "/subidas/lista", {})[1]["estados"]
     ok(len({e["release"] for e in est}) == len(est) and sum(1 for e in est if e["vigente"]) == 1
        and not any("volver a" in e["que"] for e in est) and est[0]["vigente"] and est[0].get("restaurada"),
-       "⟲ (captura de Benja) restaurar varias veces: cada versión UNA vez, una sola «actual», sin «volver a: volver a:»")
+       "⟲ (captura de Eñeños) restaurar varias veces: cada versión UNA vez, una sola «actual», sin «volver a: volver a:»")
     for i in range(7):                                   # llena el historial de sobra
         subir(B, "extra%d.pak" % i, pak({"e%d.dds" % i: b"DDS e%d" % i}))
         enviar(B, "extra %d" % i, pase=pase(B))

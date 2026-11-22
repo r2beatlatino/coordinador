@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """subidas — los amigos SUBEN archivos del cliente al server de PRUEBA desde el launcher (16-nov-2026).
 
-Benja: «que sólo los autorizados, tipo EDA, puedan subir directamente; que los otros tengan que ser aprobados, así
+Eñeños: «que sólo los autorizados, tipo EDA, puedan subir directamente; que los otros tengan que ser aprobados, así
 como las PR que abran otras personas, por ser público». (TOPOLOGIA_CONTENEDORES §36)
 
     · Cualquier cuenta con sesión sube archivos: quedan en un BORRADOR suyo, guardados por su md5.
@@ -24,7 +24,7 @@ Todo vive en `<releases>/_subidas/` (mismo disco que las releases, para los enla
     estado.json        {"prueba", "prod", "historial": [{release, que, quien, cuando, propuesta?}]}  (★ §37)
     apagado            si EXISTE, nadie sube ni envía (el interruptor de emergencia; volver atrás sigue andando)
 
-★ 16-nov (§37, Benja: «que si algo no gustó se pueda volver al estado anterior, hasta 5 atrás» y «pruebas de
+★ 16-nov (§37, Eñeños: «que si algo no gustó se pueda volver al estado anterior, hasta 5 atrás» y «pruebas de
   seguridad: un juez barato»): cada archivo pasa por `juez.py`; los PROGRAMAS nunca entran directo (dos llaves); el
   historial guarda la release vigente y las 5 anteriores, y `volver` deja vigente cualquiera de ellas.
 """
@@ -44,12 +44,12 @@ except ImportError:                                   # (en la imagen va al lado
     _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import juez
 
-# ★ 16-nov (Benja): «límite por subida 500 MB, entre archivo o archivos»
+# ★ 16-nov (Eñeños): «límite por subida 500 MB, entre archivo o archivos»
 TAM_MAX_BORRADOR = int(os.environ.get("PARCHES_SUBIDA_ENVIO_MAX_MB") or 500) * 1024 * 1024
 TAM_MAX_ARCHIVO = TAM_MAX_BORRADOR
 TAM_MAX_TOTAL = int(os.environ.get("PARCHES_SUBIDA_TOTAL_MAX_GB") or 5) * 1024 ** 3   # todo lo guardado en blobs/
 ARCHIVOS_MAX_BORRADOR = 200
-# ★ 16-nov (Benja): «sólo puede haber un máximo de 5; el que subió algo no puede tener 2 abiertos al mismo tiempo,
+# ★ 16-nov (Eñeños): «sólo puede haber un máximo de 5; el que subió algo no puede tener 2 abiertos al mismo tiempo,
 #   sí puede reemplazar lo que subió»: 5 pendientes EN TOTAL y 1 por cuenta (un envío nuevo reemplaza al suyo)
 PENDIENTES_MAX_TOTAL = 5
 INVITACIONES_PENDIENTES_MAX = 50                      # solicitudes de invitación esperando (que no se llene de pedidos)
@@ -241,7 +241,7 @@ class Subidas:
             raise Error(503, "Las subidas están desactivadas temporalmente.")
         if not autorizado:
             self._exigir_invitacion(uid)
-        # ★ 16-nov (Benja): la descripción es OPCIONAL («breve descripción, si es que ponen»)
+        # ★ 16-nov (Eñeños): la descripción es OPCIONAL («breve descripción, si es que ponen»)
         nota = " ".join(str(nota or "").split())[:500]
         with _lock:
             arch = self.borrador(uid)
@@ -281,7 +281,7 @@ class Subidas:
         # ★ 16-nov: los PENDIENTES los ve todo el mundo (cada uno puede probar cualquiera, como un PR público)
         return [p for p in props if p["uid"] == uid or p["estado"] == "pendiente"][-50:]
 
-    # ── ★ 16-nov (Benja): «test server pueden entrar; subir archivos: solicitar invitación» ──────────
+    # ── ★ 16-nov (Eñeños): «test server pueden entrar; subir archivos: solicitar invitación» ──────────
     #   Jugar y PROBAR envíos sigue abierto a todos; SUBIR, sólo con invitación. Las invitaciones se piden desde el
     #   launcher y las aprueba un AUTORIZADO (pase `r2beat2013-subir`), que queda invitado solo.
     #   invitaciones.json: uid -> {estado: pendiente|aprobada|rechazada|quitada, quien, nota, cuando, revisor}
@@ -390,7 +390,7 @@ class Subidas:
 
     def _anotar(self, release, que, quien, ahora, **extra):
         est = self._leer("estado.json", {})
-        # ★ 16-nov (captura de Benja: tres «Versión actual» y «volver a: volver a:…»): cada versión UNA vez en el
+        # ★ 16-nov (captura de Eñeños: tres «Versión actual» y «volver a: volver a:…»): cada versión UNA vez en el
         #   historial; restaurar una la sube arriba (no agrega otra copia)
         h = [x for x in self._historial(est) if x["release"] != release]
         h = h + [dict({"release": release, "que": que[:160], "quien": quien or "", "cuando": int(ahora or time.time())},
@@ -519,7 +519,7 @@ class Subidas:
             self.limpiar()
             return p
 
-    # ── ★ 16-nov (Benja): cada uno PRUEBA cualquiera de los pendientes y maneja SÓLO el suyo ─────────
+    # ── ★ 16-nov (Eñeños): cada uno PRUEBA cualquiera de los pendientes y maneja SÓLO el suyo ─────────
     #   «el que envió puede ejecutar su modificación o la de otro, rotar lanzamiento/descarga entre los 5 que hay,
     #    pero no puede editar/borrar/cancelar el de otro; sí puede borrar/editar el de él mismo».
     def release_de_envio(self, id_, uid):

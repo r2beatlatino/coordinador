@@ -1,6 +1,6 @@
 #!/bin/bash
 # ★ 20-nov — LA MUDANZA: el launcher viejo (3.0.1) se actualiza solo al N2LAUNCHER (el que sólo funciona con Miami).
-#   Benja: «a Chile no avisaremos, solamente ya mandaremos nuestro nuevo launcher como actualización».
+#   Eñeños: «a Chile no avisaremos, solamente ya mandaremos nuestro nuevo launcher como actualización».
 #   ⛔ Va DESPUÉS de publicarlo en GitHub (v-latest: Launcher.exe + R2BeatTEST_Setup.exe), y con la descarga PÚBLICA
 #      comprobada: `launcher_url` de config.json sigue siendo GitHub «latest», el 3.0.1 baja de ahí.
 #   nuevo -> /opt/r2beat/launcher/Launcher.exe = N2launcher 3.0.21 + launcher_version + restart r2beat-patch (~1 s)

@@ -1,5 +1,5 @@
 {
-  "_que_es": "Los secretos que viven en la PC de Benja (no en el VPS). Rutas relativas a la carpeta del usuario (C:/Users/benja). Se arma con respaldo_pc.bat y sale cifrado a la misma llave pública. Sin esto, si la PC se pierde, hay que rehacer llaves que el launcher y las listas ya conocen.",
+  "_que_es": "Los secretos que viven en la PC de Eñeños (no en el VPS). Rutas relativas a la carpeta del usuario (%USERPROFILE%). Se arma con respaldo_pc.bat y sale cifrado a la misma llave pública. Sin esto, si la PC se pierde, hay que rehacer llaves que el launcher y las listas ya conocen.",
   "cosas": [
     { "nombre": "LLAVES que firman las listas de descarga (GunBound/EDA) + la de reserva", "tipo": "carpeta", "ruta": ".enenos" },
     { "nombre": "Cloudflare: tokens del dominio y llaves de R2", "tipo": "carpeta", "ruta": ".cloudflare" },

@@ -10,7 +10,7 @@
 #   armarse: si un PR roto llega a develop, no se arma y el server de prueba que andaba SIGUE andando. Ese commit
 #   queda anotado en `prueba/fallido` y no se reintenta hasta que llegue otro.
 # ⚠ Reemplazar el contenedor corta a los que están jugando EN EL DE PRUEBA (prod no se toca).
-# ⛔ Prod NO se actualiza con esto: prod sale de `master` y lo aprueba Benja.
+# ⛔ Prod NO se actualiza con esto: prod sale de `master` y lo aprueba Eñeños.
 # ★ 21-nov: con el PANEL encima (prueba_panel/ → $DIR/panel): los controles del Coordinador y el contenido del launcher,
 #   con la base de PRUEBA (nada de prod). Sin $DIR/panel/Dockerfile, queda develop solo, como antes.
 set -euo pipefail

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """puerta_login — el REPARTIDOR del puerto 48004: dos servers de R2Beat 2013 en la misma máquina (15-nov-2026).
 
-Por qué existe: Benja quiere dos servers por juego (prod y prueba, TOPOLOGIA_CONTENEDORES §32). Los CANALES se
+Por qué existe: Eñeños quiere dos servers por juego (prod y prueba, TOPOLOGIA_CONTENEDORES §32). Los CANALES se
 pueden mover de puerto (el cliente los aprende del FF02 que arma el server: `R2_PUERTOS=1000` → 49005…), pero el
 LOGIN no: el exe entra SIEMPRE por el 48004 (el puerto que le pasa el launcher no lo usa). Para no tocar el exe, el
 48004 lo atiende esta puerta, que lee el PRIMER paquete de cada conexión y la pasa entera a uno de los dos:
@@ -75,7 +75,7 @@ def aud_del_pase(payload):
         return None
 
 
-# ★ 16-nov (Benja: «al cambiar de canal se quedó en "nos estamos conectando"»): el EXE le SUMA 10 al permiso cada vez
+# ★ 16-nov (Eñeños: «al cambiar de canal se quedó en "nos estamos conectando"»): el EXE le SUMA 10 al permiso cada vez
 #   que vuelve a entrar (cambiar de canal). El server lo acepta (`basedatos._mismo_vcode`: SESION_PASO=10, hasta 64
 #   veces); la puerta tiene que reconocerlo igual o lo manda a prod, que lo rechaza.
 PASO = int(os.environ.get("PUERTA_PASO") or 10)

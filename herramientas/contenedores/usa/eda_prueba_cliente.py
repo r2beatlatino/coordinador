@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """eda_prueba_cliente — ★ 21-nov-2026: el cliente del server de PRUEBA de EDA = el publicado + el de DEVELOP.
 
-Benja: «el launcher se actualizó pero el juego no» / «¿la dll no debió compilarse al cambiar el código?». Sí se
+Eñeños: «el launcher se actualizó pero el juego no» / «¿la dll no debió compilarse al cambiar el código?». Sí se
 compila: el CI de r2beatlatino/EDA (trabajo «cliente-develop», herramientas/dll_d3d9/canal.py), en cada push a
 develop, compila la d3d9.dll y la deja con su eda_d3d9.ini y la lista `cliente-develop.json` en la release
 «cliente-develop». Esta herramienta lleva ESE cliente al server de prueba:

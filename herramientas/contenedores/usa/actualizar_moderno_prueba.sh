@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # actualizar_moderno_prueba.sh — pone el server de PRUEBA de Eñeñosbit 2027 en lo último de `develop` del repo
 #   r2beatlatino/Enenosbit-2027 (privado). El mismo flujo que R2Beat 2013 (actualizar_prueba.sh) y EDA: PR → merge a
-#   develop → a los ≤ 5 min el de prueba está en ese commit. ★ 22-nov-2026, pedido de Benja.
+#   develop → a los ≤ 5 min el de prueba está en ese commit. ★ 22-nov-2026, pedido de Eñeños.
 #
 #   bash /opt/enenos/actualizar_moderno_prueba.sh            # (cron, cada 5 min) sólo si hay algo nuevo
 #   bash /opt/enenos/actualizar_moderno_prueba.sh --forzar   # lo rearma / lo vuelve a poner igual
@@ -14,7 +14,7 @@
 #   queda sano, VUELVE SOLO a la imagen anterior. En los dos casos el commit queda en `fallido` y no se reintenta
 #   hasta que llegue otro.
 # ⚠ Reemplazar el contenedor corta a los que están jugando EN EL DE PRUEBA.
-# ⛔ PROD (r2beat-moderno, MODERNO_IMAGEN) NO se toca con esto: sale de `main` y lo aprueba Benja.
+# ⛔ PROD (r2beat-moderno, MODERNO_IMAGEN) NO se toca con esto: sale de `main` y lo aprueba Eñeños.
 # ⛔ El .env no se imprime: se cambia SÓLO la línea MODERNO_PRUEBA_IMAGEN, con respaldo en $DIR/.env.antes (600).
 # Acceso al repo: la deploy key de SÓLO LECTURA /root/.ssh/enenosbit_deploy (Host github-enenosbit en /root/.ssh/config).
 set -euo pipefail

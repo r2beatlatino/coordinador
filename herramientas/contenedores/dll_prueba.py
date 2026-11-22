@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """dll_prueba.py — ★ 21-nov: la `d3d9.dll` de `develop` (repo PÚBLICO R2beat-2013) llega SOLA al server de PRUEBA.
 
-Benja: «la dll de Hysteria no se autoactualizaba en testserver, tal y como ya lo hace EDA». El server de prueba se
+Eñeños: «la dll de Hysteria no se autoactualizaba en testserver, tal y como ya lo hace EDA». El server de prueba se
 rearmaba solo (`actualizar_prueba.sh`), pero la dll que bajan los jugadores la reparte el server de PARCHES según una
 release, y esa release se armaba a mano. Esto la arma sola:
 

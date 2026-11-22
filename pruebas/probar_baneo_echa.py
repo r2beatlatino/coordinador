@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_baneo_echa — ★ 21-nov-2026: banear en el Coordinador también DESCONECTA a la persona de los juegos.
 
-Benja: «banear no desconecta al usuario». El baneo vive en Cuenta Eñeños (no le da más pases) y el que ya estaba
+Eñeños: «banear no desconecta al usuario». El baneo vive en Cuenta Eñeños (no le da más pases) y el que ya estaba
 adentro seguía jugando. Ahora, después de banear, en cada server baneado que se gestiona se busca a la persona por su
 Eñeños ID y se echa a sus personajes CONECTADOS. Dos juegos de mentira: uno habla como el panel de R2Beat
 (`usuarios?q=` + `usuario/N/echar`) y otro como el contrato (`buscar?q=` + `echar {id}`).

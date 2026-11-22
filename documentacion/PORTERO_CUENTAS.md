@@ -5,7 +5,7 @@
 > `datos.db`, el panel viejo…) sigue en ese repo. Las rutas `servidor/`, `pruebas/` y `herramientas/contenedores/` de acá
 > son las mismas que allá.
 
-> **11-nov-2026 · (174) · NO en prod.** Benja: *«una capa arriba de ambos juegos para los accountid»* ·
+> **11-nov-2026 · (174) · NO en prod.** Eñeños: *«una capa arriba de ambos juegos para los accountid»* ·
 > *«¿habría que reiniciar el servidor de r2beat?»* (no) · *«solo las cuentas aprobadas tendrán acceso a eda por ahora»* ·
 > *«solo las aprobadas podrán descargar / jugar»*.
 > Código: `servidor/portero.py` + `servidor/firma_ed25519.py` · prueba `pruebas/probar_portero.py` (33 ✔).
@@ -107,7 +107,7 @@ python -m servidor.portero clave            # la clave PÚBLICA (JWKS), para pas
 
 ### ★ Los MODERADORES (12-nov, ✅ EN PROD)
 
-Benja: dos colaboradores de EDA (jugador2 y jugador3) que aprueben cuentas sin depender de él; «2, tu
+Eñeños: dos colaboradores de EDA (jugador2 y jugador3) que aprueben cuentas sin depender de él; «2, tu
 recomendación» = **sin banear**.
 
 - `moderadores.txt` **al lado de `admin.txt`** (en prod: `/opt/r2beat/game2013/moderadores.txt`), mismo formato: uid,
@@ -131,7 +131,7 @@ La lógica está en `taller/launcher_webui/eda_juego.py`, sin ventana, para pode
 
 1. **Un solo login.** Después de ENTRAR, el launcher también entra al portero con el `pass_sha256_upper`. Va en un hilo
    aparte, así que R2Beat no espera.
-2. ★ **El BOTÓN de EDA** (12-nov, el dibujo de Benja), al lado de la frase y debajo del logo. Lleva la pareja recortada
+2. ★ **El BOTÓN de EDA** (12-nov, el dibujo de Eñeños), al lado de la frase y debajo del logo. Lleva la pareja recortada
    del arte (`ui/eda-boton.jpg`) y el logo «E.D.A».
    - **Apagado** (gris, 🔒 BETA): sin sesión, cuenta no aprobada o sin portero. Si lo tocan, se explica por qué.
    - **Prendido** (color y latido rosa): cuenta aprobada.
@@ -179,7 +179,7 @@ sin esos dos campos o con rutas que se salgan de la carpeta (`..`, absolutas).
 
 ### ★★ Launcher 2.6 (12-nov): el manifest lo FIRMA EDA — ⏳ compilado, NO publicado
 
-Benja: que EDA no dependa de su «aprueba, aprueba» para cada versión del cliente. Desde el 2.6:
+Eñeños: que EDA no dependa de su «aprueba, aprueba» para cada versión del cliente. Desde el 2.6:
 
 1. **El portero es la PUERTA:** `GET /cuentas/manifiesto/eda` sigue haciendo falta (200 sólo a una aprobada), pero su
    contenido ya no se usa. Sin aprobación no se pide nada más.
@@ -187,7 +187,7 @@ Benja: que EDA no dependa de su «aprueba, aprueba» para cada versión del clie
    compacto Ed25519: cabecera `{"alg":"EdDSA","typ":"eda-manifiesto","kid":sha256(pub)[:16]}`, carga = el manifest de
    arriba + `"aud":"eda-launcher"` + `"iat"`. Lo firma EDA en su VPS (`herramientas/firmar_manifiesto.py` del repo de EDA).
 3. **Las claves públicas van FIJAS en el launcher** (`eda_juego.CLAVES_EDA`): la ACTUAL `d033b53012b0a91f` (privada en
-   el VPS de EDA) y la de RESERVA `d4a9aeb1576fb27b` (privada fuera de línea, en la PC de Benja). Si se pierde o se filtra
+   el VPS de EDA) y la de RESERVA `d4a9aeb1576fb27b` (privada fuera de línea, en la PC de Eñeños). Si se pierde o se filtra
    la actual, EDA firma con la de reserva sin otro launcher. Si se pierden las dos: launcher nuevo.
 4. **Rechaza** (y no baja nada): sin firma, otro `alg`/`typ`, `kid` desconocido, firma que no verifica, otro `aud`, y una
    `version` MENOR que la última aceptada (`eda_ver_ok` en las prefs; se compara por número). ⇒ Para volver atrás un
@@ -197,16 +197,16 @@ Benja: que EDA no dependa de su «aprueba, aprueba» para cada versión del clie
 Prueba: `probar_launcher_eda.py` §9 (12 controles al revés) + el manifiesto real de EDA verificado con las claves fijas.
 Compilado: `_trabajo/deploy_eda26/` (launcher `b38f59a5`, instalador `df01f074`; el exe trae las 2 claves, comprobado
 dentro del PYZ). Publicar: `powershell -File _trabajo\deploy_eda26\publicar_launcher.ps1` (GitHub → descarga pública por
-md5 → exe al VPS → `launcher_switch.sh nuevo`); volver: `… -Volver` (= el 2.5 `fc82eed9`). ⛔ Sólo a la orden de Benja.
+md5 → exe al VPS → `launcher_switch.sh nuevo`); volver: `… -Volver` (= el 2.5 `fc82eed9`). ⛔ Sólo a la orden de Eñeños.
 ⚠ Mientras haya launchers 2.5 dando vueltas, siguen leyendo el manifest del PORTERO: el `eda.json` de
 `/opt/r2beat/portero/manifiestos/` tiene que seguir al día (o quedar en una versión que funcione) hasta que todos sean 2.6.
 
 ### ⏳ Lo que falta
-- ✅ **El dominio de EDA** (Benja, 11-nov): **`eñeños.link`** con la nube de Cloudflare (la web y el canje HTTPS) y
+- ✅ **El dominio de EDA** (Eñeños, 11-nov): **`eñeños.link`** con la nube de Cloudflare (la web y el canje HTTPS) y
   **`eda.eñeños.link`** sin nube (el juego, TCP 25900), los dos al VPS de USA. ⛔ En el manifest y en lo técnico va el
   PUNYCODE: `xn--eeos-gqab.link` y `eda.xn--eeos-gqab.link`, porque el launcher valida `[A-Za-z0-9.-]` y el exe del 2009
   resuelve el host en ANSI. Medido: el 25900 abre en `eda.`; `https://xn--eeos-gqab.link` todavía da 403 (falta Caddy).
-  ✅ **Los archivos de EDA** (Benja): en el VPS de USA, **sólo por la CDN de Cloudflare**: «ip directa no se entrega».
+  ✅ **Los archivos de EDA** (Eñeños): en el VPS de USA, **sólo por la CDN de Cloudflare**: «ip directa no se entrega».
   `base = https://xn--eeos-gqab.link/files-eda/<release>-<azar>/`. Caddy de EDA: `/files-eda/*` y `/eda/*` sólo a las
   IPs de Cloudflare (como el `cf_only` de Chile); el 25900 del juego, abierto a todos.
   ⛔ **Cloudflare no guarda por defecto `.dat .dll .flt .asi .ini .cfg`** (`.exe` sí): sin una **Cache Rule**
@@ -217,7 +217,7 @@ md5 → exe al VPS → `launcher_switch.sh nuevo`); volver: `… -Volver` (= el 
 - **Compilar el launcher** (PyInstaller toma `eda_juego.py` solo, porque lo importa el core) y probarlo con el exe de
   verdad contra el server de prueba de EDA.
 
-## 9 · Para subirlo (⛔ sólo cuando Benja lo pida — no reinicia el juego)
+## 9 · Para subirlo (⛔ sólo cuando Eñeños lo pida — no reinicia el juego)
 
 1. Subir `servidor/portero.py` y `servidor/firma_ed25519.py`. Lo que ya corre no los importa, así que no cambia nada
    del juego.

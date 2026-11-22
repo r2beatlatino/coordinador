@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """probar_gestion — la FASE C del panel del Coordinador (servidor/gestion.py), 20-nov-2026: la gestión de cada juego,
-con permisos asignables por acción y CUPOS por moderador y juego (Benja: «con cupo y permisos asignables para X
+con permisos asignables por acción y CUPOS por moderador y juego (Eñeños: «con cupo y permisos asignables para X
 acción también»). El panel del juego es uno DE MENTIRA (habla como `/api/interno/panel/…` de R2Beat y devuelve IPs y
 logins a propósito); el Coordinador y el portero son los de verdad.
 

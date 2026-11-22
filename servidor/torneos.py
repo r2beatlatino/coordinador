@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """torneos — ★ 20-nov-2026: los TORNEOS de cada juego, manejados desde el panel del Coordinador.
 
-Benja: *«me encanta, mételo al launcher»* (el popup de torneos del prototipo). Los torneos, la votación de la hora, la
+Eñeños: *«me encanta, mételo al launcher»* (el popup de torneos del prototipo). Los torneos, la votación de la hora, la
 inscripción y la llave viven en el SERVER DEL JUEGO (R2Beat 2013: `servidor/torneos.py` de su repo, con su datos.db).
 El contrato es `documentacion/TORNEOS.md` del R2Beat 2013 (sección 3: la puerta del Coordinador). Acá no hay copias:
 el panel le pide al juego y el juego es el que decide (estados, cupo, llave, quién gana).

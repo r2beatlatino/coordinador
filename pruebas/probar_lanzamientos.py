@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_lanzamientos — el «contenido dinámico»: cuándo se abre cada juego y las invitaciones anticipadas. 18-nov-2026.
 
-Benja: EDA sábado 21 19:00 (Perú), GunBound domingo 22 12:00 (Perú), Eñeñosbit 2027 lunes 23 19:00 (Perú); EDA y
+Eñeños: EDA sábado 21 19:00 (Perú), GunBound domingo 22 12:00 (Perú), Eñeñosbit 2027 lunes 23 19:00 (Perú); EDA y
 GunBound BETA, Eñeñosbit ALPHA; antes, cerrado salvo invitación; la invitación llega a Discord con Ñ2-ID y
 aprobar / rechazar (admins y moderadores). Con un DISCORD FALSO (webhook local) y CONTROLES (⟲):
   · las fechas en hora de Perú ⟲ un lanzamientos.json las cambia sin publicar nada

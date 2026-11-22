@@ -344,7 +344,7 @@ try:
     cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "aprobar", "uid": J, "pase": "eda"}, S_VIEJO)
     ok(cod == 200, f"aprueba en EDA ({cod})")
     cod, d, _ = pedir("POST", "/coordinador/api/accion", {"accion": "banear", "uid": J, "pase": "gunbound"}, S_VIEJO)
-    ok(cod == 403, f"⟲ pero NO banea (Benja, 12-nov: «sin banear») ({cod})")
+    ok(cod == 403, f"⟲ pero NO banea (Eñeños, 12-nov: «sin banear») ({cod})")
 
     print("· lo que ve cada uno de una persona")
     cod, dm, _ = pedir("GET", f"/coordinador/api/persona/{J}", cookies=S_MOD)

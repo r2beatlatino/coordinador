@@ -14,7 +14,7 @@ Cómo es por dentro (lo lee también RECONSTRUIR.md):
 - Adentro va `MANIFIESTO.json`: qué se guardó, de dónde, su sha256, su tamaño y las filas de cada tabla. `abrir`/`ver`
   comprueban todo eso.
 - Se cifra con `age` para una LLAVE PÚBLICA: la máquina que respalda puede cifrar pero nunca descifrar. La llave
-  privada la tiene sólo Benja (protegida con su contraseña).
+  privada la tiene sólo Eñeños (protegida con su contraseña).
 """
 import argparse
 import fnmatch
@@ -213,7 +213,7 @@ def main(argv=None):
     for nombre in ("abrir", "ver"):
         b = sub.add_parser(nombre)
         b.add_argument("--archivo", required=True)
-        b.add_argument("--llave", required=True, help="la llave PRIVADA de age (la de Benja)")
+        b.add_argument("--llave", required=True, help="la llave PRIVADA de age (la de Eñeños)")
         if nombre == "abrir":
             b.add_argument("--destino", required=True)
     x = ap.parse_args(argv)

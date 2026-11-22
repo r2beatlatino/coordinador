@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_chat_guardias — los GUARDIAS del chat de amigos (servidor/social.py), 20-nov-2026.
 
-Benja: «quita el aviso "se borrará en 2 días"; pon pruebas o guards para que no manden miles de mensajes cortos o
+Eñeños: «quita el aviso "se borrará en 2 días"; pon pruebas o guards para que no manden miles de mensajes cortos o
 largos, también prueba tipos de ataque: que el chat de amigos no se pueda usar para llenar el disco duro o hacer
 muchísimo spam; un guard de 1 GB: si pasa ese límite, se van borrando los mensajes más viejos de todos».
 

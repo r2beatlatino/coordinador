@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_dll_prueba — la dll de `develop` llega SOLA a la lista de PRUEBA (21-nov-2026, `dll_prueba.py`).
 
-Benja: «la dll de Hysteria no se autoactualizaba en testserver, tal y como ya lo hace EDA».
+Eñeños: «la dll de Hysteria no se autoactualizaba en testserver, tal y como ya lo hace EDA».
 Cada regla con su CONTROL AL REVÉS (⟲):
   · DECIDIR (la regla pura):
       - dll nueva con la prueba «dll» de GitHub en verde → publica ⟲ en rojo NO, sin prueba (vieja) NO, en curso espera

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""social — AMIGOS, ESTADO y CHAT de la plataforma Eñeños (16-nov-2026, Benja). Parte del portero (Cuenta Eñeños
+"""social — AMIGOS, ESTADO y CHAT de la plataforma Eñeños (16-nov-2026, Eñeños). Parte del portero (Cuenta Eñeños
 dueña, `R2_CUENTAS_DUENA=1`): los amigos son de la PERSONA (Eñeños ID), no de un personaje.
 
-QUÉ PIDIÓ BENJA
+QUÉ PIDIÓ EÑEÑOS
     «estado de amigos "jugando - r2beat" o X juego, sala, canción, dificultad, lo más compacto posible (tipo rich
     presence de Discord y la mensajería de Riot) · "en launcher", desconectado · los chats se guardan máximo 2 días,
     sólo texto · cargar el estado de otros juegos como EDA o Gunbound según lo que se pueda leer de su contenedor».
@@ -24,7 +24,7 @@ LAS RUTAS (Bearer = la sesión de /entrar)
     POST /social/enviar   {para, texto}    sólo a amigos; 1–500 caracteres (ver LOS GUARDIAS)
     POST /social/chat     {con}            los últimos 100 mensajes con esa persona, y los marca leídos
 
-★ 20-nov — LOS GUARDIAS DEL CHAT (Benja: «quita el aviso "se borrará en 2 días"; pon guards para que no manden miles
+★ 20-nov — LOS GUARDIAS DEL CHAT (Eñeños: «quita el aviso "se borrará en 2 días"; pon guards para que no manden miles
   de mensajes cortos o largos, prueba tipos de ataque: que el chat de amigos no sirva para llenar el disco ni para
   hacer muchísimo spam; un guard de 1 GB: si pasa ese límite, se van borrando los mensajes más viejos de todos»):
     · YA NO se borra a los 2 días. El chat entero tiene un TOPE (`R2_CHAT_TOPE_MB`, de fábrica 1024 = 1 GB, contado
@@ -75,7 +75,7 @@ def tope_bytes():
     return int(max(0.01, mb) * 1024 * 1024)
 ESPERA_MAX = 25            # ★ 18-nov: la «espera larga» de mensajes (social.esperar) dura como mucho 25 s
 VISTO_CADA = 300            # ★ 18-nov: «visto por última vez» se GUARDA en cuentas.visto, como mucho cada 5 min por persona
-#   (Benja: «la marca debe ser la última vez que estuvieron conectados al launcher NUEVO, o al juego: se desconectó
+#   (Eñeños: «la marca debe ser la última vez que estuvieron conectados al launcher NUEVO, o al juego: se desconectó
 #   cuando»). Sólo eso: el latido del launcher y la presencia que cuenta el juego. NADA sacado de la historia vieja.
 
 NOMBRE_JUEGO = {"r2beat2013": "R2Beat", "r2beat2013-prueba": "R2BeatTS", "eda": "Espada del Alma", "gunbound": "Gunbound", "r2beatnfun": "R2Beat Fun",
@@ -120,7 +120,7 @@ def preparar(c):
     if "apodo_clave" not in cols:
         c.execute("ALTER TABLE cuentas ADD COLUMN apodo_clave TEXT")
     c.execute("CREATE UNIQUE INDEX IF NOT EXISTS cuentas_apodo_clave ON cuentas (apodo_clave)")
-    # ★ 18-nov (Benja: «última vez conectado de los amigos»): antes vivía sólo en memoria y se perdía al reiniciar
+    # ★ 18-nov (Eñeños: «última vez conectado de los amigos»): antes vivía sólo en memoria y se perdía al reiniciar
     if "visto" not in cols:
         c.execute("ALTER TABLE cuentas ADD COLUMN visto INTEGER")
 
@@ -183,7 +183,7 @@ def leer_juegos(P, ahora=None):
 
 
 def traer_amistades(P, juego, url_presencia, ficha):
-    """★ 18-nov (Benja: «agregar amigo desde el juego agrega al amigo también al launcher»; por ahora R2Beat): le pide
+    """★ 18-nov (Eñeños: «agregar amigo desde el juego agrega al amigo también al launcher»; por ahora R2Beat): le pide
     al juego las amistades nuevas desde la última fila que vio (`sincro_amigos`) y las suma como «amigos» (un pedido
     pendiente entre los dos también pasa a amigos). Borrar NO viaja. Devuelve cuántas sumó."""
     url = url_presencia.rsplit("/presencia", 1)[0] + "/amistades"
@@ -428,7 +428,7 @@ def estado(P, token, desde=0, juego=None, ahora=None):
 
 
 # ── ★ 18-nov: la mudanza de los AMIGOS del R2Beat viejo ──────────────────────────────────────────────────────
-# Benja: «haremos la transformación de cuentas viejas a Eñeños ID; quienes estén agregados en el R2Beat viejo deberán
+# Eñeños: «haremos la transformación de cuentas viejas a Eñeños ID; quienes estén agregados en el R2Beat viejo deberán
 # estar ya agregados como amigos en Eñeños ID». En el R2Beat viejo la amistad es de PERSONAJE (`friends`, uid ↔
 # friend_uid, guardada en los dos sentidos); acá es de PERSONA (Eñeños ID). Cada personaje se lleva a su cuenta de HOY
 # (`cuenta_personajes` manda: la mudanza de personajes; si no, el casillero 1 `users.uid`), los borrados no cuentan,
@@ -713,7 +713,7 @@ def _avisar(para, mid):
 
 
 def esperar(P, token, desde, ahora=None, tope=ESPERA_MAX):
-    """★ 18-nov (Benja: «los mensajes llegan con algo de delay»): POST /social/esperar {desde} — la ESPERA LARGA.
+    """★ 18-nov (Eñeños: «los mensajes llegan con algo de delay»): POST /social/esperar {desde} — la ESPERA LARGA.
     Si ya hay un mensaje para mí después de `desde` (el último id que vio el launcher), contesta enseguida; si no,
     se queda esperando hasta `tope` segundos y `enviar` la despierta apenas me escriben. -> {"hay": bool}.
     El launcher deja siempre una abierta: el mensaje llega al instante, sin preguntar cada 4 s (con 500 jugadores

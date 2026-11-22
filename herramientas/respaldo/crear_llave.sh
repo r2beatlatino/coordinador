@@ -1,5 +1,5 @@
 #!/bin/sh
-# Crea LA llave del respaldo (una sola vez). Lo corre BENJA en su PC, en una terminal (le pide una contraseña).
+# Crea LA llave del respaldo (una sola vez). Lo corre EÑEÑOS en su PC, en una terminal (le pide una contraseña).
 #     sh herramientas/respaldo/crear_llave.sh  C:/ruta/donde/guardarla
 # Deja: enenos_respaldo_llave.age  = la llave PRIVADA, cifrada con tu contraseña (guardala en 2 lugares FUERA de la PC)
 #       herramientas/respaldo/llave_publica.txt = la PÚBLICA (ésa sí va al repo: sólo sirve para cifrar)

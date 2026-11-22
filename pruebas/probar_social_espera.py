@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """probar_social_espera — la ESPERA LARGA de mensajes (social.esperar). 18-nov-2026.
 
-Benja: «los mensajes funcionan, pero llegan con algo de delay». El launcher preguntaba cada 4 s (cada 20 s con el
+Eñeños: «los mensajes funcionan, pero llegan con algo de delay». El launcher preguntaba cada 4 s (cada 20 s con el
 panel cerrado); ahora deja una pregunta abierta que el server contesta apenas alguien escribe. Con CONTROLES (⟲):
   · un mensaje para mí DESPIERTA la espera enseguida (no a los 25 s)
   · ⟲ sin mensajes, la espera vuelve sola al tope con «no hay»

@@ -1,6 +1,6 @@
 """★ 21-nov — el `/salud` de Eñeñosbit 2027 (el R2Beat moderno) para el Coordinador.
 
-Benja: «que EDA y Eñeñosbit 2027 muestren en prod y test server cuántas personas están, o si están 0». El server de
+Eñeños: «que EDA y Eñeñosbit 2027 muestren en prod y test server cuántas personas están, o si están 0». El server de
 Fluidez no tiene HTTP, así que esto corre AL LADO, dentro del mismo contenedor (lo mete `moderno_imagen.sh`), y cuenta
 sin tocar su código: las conexiones TCP vivas (ESTABLISHED) a SUS puertos —el login, el juego y los de cuentas—, leídas
 de /proc/net/tcp del contenedor. Un jugador = una IP de afuera distinta (el healthcheck y lo local no cuentan).

@@ -1,6 +1,6 @@
 'use strict';
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
-   panel.js — el Coordinador Eñeños, FASE A (19-nov-2026). El diseño es el del prototipo aprobado por Benja;
+   panel.js — el Coordinador Eñeños, FASE A (19-nov-2026). El diseño es el del prototipo aprobado por Eñeños;
    los datos son los de verdad (servidor/coordinador.py). ⛔ Nada inventado: si un dato no existe, no se muestra.
      #/entrar          sólo Discord o Google vinculados a un Eñeños ID con rol
      #/juegos          las tarjetas de juegos.json, con PROD / TEST
@@ -559,7 +559,7 @@ function pintarPersona(p) {
   S.persona = p;
   personajesDePersona(p);
 }
-/* ★ 20-nov (Benja: «cambiar la contraseña de un jugador»): ADMIN. El server genera una provisoria al azar y cierra sus
+/* ★ 20-nov (Eñeños: «cambiar la contraseña de un jugador»): ADMIN. El server genera una provisoria al azar y cierra sus
    sesiones; se muestra UNA vez para pasársela al jugador, que la cambia después en el launcher. Nadie la escribe. */
 function restablecerClave() {
   const p = S.persona; if (!p) return;
@@ -2626,7 +2626,7 @@ function formPermisos(i) {
     const a = c.acciones || [], extra = [a.includes('aviso') ? 'mandar avisos' : '', a.includes('echar') ? 'desconectar' : ''].filter(Boolean);
     return 'mirar el tablero y las fichas' + (extra.length ? (extra.length > 1 ? ', ' + extra[0] + ' y ' + extra[1] : ' y ' + extra[0]) : '');
   };
-  /* ★ 21-nov (Benja: «quiero el permiso asignable»): lo de TODA LA RED (la cuenta Eñeños, no un juego): fila `_red` */
+  /* ★ 21-nov (Eñeños: «quiero el permiso asignable»): lo de TODA LA RED (la cuenta Eñeños, no un juego): fila `_red` */
   const asRed = P.asignables_red || [];
   const seccionRed = () => { const x = de('_red');
     return `<section class="g-perm" data-juego="_red"><h3>${ic('lock', 's14')} Cuenta Eñeños (cualquier juego)</h3>

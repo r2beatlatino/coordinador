@@ -2,7 +2,7 @@
 """coordinador — el PANEL REAL del «Coordinador Eñeños», fase A (19-nov-2026). Parte del portero (Cuenta Eñeños
 dueña, `R2_CUENTAS_DUENA=1`): sin esa variable, nada de esto existe (404).
 
-QUÉ HAY EN LA FASE A (el diseño es el prototipo aprobado por Benja; acá NADA de datos inventados)
+QUÉ HAY EN LA FASE A (el diseño es el prototipo aprobado por Eñeños; acá NADA de datos inventados)
     · ENTRAR (#/entrar): sólo con Discord o Google, y sólo si ese Discord/Google está VINCULADO a un Eñeños ID con rol
       (admin.txt / moderadores.txt). Nada de usuario y clave.
     · ELEGIR JUEGO (#/juegos): las tarjetas salen de `juegos.json`. «Jugando ahora» y el estado de cada servidor SÓLO
@@ -570,7 +570,7 @@ def persona(P, viewer, uid, ahora=None):
     d["sancion"] = limites_sancion(P, viewer)
     # ★ 21-nov: el botón «Restablecer contraseña» (ADMIN, o un moderador con ese permiso de la red; nunca al equipo)
     d["puede_clave"] = bool(P.es_duena() and (admin or (P.rol_de(uid) is None and GE.puede_red(P, viewer, "clave"))))
-    # ★ 21-nov (Benja, opción 2): el moderador CON ese permiso ve el USUARIO (login) en la ficha — para el jugador que
+    # ★ 21-nov (Eñeños, opción 2): el moderador CON ese permiso ve el USUARIO (login) en la ficha — para el jugador que
     #   olvidó también su usuario. Sólo acá (no en las listas ni en la búsqueda), y cada vista queda en la auditoría
     #   (una por hora por moderador y cuenta, para no llenarla con cada recarga).
     if d["puede_clave"] and not admin:

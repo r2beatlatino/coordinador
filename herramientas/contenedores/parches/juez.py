@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """juez — revisa CADA archivo que sube un amigo antes de guardarlo (16-nov-2026, TOPOLOGIA_CONTENEDORES §37).
 
-Benja: «pruebas de seguridad para que no puedan subir malware o archivos malintencionados; un juez que valide los
+Eñeños: «pruebas de seguridad para que no puedan subir malware o archivos malintencionados; un juez que valide los
 archivos, que sea barato». Barato = sin antivirus ni dependencias: lee la CABEZA del archivo (y la COLA de un .pak,
 donde está su tabla), nunca lo abre ni lo ejecuta. Unos milisegundos por archivo.
 

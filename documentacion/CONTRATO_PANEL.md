@@ -1,6 +1,6 @@
 # Contrato del panel — cómo un juego se deja gestionar desde el Coordinador
 
-> 20-nov-2026. Benja: *«GunBound y EDA aún no tienen muchos comandos: lee sus servers y haz ambos a la vez; cuando
+> 20-nov-2026. Eñeños: *«GunBound y EDA aún no tienen muchos comandos: lee sus servers y haz ambos a la vez; cuando
 > maduren en un futuro corto se editarán sus secciones»*.
 >
 > R2Beat 2013 NO usa este contrato: expone su panel viejo entero (`/api/interno/panel/<ruta>`, ver `gestion.py`).
