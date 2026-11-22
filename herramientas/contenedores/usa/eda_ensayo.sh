@@ -22,6 +22,10 @@ SERVIDOR="185.147.157.33:25910"
 CANJE="https://ensayo.xn--eeos-gqab.link/eda/pase"
 SERVIDOR_PRUEBA="185.147.157.33:35900"
 CANJE_PRUEBA="https://ensayo.xn--eeos-gqab.link/eda-prueba/pase"
+# 22-nov (lo eligio Rui; sesion de EDA): la lista de PRUEBA lleva "diag" = adonde la dll manda el diagnostico
+#   automatico (PR r2beatlatino/EDA#71). El launcher >= 3.0.30 se la pasa al juego (EDA_DIAG_URL) solo si la
+#   lista firmada la trae. Vaciarla = apagarlo (la lista de prueba se vuelve a firmar sola). Respaldo: *.antes-diag
+DIAG_PRUEBA="https://ensayo.xn--eeos-gqab.link/eda-prueba/diag"
 mkdir -p "$EST"
 log() { echo "$(date '+%F %T') [eda-ensayo] $*"; }
 
@@ -32,15 +36,20 @@ FUENTE=$EDA/manifiesto/eda.json
 #   Devuelve 0 = igual · 1 = la cambió · 2 = falló (y la de antes queda). ⚠ Dentro de un `||` el `set -e` NO corta
 #   (bash lo apaga en la función entera): por eso cada paso se comprueba a mano.
 armar_lista() {
-    local SRV="$1" CJ="$2" SALIDA="$ENS/eda_web/$3" MARCA="$EST/$4" FTE="${5:-$FUENTE}" H
+    local SRV="$1" CJ="$2" SALIDA="$ENS/eda_web/$3" MARCA="$EST/$4" FTE="${5:-$FUENTE}" DG="${6:-}" H
     H=$(sha256sum "$FTE" | cut -c1-16)
+    if [ -n "$DG" ]; then H="$H-$(printf %s "$DG" | sha256sum | cut -c1-8)"; fi   # (22-nov: el "diag" tambien cuenta)
     [ "$H" = "$(cat "$MARCA" 2>/dev/null || true)" ] && [ -f "$SALIDA" ] && return 0
-    python3 - "$FTE" "$SRV" "$CJ" > "$EST/eda.json" <<'PY'
+    python3 - "$FTE" "$SRV" "$CJ" "$DG" > "$EST/eda.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 for k in ("aud", "iat"):
     d.pop(k, None)
 d["servidor"], d["canje"] = sys.argv[2], sys.argv[3]
+d.pop("diag", None)
+if len(sys.argv) > 4 and sys.argv[4]:                # (22-nov: solo la lista que lo pide = la de PRUEBA)
+    assert sys.argv[4].startswith("https://") and " " not in sys.argv[4] and len(sys.argv[4]) <= 255, "diag invalido"
+    d["diag"] = sys.argv[4]
 # ★ 18-nov: los archivos, por la CDN del sistema nuevo (los mismos de prod: /opt/eda/files-eda/<versión>/)
 d["base"] = "https://cdn.xn--eeos-gqab.link/eda/" + d["base"].rstrip("/").rsplit("/", 1)[-1] + "/"
 assert d.get("files") and d.get("version"), "eda.json sin archivos o sin versión"
@@ -49,10 +58,11 @@ PY
     [ $? -eq 0 ] || { log "⛔ $3: no se pudo armar la lista"; return 2; }
     # (la firma necesita pycryptodome: la tiene la imagen de EDA, no el sistema. Un contenedor descartable, todo de lectura)
     docker run --rm --network none --entrypoint python         -v "$EDA/prod/herramientas:/h:ro" -v "$EDA/claves:/k:ro" -v "$EST:/e:ro" eda-server:prod         /h/firmar_manifiesto.py firmar /e/eda.json /k/manifiesto-actual.pem > "$EST/nueva.jws"         || { log "⛔ $3: no se pudo firmar"; return 2; }
-    python3 - "$EST/nueva.jws" "$SRV" "$CJ" <<'PY'
+    python3 - "$EST/nueva.jws" "$SRV" "$CJ" "$DG" <<'PY'
 import base64, json, sys
 a, b, c = open(sys.argv[1]).read().strip().split(".")
 d = json.loads(base64.urlsafe_b64decode(b + "=" * (-len(b) % 4)))
+assert d.get("diag", "") == (sys.argv[4] if len(sys.argv) > 4 else ""), "la firmada no trae el diag que se pidio"
 assert d["servidor"] == sys.argv[2] and d["canje"] == sys.argv[3] and d["aud"] == "eda-launcher" and d["files"],     "la lista nueva no es la que se pidió"
 PY
     [ $? -eq 0 ] || { log "⛔ $3: la firmada no es la que se pidió: queda la de antes"; return 2; }
@@ -73,10 +83,10 @@ if [ -f "$FUENTE" ]; then
     #   carpeta de enlaces duros, la versión no cambia. Si falla, la lista de prueba sigue con el cliente publicado.
     if DIST=$(python3 "$ENS/eda_prueba_cliente.py" armar "$FUENTE"               "https://github.com/r2beatlatino/EDA/releases/download/cliente-develop/cliente-develop.json"               "$EDA/files-eda" "$EST/cache-develop" "$EST/fuente-prueba.json" 2>&1); then
         [ "$DIST" != "$(cat "$EST/prueba-distintos" 2>/dev/null || true)" ] && { log "cliente de prueba: de develop = ${DIST}"; echo "$DIST" > "$EST/prueba-distintos"; }
-        armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba "$EST/fuente-prueba.json" || true
+        armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba "$EST/fuente-prueba.json" "$DIAG_PRUEBA" || true
     else
         log "⚠ cliente de prueba: ${DIST} — sigue el publicado"
-        armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba || true
+        armar_lista "$SERVIDOR_PRUEBA" "$CANJE_PRUEBA" prueba.jws lista-prueba "" "$DIAG_PRUEBA" || true
     fi
 fi
 [ "${SOLO_LISTA:-}" = "1" ] && exit 0
