@@ -29,6 +29,11 @@ flock -n 9 || exit 0                                     # una sola vuelta a la 
 [ -d "$REPO/.git" ] || git clone -q -b "$RAMA" "$URL" "$REPO"
 cd "$REPO"
 git fetch -q origin "$RAMA"
+# ★ 21-nov: la DLL de develop → la lista del cliente de PRUEBA (dll_prueba.py: sólo con la prueba «dll» de GitHub en
+#   verde). Va aparte del server: mira en cada vuelta aunque el server no cambie, y si falla, todo sigue igual.
+if [ -f "$CONJUNTO/dll_prueba.py" ]; then
+    python3 "$CONJUNTO/dll_prueba.py" "$REPO" "$RAMA" || echo "$(date '+%F %T') ⚠ dll_prueba falló: la lista de prueba sigue igual"
+fi
 AHORA="$(git rev-parse --short "origin/$RAMA")"
 CORRE="$(docker image inspect -f '{{index .Config.Labels "enenos.commit"}}' "$IMAGEN" 2>/dev/null || true)"
 # ★ 21-nov: el PANEL (prueba_panel/): encima de develop van los módulos de PROD, sacados de la imagen del juego de prod
