@@ -5,7 +5,8 @@ acción también»). El panel del juego es uno DE MENTIRA (habla como `/api/inte
 logins a propósito); el Coordinador y el portero son los de verdad.
 
 Cada regla con su control al revés (⟲):
-  1 · la ADMIN ve todo, con IPs; ⟲ al moderador NUNCA le llega una IP ni un login
+  1 · sólo ADMIN en R2_VEN_IPS ve las IP (el resto de los ADMIN ve el login, sin IP); ⟲ lista vacía/ausente: nadie;
+      ⟲ moderador listado tampoco (y nunca un login)
   2 · BASE del moderador: mirar, avisar, echar ⟲ dar Rcoin sin permiso: 403 y no viaja nada
   3 · ⟲ lista cerrada: respaldo, ip/…, ban… dan 404 aunque sea ADMIN
   4 · repartir permisos: sólo ADMIN ⟲ un juego no asignado: 409 ⟲ una acción inventada: 400
@@ -46,6 +47,17 @@ def ok(cond, que):
 FICHA = "ficha-de-prueba"
 VISTO = []
 LOCK = threading.Lock()
+PRIVADOS = {"ip": "192.0.2.5", "ips": [{"ip": "192.0.2.5", "pais": "PE"}], "login": "cuenta5",
+            "username": "cuenta5", "geoip": {"pais": "PE"}, "misma_ip": [{"uid": 7, "nick": "Jugador7"}],
+            "comparte_ip": 2, "misma_ip_total": 2, "comparten_ip": 2}
+
+
+def respuesta():
+    return {"filas": [{"uid": 5, "nick": "Jugador5", "pais": "PE", **PRIVADOS,
+                       "datos": dict(PRIVADOS), "sesiones": [dict(PRIVADOS, inicio=1)]}], "total": 1,
+            "campos": [{"nombre": "IP", "valor": PRIVADOS["ip"]}, {"nombre": "Login", "valor": "cuenta5"},
+                       {"nombre": "Comparten su IP", "valor": 2}, {"nombre": "País", "valor": "PE"}],
+            "detalle": [{"nombre": "IPs", "valor": [PRIVADOS["ip"]]}]}
 
 
 class Juego(BaseHTTPRequestHandler):
@@ -69,9 +81,7 @@ class Juego(BaseHTTPRequestHandler):
         if self.headers.get("X-Ficha-Interna") != FICHA:
             return self._mandar(404, {"error": "no existe"})
         self._anotar()
-        return self._mandar(200, {"filas": [{"uid": 5, "nick": "Jugador5", "ip": "190.7.7.7", "login": "cuenta5",
-                                             "misma_ip": 2, "pais": "PE", "datos": {"ips": ["190.7.7.7"]}}],
-                                  "total": 1})
+        return self._mandar(200, respuesta())
 
     def do_POST(self):
         if self.headers.get("X-Ficha-Interna") != FICHA or self.headers.get("X-R2") != "1":
@@ -79,8 +89,8 @@ class Juego(BaseHTTPRequestHandler):
         d = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         self._anotar(d)
         if d.get("valor") == 333 or d.get("cantidad") == 222:
-            return self._mandar(400, {"error": "ese uid no tiene personaje"})
-        return self._mandar(200, {"ok": True})
+            return self._mandar(400, dict(respuesta(), error="ese uid no tiene personaje"))
+        return self._mandar(200, dict(respuesta(), ok=True, antes="luna", despues=d.get("licencia", "luna")))
 
 
 juego_srv = ThreadingHTTPServer(("127.0.0.1", 0), Juego)
@@ -101,6 +111,7 @@ os.environ.update({
     "R2_CUENTAS_UID_DESDE": "10000000",
     "R2_CUENTAS_FICHA_INTERNA": FICHA,
     "R2_PANEL_GESTION": f"r2beat2013={URL}",
+    "R2_VEN_IPS": "",
 })
 for k in ("R2_PANEL_SALUD", "R2_PRESENCIA", "R2_DISCORD_EVENTOS_WEBHOOK", "R2_JUEGOS_CATALOGO", "R2_UID_NUEVAS_DESDE"):
     os.environ.pop(k, None)
@@ -134,15 +145,38 @@ def dado(uid, k="rcoin"):
     return r[0] if r else None
 
 
-print("1 · la ADMIN ve todo; al moderador no le llega nada privado")
+print("1 · IPs sólo para ADMIN de la lista; al moderador no le llega nada privado")
 cod, d = pedir(JEFA, "GET", "conectados")
-ok(cod == 200 and d["filas"][0]["ip"] == "190.7.7.7" and VISTO[-1]["admin"] == "1" and VISTO[-1]["quien"] == "coordinador:jefa",
-   f"la ADMIN: con IP, firmada «coordinador:jefa» ({cod})")
+ok(cod == 200 and "ip" not in d["filas"][0] and VISTO[-1]["admin"] == "1" and VISTO[-1]["quien"] == "coordinador:jefa",
+   f"lista vacía: la ADMIN sin IP, firmada «coordinador:jefa» ({cod})")
+ok(d["filas"][0].get("login") == "cuenta5" and "comparten_ip" not in d["filas"][0] and "misma_ip_total" not in d["filas"][0],
+   "⟲ la ADMIN sin IP sigue viendo el login (sólo se ocultan las IP y lo que sale de ellas)")
+os.environ["R2_VEN_IPS"] = str(JEFA)
+cod, d = pedir(JEFA, "GET", "conectados")
+ok(cod == 200 and all(d["filas"][0].get(k) == v for k, v in PRIVADOS.items()), "⟲ ADMIN listado sí recibe los privados")
+os.environ["R2_VEN_IPS"] = str(MR2)
 cod, d = pedir(MR2, "GET", "conectados")
 txt = json.dumps(d)
 ok(cod == 200 and d["filas"][0]["nick"] == "Jugador5" and d["filas"][0]["pais"] == "PE", f"el moderador de R2Beat mira ({cod})")
-ok("190.7.7.7" not in txt and "cuenta5" not in txt and "misma_ip" not in txt and VISTO[-1]["admin"] == "0",
-   "⟲ y no le llega ni una IP ni un login (tampoco anidados)")
+ok("192.0.2.5" not in txt and "cuenta5" not in txt and "misma_ip" not in txt and VISTO[-1]["admin"] == "0",
+   "⟲ aunque esté en la lista no le llega ni una IP ni un login (tampoco anidados)")
+
+print("1b · licencia: ruta, asignación y auditoría")
+cod, d = pedir(JEFA, "POST", "usuario/5/licencia", {"licencia": "sol"})
+ok(cod == 200 and d.get("antes") == "luna" and d.get("despues") == "sol"
+   and VISTO[-1]["cuerpo"] == {"licencia": "sol"}, "ADMIN cambia Luna a Sol con el contrato del juego")
+n = len(VISTO)
+cod, _ = pedir(MR2, "POST", "usuario/5/licencia", {"licencia": "estrella"})
+ok(cod == 403 and len(VISTO) == n, "⟲ moderador sin licencia: 403 y no viaja")
+cod, d = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MR2, "juego": "r2beat2013", "acciones": ["licencia"]})
+ok(cod == 200 and "licencia" in d["asignables_de"]["r2beat2013"]
+   and any(x["id"] == "licencia" and x["nombre"] == "Cambiar la licencia" for x in d["asignables"]),
+   "licencia asignable con su texto para el panel")
+for licencia in ("ninguna", "estrella", "luna", "sol"):
+    cod, d = pedir(MR2, "POST", "usuario/5/licencia", {"licencia": licencia})
+    ok(cod == 200 and d.get("despues") == licencia, f"moderador con licencia: {licencia} pasa")
+ok(P._propia().execute("SELECT COUNT(*) FROM auditoria WHERE accion = 'gestión · licencia'").fetchone()[0] == 5,
+   "las cinco licencias cambiadas quedan en gestión · licencia")
 
 print("2 · lo de BASE del moderador")
 for ruta in ("aviso", "usuario/5/echar", "usuario/5/mute"):
@@ -279,6 +313,48 @@ ok(cod == 404, f"⟲ el moderador de R2Beat en GunBound: 404 ({cod})")
 cod, d = callado(GE.ver_permisos, CO, P, JEFA)
 ok(d.get("asignables_de", {}).get("gunbound") == ["moneda"] and "rcoin" in d["asignables_de"]["r2beat2013"],
    "el panel sabe qué se asigna en cada juego")
+
+print("9 · privacidad en TODAS las rutas de ambos tipos, también POST y errores")
+
+
+def sin_ips(v):
+    if isinstance(v, dict):
+        return not any(GE._campo_privado(k, GE._SOLO_IPS) for k in v) and all(sin_ips(x) for x in v.values())
+    return all(sin_ips(x) for x in v) if isinstance(v, list) else True
+
+
+def sin_privados(v):
+    if isinstance(v, dict):
+        return not any(k in PRIVADOS for k in v) and all(sin_privados(x) for x in v.values())
+    return all(sin_privados(x) for x in v) if isinstance(v, list) else True
+
+
+for lista in (None, "", "inválido", str(MR2), f" {JEFA + 1}, 00{JEFA}, {MR2} "):
+    if lista is None:
+        os.environ.pop("R2_VEN_IPS", None)
+    else:
+        os.environ["R2_VEN_IPS"] = lista
+    autorizado = lista is not None and f"00{JEFA}" in lista
+    for jid, rutas in (("r2beat2013", GE.RUTAS), ("gunbound", GE.RUTAS_CONTRATO1)):
+        for metodo, patron, _ in rutas:
+            ruta = patron.replace(GE._N, "5").replace(GE._ID, "abc-12")
+            cod, d = pedir(JEFA, metodo, ruta, {} if metodo == "POST" else None, juego=jid)
+            ok(cod == 200 and (d["filas"][0].get("ip") == PRIVADOS["ip"] and len(d["campos"]) == 4 if autorizado
+                              else sin_ips(d) and d["campos"] == [{"nombre": "Login", "valor": "cuenta5"},
+                                                                    {"nombre": "País", "valor": "PE"}]
+                              and d["detalle"] == [] and "192.0.2.5" not in json.dumps(d)
+                              and d["filas"][0].get("login") == "cuenta5"),
+               f"{jid} {metodo} {ruta}: {'con' if autorizado else 'sin'} privados (lista {lista!r})")
+        ruta = "usuario/5/rcoin" if jid == "r2beat2013" else "moneda"
+        cod, d = pedir(JEFA, "POST", ruta, {"valor": 333}, juego=jid)
+        ok(cod == 400 and (d["filas"][0].get("ip") == PRIVADOS["ip"] if autorizado else sin_ips(d) and "192.0.2.5" not in json.dumps(d)),
+           f"⟲ {jid}: el error del juego también respeta la lista")
+    for viewer, jid in ((MR2, "r2beat2013"), (MGB, "gunbound")):
+        cod, d = pedir(viewer, "GET", "conectados", juego=jid)
+        ok(cod == 200 and sin_privados(d), f"⟲ {jid}: moderador siempre sin privados")
+
+cod, _ = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MGB, "juego": "gunbound", "acciones": ["licencia"]})
+ok(cod == 400, "⟲ licencia no se asigna a contrato1")
 
 juego_srv.shutdown()
 P.cerrar_conexiones()

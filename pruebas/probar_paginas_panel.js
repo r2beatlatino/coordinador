@@ -132,5 +132,84 @@ function ok(cond, texto) {
   ok(run(`pedidos.at(-1).ruta === 'pagina/publicar' && pedidos.at(-1).cuerpo.base === 'importada'
        && pedidos.at(-1).cuerpo.version === '3' && J.borr.pagina.version_actual === '3'`),
     'Publicar borrador envía versión y base y refresca la versión actual');
+
+  run(`
+    const pjLic = {uid:5, nick:'Jugador <5>', licencia:'luna', inventario:[]};
+    const JL = {jid:'r2beat2013', env:'live', sel:5, tab:'personas', g:nuevoG({rol:'moderador', acciones:[], cupos:{}})};
+    JL.g.fichas['5'] = {f:pjLic, h:{dias:[]}, pjs:[]};
+    S.jc = JL; S.catalogo = [{id:'r2beat2013', nombre:'R2Beat 2013'}];
+    let modalLic = '', confirmacionLic = null, clickLic, avisoLic, recargasLic = 0;
+    const selectLic = {value:'luna'}, errorLic = {textContent:''}, diaLic = {innerHTML:''};
+    const domLic = {querySelector:s => s === '#liOk' ? {addEventListener:(ev, f) => {clickLic=f;}}
+      : s === '#liV' ? selectLic : s === '#liErr' ? errorLic : s === '#dCuerpo' ? diaLic : null};
+    abrirCapa = html => {modalLic=html; return domLic;}; cerrarCapa = () => {};
+    confirmar = d => {confirmacionLic=d;}; toast = d => {avisoLic=d;};
+    cargarFicha = () => {recargasLic++;}; pedidos=[];
+  `);
+  ok(run(`herramientasHtml(JL,pjLic).includes('Cambiar la licencia')
+      && !herramientasHtml(JL,pjLic).includes('data-accion="g-licencia"')
+      && herramientasHtml(JL,pjLic).includes('#i-lock')`), 'Dar y cambiar: licencia con candado sin permiso');
+  run(`accionFicha(JL,{dataset:{accion:'g-licencia'}}); formLicencia(JL,pjLic);`);
+  ok(run(`modalLic === '' && pedidos.length === 0`), '⟲ sin permiso tampoco abre el formulario por acción directa');
+  run(`JL.g.mios.acciones=['licencia']; accionFicha(JL,{dataset:{accion:'g-licencia'}});`);
+  ok(run(`herramientasHtml(JL,pjLic).includes('data-accion="g-licencia"')
+      && herramientasHtml(JL,pjLic).includes('#i-star') && modalLic.includes('Actual: <b>Luna</b>')
+      && ['Ninguna','Estrella','Luna','Sol'].every(t=>modalLic.includes('>'+t+'</option>'))
+      && modalLic.includes('value="luna" selected') && !modalLic.includes('Jugador <5>')`),
+    'Licencia asignada: estrella, actual y cuatro opciones escapadas');
+  run(`selectLic.value='luna'; clickLic();`);
+  ok(run(`errorLic.textContent === 'Elija una licencia distinta.' && !confirmacionLic && !pedidos.length`),
+    '⟲ elegir la misma licencia no confirma ni envía');
+  run(`selectLic.value='inventada'; clickLic();`);
+  ok(run(`!confirmacionLic && !pedidos.length`), '⟲ una licencia inventada no se envía');
+  for (const licencia of ['ninguna', 'estrella', 'luna', 'sol']) {
+    run(`pjLic.licencia=${JSON.stringify(licencia === 'luna' ? 'sol' : 'luna')};
+      confirmacionLic=null; formLicencia(JL,pjLic); selectLic.value=${JSON.stringify(licencia)};
+      proxima={ok:true,d:{antes:pjLic.licencia,despues:${JSON.stringify(licencia)}}};`);
+    const antes = run('pedidos.length');
+    run('clickLic();');
+    ok(run(`pedidos.length === ${antes} && confirmacionLic.ok === 'Cambiar la licencia'
+      && confirmacionLic.txt.includes('Antes:') && confirmacionLic.txt.includes('Ahora:')`),
+      `${licencia}: pide confirmación antes de enviar`);
+    await run('confirmacionLic.alAceptar()');
+    ok(run(`pedidos.length === ${antes + 1} && pedidos.at(-1).ruta === 'gestion'
+      && pedidos.at(-1).cuerpo.juego === 'r2beat2013' && pedidos.at(-1).cuerpo.entorno === 'live'
+      && pedidos.at(-1).cuerpo.ruta === 'usuario/5/licencia'
+      && pedidos.at(-1).cuerpo.cuerpo.licencia === ${JSON.stringify(licencia)}
+      && avisoLic.t === 'Licencia cambiada'
+      && avisoLic.sub.includes('Antes: '+licenciaTxt(pjLic.licencia)+' · Ahora: '+licenciaTxt(${JSON.stringify(licencia)}))`),
+      `${licencia}: contrato correcto y resultado antes/ahora del servidor`);
+  }
+  ok(run(`recargasLic === 4 && ACC_TXT['gestión · licencia'][0] === 'cambió la licencia'
+      && AUD_TXT.licencia === 'cambió la licencia'
+      && audDet({accion:'licencia',detalle:{antes:'luna',despues:'sol'}}) === 'Luna → Sol'`),
+    'Tras cambiar relee la ficha; ambas auditorías nombran la licencia y sus valores');
+  run(`formLicencia(JL,pjLic); selectLic.value='estrella'; clickLic(); JL.g.mios.acciones=[];`);
+  await run('confirmacionLic.alAceptar()');
+  ok(run(`pedidos.length === 4 && recargasLic === 4`), '⟲ permiso retirado antes de confirmar: no envía');
+  run(`JL.g.mios={rol:'admin',acciones:['licencia']}; formLicencia(JL,pjLic); selectLic.value='estrella';
+      clickLic(); proxima={ok:false,status:400,d:{error:'Licencia rechazada'}};`);
+  await run('confirmacionLic.alAceptar()');
+  ok(run(`avisoLic.tipo === 'err' && avisoLic.sub === 'Licencia rechazada' && recargasLic === 4`),
+    '⟲ ADMIN abre licencia; rechazo muestra el error y no anuncia éxito');
+
+  ok(run(`conexionesHtml(JL,{}) === '' && conexionesHtml(JL,{ips:[],misma_ip:[]}) === ''
+      && conexionesHtml(JL,{ips:[{pais:'PE'}]}) === ''`), 'Sin IPs ni derivados no hay caja vacía ni texto de IP oculta');
+  ok(run(`conexionesHtml(JL,{ips:[{ip:'192.0.2.5',pais:'PE',veces:1,ultima:1}],misma_ip:[{uid:7,nick:'Jugador7'}]}).includes('192.0.2.5')
+      && conexionesHtml(JL,{misma_ip:[{uid:7,nick:'Jugador7'}]}).includes('Comparten su IP')`),
+    '⟲ los datos autorizados muestran IP y personajes que la comparten');
+  run(`JL.g.con={filas:[{uid:5,nick:'Jugador5',estado:'lobby',pais:'PE'}]};`);
+  ok(run(`!filasConectados(JL).includes('class="g-ip"') && !filasConectados(JL).includes('misma IP')`),
+    'R2Beat sin IP: conectados sin hueco ni contador');
+  run(`const JCip={jid:'gunbound',env:'live',g:nuevoG({tipo:'contrato1',acciones:[]})};
+      JCip.g.con={filas:[{id:'5',nick:'Jugador5',pais:'PE'}]};`);
+  ok(run(`!filasConectadosC(JCip).includes('class="g-ip"')`), 'Contrato1 sin IP: conectados sin hueco');
+  run(`proxima={ok:true,d:{sesiones:[{inicio:1,fin:2}]}};`);
+  await run(`abrirDia(JL,'2026-11-23')`);
+  ok(run(`!diaLic.innerHTML.includes('<span></span>') && !diaLic.innerHTML.includes('oculta')
+      && diaLic.innerHTML.includes('Cuándo entró')`), 'Sesiones sin IP: conserva horarios sin texto vacío');
+  run(`proxima={ok:true,d:{sesiones:[{inicio:1,fin:2,ip:'192.0.2.5',pais:'PE'}]}};`);
+  await run(`abrirDia(JL,'2026-11-23')`);
+  ok(run(`diaLic.innerHTML.includes('PE 192.0.2.5')`), '⟲ sesiones autorizadas muestran país e IP');
   process.stdout.write(`\n✔ probar_paginas_panel: ${controles} controles, 0 fallas\n`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

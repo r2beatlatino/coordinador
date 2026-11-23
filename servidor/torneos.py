@@ -18,6 +18,7 @@ CÓMO
 QUIÉN PUEDE
 - Ver: el que ve ese juego (ADMIN, o el moderador que lo tiene asignado). A un moderador no le llega nada privado
   (IP, login…: `gestion._limpiar`), y cada «quien» le llega como en la auditoría (su nombre o «ADMIN», nunca un login).
+  A los ADMIN se les sacan las IP, salvo si su Eñeños-ID está en R2_VEN_IPS.
 - Manejar (todo POST): ADMIN, o el MODERADOR con ese juego asignado Y la acción asignable «torneos»
   (`gestion.ASIGNABLES`, la asigna un ADMIN en «Permisos» del equipo). El de formato viejo (sin juegos) sólo mira.
 ⛔ Todo cambio queda en DOS auditorías: la del Coordinador («torneos · <acción>») y la del panel viejo del juego.
@@ -171,7 +172,7 @@ def leer(CO, P, viewer, jid, entorno):
     if cod != 200:
         out["sin_servidor"] = d.get("error") or f"El servidor del juego contestó {cod}."
         return 200, out
-    out["servidor"] = d if admin else _para_moderador(CO, P, d)
+    out["servidor"] = (d if GE.puede_ver_ips(P, viewer) else GE._sin_ips(d)) if admin else _para_moderador(CO, P, d)
     return 200, out
 
 
@@ -198,4 +199,6 @@ def accion(CO, P, viewer, d):
         P._auditar(viewer, f"torneos · {acc}", None, pase, _detalle(acc, cuerpo))
     if P.rol_de(viewer) != "admin":
         r = _para_moderador(CO, P, r)
+    elif not GE.puede_ver_ips(P, viewer):
+        r = GE._sin_ips(r)
     return cod, r

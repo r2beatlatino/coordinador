@@ -67,6 +67,8 @@ services:
       #   volumen, en /datos/panel_arte/ (documentacion/PANEL_COORDINADOR.md).
       R2_PANEL_URL: ${R2_PANEL_URL:-}
       R2_PANEL_SALUD: ${R2_PANEL_SALUD:-}
+      # IPs del panel: sólo ADMIN incluidos por Eñeños-ID; vacía = nadie.
+      R2_VEN_IPS: ${R2_VEN_IPS:-}
     volumes:
       - cuentas_datos:/datos
       # ⚠ ETAPA 0 y migración inicial: lee `datos.db` de R2Beat en etapa 0, o una sola vez al importar a `cuentas.db`

@@ -42,7 +42,7 @@ Por eso el panel no recibe la vuelta: la recibe Cuenta Eñeños, y le pasa al pa
 
 | rol | dónde | qué ve | qué toca |
 |---|---|---|---|
-| **admin** | `admin.txt` (a mano) | todo | todo + «Moderadores y permisos» |
+| **admin** | `admin.txt` (a mano) | todo, con la excepción de privacidad de IPs (§2.2) | todo + «Moderadores y permisos» |
 | **moderador con juegos** | `moderadores.txt`: `uid juego1,juego2` | sólo sus juegos (tarjetas, personas, invitaciones, lanzamientos, auditoría) | aprobar, quitar, **banear y desbanear por juego**, decidir invitaciones — sólo en sus juegos |
 | **moderador formato viejo** | `moderadores.txt`: `uid` (sin lista) | todos los juegos (como hasta hoy) | aprobar y quitar (como hasta hoy: «sin banear») |
 
@@ -109,6 +109,37 @@ auditoría los ADMIN, la consola y lo interno salen «ADMIN»), el nombre de la 
 nombre real), las cuentas con rol (ni en el buscador ni en la ficha), IPs, correos (no se guardan) ni nada de la
 contraseña. Busca por Eñeños-ID, por Ñ2-ID o por el login **exacto** (el admin, por el comienzo del login).
 
+### 2.2 · IPs y datos derivados (23-nov-2026)
+
+**Por omisión nadie ve IPs, tampoco ADMIN.** `R2_VEN_IPS` es una lista de Eñeños-ID numéricos separados por coma.
+Sólo habilita a cuentas que **además sean ADMIN**; un moderador listado no obtiene acceso. Si una cuenta figura
+en ambas listas de roles, vale su rol efectivo ADMIN. Entradas inválidas se ignoran; vacía o ausente = nadie.
+No poner cuentas reales en el repo: configurar esta lista sólo en el entorno del servicio `cuentas`.
+
+El filtro se aplica en el servidor, recursivamente, a respuestas de gestión R2Beat y contrato1 (conectados,
+búsqueda, ficha, historia, día/sesiones, chat, alertas y todas las acciones), tanto éxitos como errores. También
+a consultas y cambios de torneos. Quita `ip`, `ips`, `login`, `username`, `geoip`, correos y datos de IP compartida
+(`misma_ip`, `comparte_ip`, variantes y **sus contadores**); en contrato1 quita pares `{nombre, valor}` rotulados
+como IP/login. El país independiente puede seguir visible. El panel omite las IPs y «Comparten su IP» cuando
+no llegan, sin poner «oculta» ni dejar una caja vacía. Los nombres de autores de auditoría mantienen las reglas
+de cada rol. El panel chico del portero no publica IPs ni sesiones de terceros.
+
+`gestion.puede_ver_ips` lee `os.environ` **en cada pedido**, sin caché de la lista. Cambiar una variable en el
+entorno de otra consola o editar un `.env` no modifica un proceso ya iniciado: en systemd requiere reiniciar
+`cuentas`; en Docker Compose, recrear sólo `cuentas` para incorporar el nuevo entorno. No alcanza con
+`docker compose restart`. El compose y `ejemplo.env` incluyen `R2_VEN_IPS` vacía por omisión.
+
+### 2.3 · Licencia en Dar y cambiar (R2Beat 2013)
+
+«Cambiar la licencia» muestra la actual y permite elegir **Ninguna · Estrella · Luna · Sol**, con confirmación
+y resultado «Antes: Luna · Ahora: Sol». ADMIN puede cambiarla; un moderador necesita el juego y el permiso
+asignable `licencia` (sin cupo), con el mismo candado que las demás acciones. El Coordinador envía
+`POST usuario/<id>/licencia {"licencia": "ninguna"|"estrella"|"luna"|"sol"}` al juego; el juego guarda su máscara
+acumulativa 0/1/3/7. Cada éxito se audita como `gestión · licencia` («cambió la licencia»). No se asigna a contrato1.
+
+Pruebas: `pruebas/probar_gestion.py`, `pruebas/probar_torneos.py` y `pruebas/probar_paginas_panel.js` (con sus
+controles al revés de permisos, lista y ausencia de datos privados).
+
 ## 3 · Las rutas (en Cuenta Eñeños; Caddy del dominio del panel les antepone `/coordinador`)
 
 | ruta | qué |
@@ -155,6 +186,7 @@ juego. En el repo sólo van el logo de Eñeños Team y las fuentes (OFL / Apache
 |---|---|---|
 | `R2_PANEL_URL` | `cuentas` | la lista blanca de destinos: `https://coordinador.xn--eeos-gqab.link` (coma entre varios). Vacía = nadie entra |
 | `R2_PANEL_SALUD` | `cuentas` | `gunbound=http://gunbound:8371/salud;gunbound-prueba=http://gunbound-prueba:9371/gunbound-prueba/salud` (si están en la misma red de Docker) |
+| `R2_VEN_IPS` | `cuentas` | Eñeños-ID con coma; sólo ADMIN listados reciben IPs y datos privados de gestión/torneos; vacía = nadie (§2.2) |
 | `R2_PANEL_ARTE` | `cuentas` | opcional: otra carpeta para el arte |
 | `R2_JUEGOS_CATALOGO` | `cuentas` | opcional: otro `juegos.json` (la imagen trae el del repo en `/app/juegos.json`) |
 | `WEB_COORDINADOR_NOMBRE` | `web` (Caddy) | `coordinador.xn--eeos-gqab.link` |

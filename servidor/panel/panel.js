@@ -351,6 +351,7 @@ const ACC_TXT = { aprobar: ['aprobó a', 'check', 'verde'], quitar: ['le quitó 
   'gestión · rcoin': ['cambió el Rcoin de un jugador', 'coins', 'oro'], 'gestión · exp': ['cambió la EXP de un jugador', 'sparkle', 'oro'],
   'gestión · item/dar': ['le dio un ítem a un jugador', 'gift', 'rosa'], 'gestión · item/quitar': ['le quitó un ítem a un jugador', 'gift', ''],
   'gestión · apodo': ['cambió el apodo de un jugador', 'user', 'cian'], 'gestión · gorila': ['cambió las monedas gorila de un jugador', 'coins', 'oro'],
+  'gestión · licencia': ['cambió la licencia', 'star', 'oro'],
   'gestión · moneda': ['cambió las monedas de un jugador', 'coins', 'oro'],
   'torneos · crear': ['creó un torneo', 'trophy', 'oro'], 'torneos · editar': ['editó un torneo', 'trophy', ''], 'torneos · estado': ['cambió el estado de un torneo', 'trophy', 'rosa'],
   'torneos · fijar_hora': ['fijó la hora de un torneo', 'clock', 'cian'], 'torneos · resultado': ['cargó un resultado', 'sword', 'oro'], 'torneos · reiniciar': ['reinició un cruce', 'refresh', ''],
@@ -1872,7 +1873,7 @@ function filasConectadosC(J) {
     const enlace = ID_C.test(String(x.id)) ? `<a href="${urlPj(J, x.id)}">${esc(x.nick || x.id)}</a>` : esc(x.nick || x.id);
     return `<li><span class="g-pt vivo" aria-hidden="true"></span>${ava(x.nick || '?', 'redondo')}
       <div class="t"><b>${enlace}</b><span>${esc(lugarDe(x))}${x.enenos_id != null ? ` · Eñeños-ID ${esc(x.enenos_id)}` : ''}</span></div>
-      ${x.ip ? `<span class="g-ip" title="Conexión (sólo la ve un ADMIN)">${esc(x.ip)}</span>` : ''}
+      ${x.ip ? `<span class="g-ip" title="Conexión">${esc(x.ip)}</span>` : ''}
       ${min != null ? `<span class="g-desde" title="Conectado hace ${fmtDur(min)}">${ic('clock', 's14')}${fmtDur(min)}</span>` : ''}</li>`;
   }).join('');
 }
@@ -2251,6 +2252,7 @@ function herramientasHtml(J, f) {
       ${fila('item/dar', 'g-item-dar', 'gift', 'Dar un ítem')}
       ${fila('gorila', 'g-moneda', 'coins', 'Monedas gorila', '', 'data-k="gorila"')}
       ${fila('apodo', 'g-apodo', 'user', 'Cambiar el apodo')}
+      ${fila('licencia', 'g-licencia', 'star', 'Cambiar la licencia', licActual(f) ? `<small>Actual: ${esc(licenciaTxt(licActual(f)))}</small>` : '')}
     </ul></section>`;
 }
 function venceItem(x) {
@@ -2271,8 +2273,9 @@ function inventarioHtml(J, f) {
       : '<p class="caja-cuerpo tenue g-nada">No tiene ítems.</p>'}</section>`;
 }
 function conexionesHtml(J, f) {
-  const ips = f.ips || [], otros = f.misma_ip || [];
-  return `<section class="caja" aria-labelledby="gTIp"><div class="caja-cab"><h3 id="gTIp">${ic('wifi', 's16')}Conexiones</h3><span class="sub">sólo lo ve un ADMIN</span></div>
+  const ips = (f.ips || []).filter(x => x.ip), otros = f.misma_ip || [];
+  if (!ips.length && !otros.length) return '';
+  return `<section class="caja" aria-labelledby="gTIp"><div class="caja-cab"><h3 id="gTIp">${ic('wifi', 's16')}Conexiones</h3></div>
     <div class="caja-cuerpo g-ips">${ips.length ? ips.slice(0, 5).map(x => `<div><b>${esc(x.pais || '—')}</b> ${esc(x.ip)} <span class="tenue">· ${x.veces} ${x.veces === 1 ? 'vez' : 'veces'} · última ${haceSeg(x.ultima)}</span></div>`).join('') : '<span class="tenue">Sin conexiones guardadas.</span>'}
       ${otros.length ? `<div class="g-misma"><span class="lab">Comparten su IP</span><div class="chips">${otros.map(o => `<a class="chip oro" href="${urlPj(J, o.uid)}">${ic('users', 's14')}${esc(o.nick)}</a>`).join('')}</div></div>` : ''}</div></section>`;
 }
@@ -2280,6 +2283,7 @@ const AUD_TXT = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'le dio un ítem', 'it
   echar: 'lo desconectó', mute: 'le sacó el chat', desmute: 'le devolvió el chat', ban: 'lo baneó', desban: 'lo desbaneó', licencia: 'cambió la licencia', clave: 'cambió la contraseña', aviso: 'le mandó un aviso' };
 function audDet(a) {
   const d = a.detalle || {};
+  if (a.accion === 'licencia' && d.antes != null && d.despues != null) return `${esc(licenciaTxt(d.antes))} → ${esc(licenciaTxt(d.despues))}`;
   if (d.antes != null && d.despues != null) return `${miles(d.antes)} → ${miles(d.despues)}`;
   if (d.horas) return `${d.horas} h${d.motivo ? ` · «${esc(d.motivo)}»` : ''}`;
   if (d.nombre) return esc(d.nombre);
@@ -2459,7 +2463,7 @@ async function abrirDia(J, fecha) {
     ${car.length ? `<div><span class="lab">Sus carreras</span><div class="g-tabla-caja"><table class="t compacta"><thead><tr><th>Hora</th><th>Sala</th><th class="der">Duró</th><th class="der">EXP</th></tr></thead>
       <tbody>${car.map(x => `<tr class="${x.rara ? 'marca-raro' : ''}"><td class="num">${hora(x.inicio)}</td><td>${esc(x.sala_nombre || '—')}${x.modo ? ` <span class="tenue">· ${esc(x.modo)}</span>` : ''}</td><td class="der num">${x.seg ? fmtDur(x.seg / 60) : '—'}</td><td class="der num">${x.exp == null ? '—' : miles(x.exp)}</td></tr>`).join('')}</tbody></table></div></div>`
       : d.desglosado === false ? '<p class="tenue g-nota">Ese día el servidor todavía no anotaba cada carrera.</p>' : ''}
-    ${ses.length ? `<div><span class="lab">Cuándo entró</span><ul class="lista">${ses.map(s => `<li><div class="t"><b>${hora(s.inicio)} a ${s.fin ? hora(s.fin) : s.abierta ? 'ahora' : '—'}</b><span>${s.exp != null ? `${miles(s.exp)} de EXP` : ''}${s.ip ? ` · ${esc(s.pais || '')} ${esc(s.ip)}` : ''}</span></div></li>`).join('')}</ul></div>` : ''}`;
+    ${ses.length ? `<div><span class="lab">Cuándo entró</span><ul class="lista">${ses.map(s => `<li><div class="t"><b>${hora(s.inicio)} a ${s.fin ? hora(s.fin) : s.abierta ? 'ahora' : '—'}</b>${s.exp != null || s.ip ? `<span>${s.exp != null ? `${miles(s.exp)} de EXP` : ''}${s.ip ? `${s.exp != null ? ' · ' : ''}${s.pais ? `${esc(s.pais)} ` : ''}${esc(s.ip)}` : ''}</span>` : ''}</div></li>`).join('')}</ul></div>` : ''}`;
 }
 
 /* ══════════════ las ACCIONES sobre un personaje ══════════════ */
@@ -2498,6 +2502,7 @@ function accionFicha(J, a) {
   if (k === 'g-moneda') return formMoneda(J, f, a.dataset.k);
   if (k === 'g-item-dar') return formItem(J, f);
   if (k === 'g-apodo') return formApodo(J, f);
+  if (k === 'g-licencia' && puedeG(J, 'licencia')) return formLicencia(J, f);
   if (k === 'g-item-quitar') {
     const it = (f.inventario || []).find(x => Number(x.id) === Number(a.dataset.item)); if (!it) return;
     return confirmar({ titulo: `¿Quitarle «${esc(it.nombre)}»?`, icono: 'x', ok: 'Quitar',
@@ -2594,6 +2599,33 @@ function formApodo(J, f) {
     if (!r.ok) { $('#apErr', pn).textContent = (r.d && r.d.error) || `Error ${r.status}`; return; }
     cerrarCapa();
     trasAccion(J, f.uid, r, `Ahora se llama ${esc(apodo)}`, r.d.echado ? 'Se lo desconectó para guardar.' : '');
+  });
+}
+const LICENCIAS = [['ninguna', 'Ninguna'], ['estrella', 'Estrella'], ['luna', 'Luna'], ['sol', 'Sol']];
+// el server 2013 manda "" cuando no tiene ninguna (con licencia_mascara 0)
+const licActual = f => f.licencia || (f.licencia_mascara != null ? 'ninguna' : '');
+const licenciaTxt = v => (LICENCIAS.find(([k]) => k === String(v || '').toLowerCase()) || ['', String(v || 'Sin datos')])[1];
+function formLicencia(J, f) {
+  if (!puedeG(J, 'licencia')) return;
+  f = Object.assign({}, f, { licencia: licActual(f) });
+  const pn = abrirCapa(`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="liTit">
+    <div class="modal-cab"><span class="ic">${ic('star', 's20')}</span><div><h2 id="liTit">Cambiar la licencia</h2><p>${esc(f.nick)} · Actual: <b>${esc(licenciaTxt(f.licencia))}</b></p></div></div>
+    <div class="modal-cuerpo"><label class="campo"><span>Licencia nueva</span><select id="liV" autofocus>${LICENCIAS.map(([v, t]) => `<option value="${v}"${v === f.licencia ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <div id="liErr" style="color:var(--red);font-size:12.5px;margin-top:8px"></div></div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="liOk">Continuar</button></div></div>`);
+  $('#liOk', pn).addEventListener('click', () => {
+    if (!puedeG(J, 'licencia')) return;
+    const licencia = $('#liV', pn).value;
+    if (!LICENCIAS.some(([v]) => v === licencia) || licencia === f.licencia) {
+      $('#liErr', pn).textContent = 'Elija una licencia distinta.'; return;
+    }
+    confirmar({ titulo: `¿Cambiar la licencia de ${esc(f.nick)}?`, icono: 'star', peligro: false, ok: 'Cambiar la licencia',
+      txt: `Antes: <b>${esc(licenciaTxt(f.licencia))}</b> · Ahora: <b>${esc(licenciaTxt(licencia))}</b>`,
+      alAceptar: async () => {
+        if (!puedeG(J, 'licencia')) return;
+        const r = await gPost(J, `usuario/${f.uid}/licencia`, { licencia });
+        trasAccion(J, f.uid, r, 'Licencia cambiada', r.ok ? `Antes: ${esc(licenciaTxt(r.d.antes))} · Ahora: ${esc(licenciaTxt(r.d.despues))}` : '');
+      } });
   });
 }
 function formItem(J, f) {
@@ -2842,7 +2874,7 @@ async function pintarMisPermisos() {
   /* ★ contrato: los nombres de las monedas los dice cada juego */
   await Promise.all(js.filter((j, i) => rs[i].ok && rs[i].d.tipo === 'contrato1' && (rs[i].d.acciones || []).includes('moneda')).map(capDeJuego));
   if (!$('#misPermisosG')) return;
-  const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', gorila: 'monedas gorila', chat: 'leer el chat guardado', moneda: 'dar o quitar monedas', torneos: 'manejar los torneos' };
+  const nom = { rcoin: 'Rcoin', exp: 'EXP', 'item/dar': 'dar ítems', 'item/quitar': 'quitar ítems', apodo: 'cambiar apodos', licencia: 'cambiar la licencia', gorila: 'monedas gorila', chat: 'leer el chat guardado', moneda: 'dar o quitar monedas', torneos: 'manejar los torneos' };
   c.innerHTML = js.map((j, i) => { const r = rs[i]; if (!r.ok || !r.d.gestionable) return '';
     const ex = r.d.acciones.filter(a => nom[a]), cu = r.d.cupos || {}, contrato = r.d.tipo === 'contrato1';
     const cupoTxt = a => (a === 'moneda' ? (ms => (ms.length ? ` (le quedan ${ms.join('; ')})` : ' (sin cupo todavía)'))(Object.keys(cu).filter(k => k.startsWith('moneda:') && cu[k].cupo).map(k => `${esc(nomMonedaJuego(j, k.slice(7)))}: ${miles(cu[k].queda)} de ${miles(cu[k].cupo)}`))

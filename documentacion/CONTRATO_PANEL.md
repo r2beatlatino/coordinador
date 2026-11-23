@@ -41,7 +41,9 @@
   persona con sus personajes en todos los juegos.
 - `capacidades.acciones` lista SÓLO lo implementado (p. ej. `["ver", "aviso", "moneda"]`). Una ruta no implementada
   responde **404**.
-- `ip` sólo si el juego la tiene; el Coordinador se la saca a los moderadores.
+- `ip` sólo si el juego la tiene; el Coordinador la entrega sólo a ADMIN incluidos por Eñeños-ID en `R2_VEN_IPS`.
+  Vacía o ausente = nadie. El filtro también quita logins, geoip y datos de IP compartida (incluidos contadores),
+  en cualquier nivel y en pares `{nombre, valor}` rotulados como IP/login; conserva el país independiente.
 - Nada de contraseñas, hashes, correos ni claves en ninguna respuesta.
 
 ## Del lado del Coordinador

@@ -16,7 +16,8 @@ CÓMO
 - CUPOS: por moderador y por juego, en `portero.db` (`permisos_juego`). Se RESERVA antes de mandar (atómico: nunca
   pasa del cupo aunque mande dos a la vez) y se DEVUELVE si el juego dice que no. El moderador sólo SUMA o RESTA
   («poner» un valor fijo es de ADMIN: podría saltarse el cupo). Restar no gasta cupo.
-- PRIVACIDAD: a un moderador nunca le llega una IP, un login ni con quién comparte IP (`_SIN_PRIVADOS`).
+- PRIVACIDAD: las IP y lo derivado de ellas sólo para ADMIN incluidos en R2_VEN_IPS (vacía = nadie).
+  A un moderador nunca le llegan, aunque figure en la lista (`_SIN_PRIVADOS`).
 - ★ 20-nov (Eñeños: «GunBound y EDA… haz ambos a la vez; cuando maduren se editarán sus secciones»): DOS TIPOS de
   servidor. «r2beat» = el panel viejo de R2Beat (`RUTAS`). «contrato1» = el CONTRATO común de los juegos nuevos
   (`documentacion/CONTRATO_PANEL.md`, `RUTAS_CONTRATO1`): capacidades, salud, conectados, buscar, ficha, aviso,
@@ -47,6 +48,7 @@ ASIGNABLES = {
     "item/dar": ("Dar ítems", None),
     "item/quitar": ("Quitar ítems", None),
     "apodo": ("Cambiar el apodo", None),
+    "licencia": ("Cambiar la licencia", None),
     "gorila": ("Monedas gorila", None),
     "chat": ("Leer el chat público guardado", None),
     "moneda": ("Dar o quitar monedas del juego", "moneda"),     # ★ contrato1: con cupo por moneda
@@ -56,7 +58,7 @@ ASIGNABLES = {
 RED = "_red"                       # la «fila» de los permisos de toda la red (la cuenta Eñeños, no un juego)
 ASIGNABLES_RED = ("clave",)
 # lo que se puede asignar en cada tipo de servidor
-ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "gorila", "chat", "torneos"),
+ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "licencia", "gorila", "chat", "torneos"),
                  "contrato1": ("moneda",)}
 _MONEDA_ID = re.compile(r"^[a-z0-9_]{1,20}$")
 CUPOS = ("rcoin", "exp")
@@ -85,6 +87,7 @@ RUTAS = [
     ("POST", rf"usuario/{_N}/item/dar", "item/dar"),
     ("POST", rf"usuario/{_N}/item/quitar", "item/quitar"),
     ("POST", rf"usuario/{_N}/apodo", "apodo"),
+    ("POST", rf"usuario/{_N}/licencia", "licencia"),
     ("POST", rf"usuario/{_N}/gorila", "gorila"),
 ]
 _RUTAS = [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS]
@@ -101,6 +104,9 @@ RUTAS_CONTRATO1 = [
 ]
 _RUTAS_DE = {"r2beat": _RUTAS, "contrato1": [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS_CONTRATO1]}
 _SIN_PRIVADOS = frozenset({"ip", "ips", "login", "username", "misma_ip", "comparte_ip", "correo", "email", "geoip"})
+# ★ 23-nov (Eñeños: «que nadie pueda ver las IP… sólo yo»): a un ADMIN fuera de R2_VEN_IPS se le sacan SÓLO las IP
+#   y lo que sale de ellas (misma_ip, comparte_ip…: todo campo con «ip» como palabra). Login y correo los sigue viendo.
+_SOLO_IPS = frozenset({"ip", "ips", "geoip"})
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS permisos_juego (
@@ -208,8 +214,34 @@ def personajes_launcher(uid, jid, entorno="live"):
                 or (p["nivel"] is not None and (type(p["nivel"]) is not int or p["nivel"] < 0))
                 or type(p["conectado"]) is not bool):
             return fallo
-        personajes.append({k: p[k] for k in campos})
+        fila = {k: p[k] for k in campos}
+        if "apariencia" in p:
+            fila["apariencia"] = _apariencia(p["apariencia"])
+        personajes.append(fila)
     return 200, {"ok": True, "personajes": personajes, "maximo": maximo}
+
+
+def _entero(v, hasta=2 ** 31 - 1):
+    return type(v) is int and 0 <= v <= hasta
+
+
+def _apariencia(a):
+    """★ 23-nov: lo que lleva puesto el personaje, para el MUÑECO del launcher (como el del R2Beat 2013).
+    Sólo pasan estos campos y estos tipos; si algo no cierra, null (el launcher muestra el arte en vez del muñeco)."""
+    if not isinstance(a, dict) or not _entero(a.get("cuerpo")) or a.get("sexo") not in ("m", "f"):
+        return None
+    partes = a.get("partes")
+    if not isinstance(partes, list) or len(partes) > 32:
+        return None
+    limpias = []
+    for x in partes:
+        if not isinstance(x, dict) or not _entero(x.get("id")) or not (x.get("pestana") is None or _entero(x["pestana"])):
+            return None
+        limpias.append({"id": x["id"], "pestana": x.get("pestana")})
+    extra = {k: a.get(k) for k in ("mascota", "alas")}
+    if any(v is not None and not _entero(v) for v in extra.values()):
+        return None
+    return {"cuerpo": a["cuerpo"], "sexo": a["sexo"], "partes": limpias, **extra}
 
 
 def echar_de_los_juegos(eid, pases, quien, motivo=""):
@@ -243,12 +275,31 @@ def echar_de_los_juegos(eid, pases, quien, motivo=""):
     return out
 
 
-def _limpiar(v):
+def _sin_ips(v):
+    """Lo que ve un ADMIN que no está en R2_VEN_IPS: todo menos las IP (y lo derivado de ellas)."""
+    return _limpiar(v, _SOLO_IPS)
+
+
+def puede_ver_ips(P, viewer):
+    """Sólo ADMIN de la lista de Eñeños-ID. Se consulta el entorno en cada pedido."""
+    autorizados = {u.strip().lstrip("0") for u in (os.environ.get("R2_VEN_IPS") or "").split(",")
+                   if re.fullmatch(r"[0-9]+", u.strip())}
+    return P.rol_de(viewer) == "admin" and str(int(viewer)) in autorizados
+
+
+def _campo_privado(k, claves=_SIN_PRIVADOS):
+    return bool(claves.intersection(re.split(r"[^a-z0-9]+", str(k).lower())))
+
+
+def _limpiar(v, claves=_SIN_PRIVADOS):
     """Saca lo privado (IP, login…) de una respuesta, en cualquier nivel."""
     if isinstance(v, dict):
-        return {k: _limpiar(x) for k, x in v.items() if k not in _SIN_PRIVADOS}
+        # También variantes como ultima_ip, comparten_ip o misma_ip_total: ni el contador se entrega.
+        return {k: _limpiar(x, claves) for k, x in v.items() if not _campo_privado(k, claves)}
     if isinstance(v, list):
-        return [_limpiar(x) for x in v]
+        # contrato1 también muestra pares {nombre, valor} en campos/detalle.
+        return [_limpiar(x, claves) for x in v if not (isinstance(x, dict) and "valor" in x
+                                                       and _campo_privado(x.get("nombre", ""), claves))]
     return v
 
 
@@ -406,6 +457,8 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
         P._auditar(viewer, f"gestión · {accion}", None, pase, ruta[:120])
     if not admin:
         d = _limpiar(d)
+    elif not puede_ver_ips(P, viewer):
+        d = _sin_ips(d)
     if metodo == "POST" and k:
         d = dict(d, cupos=permisos(P, viewer, jid)["cupos"])
     return cod, d

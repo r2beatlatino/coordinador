@@ -114,6 +114,11 @@ try:
     os.environ.pop("R2_CUENTAS_UID_DESDE", None)
     os.environ.pop("R2_UID_NUEVAS_DESDE", None)
 
+    # Este caso prueba la aprobación anticipada: no depende de que siga pendiente el estreno real de EDA.
+    os.makedirs(os.path.join(tmp, "config"), exist_ok=True)
+    with open(os.path.join(tmp, "config", "lanzamientos.json"), "w", encoding="utf-8") as f:
+        json.dump({"eda": {"desde": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() + 86400))}}, f)
+
     from servidor import portero as pt
 
     print("1 · importar desde una datos.db vieja (Eñeños ID secuencial, traducción en portero.db, CSV)")

@@ -46,7 +46,8 @@ def ok(cond, que):
 FICHA = "ficha-de-prueba"
 TORNEOS = [{"id": 1, "nombre": "Copa de Navidad", "modo": "solo", "estado": "inscripcion", "cupo": 8,
             "horas": [{"t": 1798000000, "votos": 3}], "fecha": 1798000000, "info": "",
-            "inscritos": [{"id": 11, "nombre": "Kairo", "login": "kairo_secreto", "semilla": None}],
+            "inscritos": [{"id": 11, "nombre": "Kairo", "login": "kairo_secreto", "semilla": None,
+                           "ip": "192.0.2.11", "ips": ["192.0.2.11"], "misma_ip": 2}],
             "cruces": [], "podio": {"primero": None, "segundo": None, "tercero": None},
             "quien": "coordinador:jefa", "cambiado": 1797000000}]
 VISTO = []          # cada POST: {"cab": {...}, "cuerpo": {...}}
@@ -80,7 +81,7 @@ class Juego(BaseHTTPRequestHandler):
         if d.get("accion") == "resultado" and d.get("ganador") not in ("a", "b"):
             return self._mandar(400, {"error": "El ganador tiene que ser «a» o «b»."})
         if d.get("accion") == "reiniciar" and not d.get("forzar"):
-            return self._mandar(409, {"error": "Ese cruce ya tiene resultados más adelante.", "forzar": True})
+            return self._mandar(409, {"error": "Ese cruce ya tiene resultados más adelante.", "forzar": True, "torneos": TORNEOS})
         return self._mandar(200, {"ok": True, "torneos": TORNEOS})
 
 
@@ -106,6 +107,7 @@ os.environ.update({
     "R2_PANEL_TORNEOS": f"r2beat2013={URL_JUEGO};r2beat2013-prueba=http://127.0.0.1:9/api/interno/torneos",
     # (la gestión sólo hace falta para saber el TIPO de cada juego al asignar permisos: nadie la llama acá)
     "R2_PANEL_GESTION": "r2beat2013=http://127.0.0.1:9/api/interno/panel;gunbound=contrato1:http://127.0.0.1:9/interno/panel",
+    "R2_VEN_IPS": "",
 })
 for k in ("R2_PANEL_SALUD", "R2_PRESENCIA", "R2_DISCORD_EVENTOS_WEBHOOK", "R2_JUEGOS_CATALOGO", "R2_UID_NUEVAS_DESDE",
           "R2_PANEL_CONTENIDO"):
@@ -146,8 +148,8 @@ print("1 · ver los torneos")
 cod, d = callado(TO.leer, CO, P, JEFA, "r2beat2013", "live")
 ok(cod == 200 and d["con_fuente"] and d["puede"] and d["es_admin"] and d["servidor"]["torneos"][0]["id"] == 1,
    f"la ADMIN ve los torneos de R2Beat PROD y puede manejarlos ({cod})")
-ok(d["servidor"]["torneos"][0]["inscritos"][0].get("login") == "kairo_secreto"
-   and d["servidor"]["torneos"][0]["quien"] == "coordinador:jefa", "a la ADMIN le llega todo (también el «quien» tal cual)")
+ok("ip" not in d["servidor"]["torneos"][0]["inscritos"][0] and d["servidor"]["torneos"][0]["inscritos"][0].get("login")
+   and d["servidor"]["torneos"][0]["quien"] == "coordinador:jefa", "ADMIN sin lista: sin IP (sí el login); «quien» conserva la auditoría")
 cod, d = callado(TO.leer, CO, P, MR2, "r2beat2013", "live")
 ok(cod == 200 and d["puede"] and d["servidor"]["torneos"][0]["inscritos"][0]["nombre"] == "Kairo",
    f"el moderador de R2Beat con «torneos» los ve y puede manejarlos ({cod})")
@@ -266,6 +268,28 @@ for mala in ("borrar_todo", "", None, "CREAR"):
 for a in TO.ACCIONES:
     mandar(JEFA, accion=a, torneo=1, ronda=0, idx=0, ganador="a", forzar=True)
 ok([v["cuerpo"]["accion"] for v in VISTO[n:]] == list(TO.ACCIONES), f"las {len(TO.ACCIONES)} del contrato viajan")
+
+print("8 · privacidad en torneos: consultas, cambios y errores")
+for lista in (None, "", str(MR2), str(JEFA)):
+    if lista is None:
+        os.environ.pop("R2_VEN_IPS", None)
+    else:
+        os.environ["R2_VEN_IPS"] = lista
+    for viewer in (JEFA, MR2):
+        for metodo in ("GET", "POST", "ERROR"):
+            if metodo == "GET":
+                cod, r = callado(TO.leer, CO, P, viewer, "r2beat2013", "live")
+                datos = r["servidor"]
+            else:
+                cod, datos = callado(TO.accion, CO, P, viewer,
+                                     {"juego": "r2beat2013", "entorno": "live", "accion": "reiniciar" if metodo == "ERROR" else "editar", "torneo": 1})
+            fila = datos["torneos"][0]["inscritos"][0]
+            permitido = viewer == JEFA and lista == str(JEFA)
+            ok(cod == (409 if metodo == "ERROR" else 200)
+               and all((k in fila) == permitido for k in ("ip", "ips", "misma_ip"))
+               and ("login" in fila) == (viewer == JEFA),        # el login: todo ADMIN; un moderador nunca
+               f"torneos {metodo}: {'ADMIN' if viewer == JEFA else 'moderador'}, lista {lista!r}: {'con' if permitido else 'sin'} privados")
+os.environ["R2_VEN_IPS"] = ""
 
 juego_srv.shutdown()
 P.cerrar_conexiones()

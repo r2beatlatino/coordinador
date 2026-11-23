@@ -128,6 +128,22 @@ with tempfile.TemporaryDirectory(prefix="personajes_") as tmp:
                "sexo f también se acepta")
             ok(respuesta({"personajes": [], "maximo": 0}) == (200, {"ok": True, "personajes": [], "maximo": 0}),
                "sin personajes: lista vacía válida")
+            # ★ 23-nov: la apariencia (el muñeco del launcher) pasa limpia; si no cierra, null — nunca tira el 502
+            ap = {"cuerpo": 130900, "sexo": "m", "partes": [{"id": 310565, "pestana": 302}], "mascota": None, "alas": None}
+            r = respuesta({"personajes": [dict(personaje, apariencia=dict(ap, secreto="x"))], "maximo": 4})
+            ok(r[0] == 200 and r[1]["personajes"][0]["apariencia"] == ap, "apariencia válida pasa, sin campos de más")
+            r = respuesta({"personajes": [dict(personaje, apariencia=dict(ap, partes=[{"id": 1, "pestana": 2, "x": 3}]))],
+                           "maximo": 4})
+            ok(r[0] == 200 and r[1]["personajes"][0]["apariencia"]["partes"] == [{"id": 1, "pestana": 2}],
+               "⟲ una parte con campos de más llega sólo con id y pestana")
+            for malo in (None, "x", dict(ap, cuerpo="130900"), dict(ap, sexo="M"), dict(ap, partes={}),
+                         dict(ap, partes=[{"id": -1, "pestana": 302}]), dict(ap, partes=[{"id": 1}] * 33),
+                         dict(ap, mascota="perro"), dict(ap, alas=True)):
+                r = respuesta({"personajes": [dict(personaje, apariencia=malo)], "maximo": 4})
+                ok(r[0] == 200 and r[1]["personajes"][0]["apariencia"] is None,
+                   f"⟲ apariencia inválida ({str(malo)[:30]}…): null, el resto llega")
+            r = respuesta({"personajes": [personaje], "maximo": 4})
+            ok("apariencia" not in r[1]["personajes"][0], "⟲ sin apariencia en el server: la clave no aparece")
     finally:
         P.cerrar_conexiones()
 
