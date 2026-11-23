@@ -560,11 +560,14 @@ def persona(P, viewer, uid, ahora=None):
         for pase, entorno in pases_de(P, j["id"]):
             ban = P.baneo_vigente(uid, pase, ahora)                 # ★ 20-nov: sólo el que HOY cuenta
             apr = p.execute("SELECT desde FROM aprobados WHERE uid = ? AND juego = ?", (uid, pase)).fetchone()
+            at = p.execute("SELECT faltas FROM antitrampa_faltas WHERE uid = ? AND juego = ?", (uid, pase)).fetchone()
+            faltas_at = int(at["faltas"]) if at and int(at["faltas"] or 0) > 0 else 0
             pases.append({"pase": pase, "entorno": entorno, "nombre": P._juegos()[pase]["nombre"],
                           "abierto": bool(P._juegos()[pase]["abierto"]), "aprobada": bool(apr), "baneada": bool(ban),
                           "motivo": (ban["motivo"] or "") if ban else "", "permitido": P.permitido(uid, pase, ahora),
                           **({"hasta": P.datos_baneo(ban, ahora)["hasta"],
-                              "restante_seg": P.datos_baneo(ban, ahora)["restante_seg"]} if ban else {})})
+                              "restante_seg": P.datos_baneo(ban, ahora)["restante_seg"]} if ban else {}),
+                          **({"antitrampa_faltas": faltas_at} if faltas_at > 0 else {})})
         inv = None
         if j["id"] in tabla:
             f = LZ._ultima(P, uid, j["id"])
@@ -685,18 +688,23 @@ def baneos(P, viewer, ahora=None):
     ahora = int(time.time() if ahora is None else ahora)
     admin = _es_admin(P, viewer)
     admins_login = {P._login_de(u) for u in P.admins()} - {None}
-    filas = P._propia().execute("SELECT uid, juego, desde, quien, motivo, hasta FROM baneos "
-                                "WHERE hasta IS NULL OR hasta > ? ORDER BY hasta IS NULL, hasta, desde DESC LIMIT 500",
-                                (ahora,)).fetchall()
+    p = P._propia()
+    filas = p.execute("SELECT uid, juego, desde, quien, motivo, hasta FROM baneos "
+                      "WHERE hasta IS NULL OR hasta > ? ORDER BY hasta IS NULL, hasta, desde DESC LIMIT 500",
+                      (ahora,)).fetchall()
     out = []
     for f in filas:
         if not P.puede_en(viewer, f["juego"]):
             continue
         if not admin and P.rol_de(f["uid"]) is not None:
             continue
+        at = p.execute("SELECT faltas FROM antitrampa_faltas WHERE uid = ? AND juego = ?",
+                       (int(f["uid"]), f["juego"])).fetchone()
+        faltas_at = int(at["faltas"]) if at and int(at["faltas"] or 0) > 0 else 0
         g = dict({"uid": int(f["uid"]), "persona": _nombre(P, f["uid"]), "pase": f["juego"],
                   "juego": juego_de_pase(P, f["juego"]), "nombre": P._juegos().get(f["juego"], {}).get("nombre", f["juego"]),
-                  "desde": f["desde"], "quien": _quien_para(P, f["quien"], admin, admins_login)}, **P.datos_baneo(f, ahora))
+                  "desde": f["desde"], "quien": _quien_para(P, f["quien"], admin, admins_login),
+                  **({"antitrampa_faltas": faltas_at} if faltas_at > 0 else {})}, **P.datos_baneo(f, ahora))
         if admin:
             g["usuario"] = P._login_de(f["uid"]) or ""
         out.append(g)
@@ -757,6 +765,8 @@ def _quien_para(P, quien, admin, admins_login):
     q = str(quien or "")
     if admin:
         return q
+    if q == "antitrampa":
+        return "antitrampa"
     if q in admins_login or q.startswith(("consola", "interno", "uid ")):
         return "ADMIN"
     r = P._cuentas().execute("SELECT uid FROM cuentas WHERE usuario = ? COLLATE BINARY", (q,)).fetchone()
@@ -772,7 +782,7 @@ def auditoria(P, viewer, limite=60):
     for f in filas:
         if not admin:
             # ★ 20-nov fase C: también lo que se hizo desde la gestión de SUS juegos («gestión · rcoin»…)
-            de_gestion = str(f["accion"] or "").startswith(("gestión · ", "torneos · "))   # ★ y los torneos
+            de_gestion = str(f["accion"] or "").startswith(("gestión · ", "torneos · ", "antitrampa · "))   # ★ y los torneos / antitrampa
             if (f["accion"] not in MOVIMIENTOS and not de_gestion) or not f["juego"] or not P.puede_en(viewer, f["juego"]):
                 continue
             if f["uid"] and P.rol_de(f["uid"]) is not None:

@@ -92,6 +92,7 @@ VARIABLES
     R2_CUENTAS_UID_DESDE desde qué uid se numeran las cuentas NUEVAS (por omisión `UID_NUEVAS_DESDE` = 10.000.000)
     R2_CUENTAS_FICHA_INTERNA  ficha compartida para el pedido interno `GET /cuentas/interno/cuenta/<uid>` ->
                          `{uid, usuario, estado}` (sin esta variable, ese pedido no existe)
+    R2_ANTITRAMPA_BANEO_EN  en qué falta del antitrampa se banea por juego (por omisión 3; 0 = nunca banea)
 """
 import base64
 import hashlib
@@ -269,6 +270,8 @@ CREATE TABLE IF NOT EXISTS aprobados (uid INTEGER NOT NULL, juego TEXT NOT NULL,
                                       PRIMARY KEY (uid, juego));
 CREATE TABLE IF NOT EXISTS baneos    (uid INTEGER NOT NULL, juego TEXT NOT NULL, desde TEXT, quien TEXT, motivo TEXT,
                                       hasta INTEGER, PRIMARY KEY (uid, juego));
+CREATE TABLE IF NOT EXISTS antitrampa_faltas (uid INTEGER NOT NULL, juego TEXT NOT NULL, faltas INTEGER NOT NULL DEFAULT 0,
+                                      ultima_regla TEXT, ultima TEXT, PRIMARY KEY (uid, juego));
 CREATE TABLE IF NOT EXISTS sesiones  (huella TEXT PRIMARY KEY, uid INTEGER NOT NULL, creada INTEGER, vence INTEGER,
                                       ip TEXT);
 CREATE TABLE IF NOT EXISTS pases     (jti TEXT PRIMARY KEY, uid INTEGER, juego TEXT, emitido INTEGER, ip TEXT);
@@ -852,6 +855,98 @@ def enlaces_internos(ficha_dada=""):
     return 200, {"cuentas": [{"usuario": r["usuario"], "uid": int(r["uid"])} for r in filas]}
 
 
+_REGLA_ANTITRAMPA = re.compile(r"^[a-z0-9_]{1,40}\Z")
+
+
+def _antitrampa_baneo_en():
+    """En qué falta banea el antitrampa (`R2_ANTITRAMPA_BANEO_EN`, entero; por omisión 3; 0 = nunca banea)."""
+    v = (os.environ.get("R2_ANTITRAMPA_BANEO_EN") or "").strip()
+    if v == "":
+        return 3
+    if v.isdigit():
+        return int(v)
+    return 3
+
+
+def _limpiar_txt_at(valor, tope):
+    txt = "".join(ch for ch in str(valor or "") if ord(ch) >= 32 and not (127 <= ord(ch) <= 159))
+    return txt.strip()[:tope]
+
+
+def antitrampa_interna(datos, ficha_dada, ahora=None):
+    """POST interno `/cuentas/interno/antitrampa` `{enenos_id, juego, regla, detalle, nick}` ->
+    `{"ok": true, "faltas": n, "escalon": "expulsado"|"advertencia"|"baneo", "baneada": bool}`.
+    El servidor del juego sólo detecta y avisa; el Coordinador lleva la cuenta por `(uid, juego)` y banea en `baneos`
+    (permanente, sólo en ese juego) al llegar a `R2_ANTITRAMPA_BANEO_EN` (0 = nunca banea)."""
+    err = _verificar_ficha_interna(ficha_dada)
+    if err:
+        return err
+    if not isinstance(datos, dict):
+        return 400, {"error": "Pedido mal armado."}
+    raw_uid = datos.get("enenos_id")
+    if isinstance(raw_uid, (bool, float)):
+        return 400, {"error": "Cuenta inválida."}
+    try:
+        uid = int(raw_uid)
+    except (TypeError, ValueError):
+        return 400, {"error": "Cuenta inválida."}
+    if uid <= 0:
+        return 400, {"error": "Cuenta inválida."}
+    juego = datos.get("juego")
+    if not isinstance(juego, str):
+        return 400, {"error": "Juego inválido."}
+    juego = juego.strip()
+    if juego not in _juegos():
+        return 400, {"error": "Juego desconocido."}
+    regla = datos.get("regla")
+    if not isinstance(regla, str) or not _REGLA_ANTITRAMPA.match(regla):
+        return 400, {"error": "Regla inválida."}
+    detalle = _limpiar_txt_at(datos.get("detalle"), 200)
+    nick = _limpiar_txt_at(datos.get("nick"), 24)
+    if not _cuentas().execute("SELECT 1 FROM cuentas WHERE uid = ?", (uid,)).fetchone():
+        return 404, {"error": "Esa cuenta no existe."}
+    cuando = _ahora_txt() if ahora is None else time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ahora))
+    baneo_en = _antitrampa_baneo_en()
+    with _escribir:
+        c = _propia()
+        c.execute(
+            "INSERT INTO antitrampa_faltas (uid, juego, faltas, ultima_regla, ultima) "
+            "VALUES (?, ?, 1, ?, ?) "
+            "ON CONFLICT(uid, juego) DO UPDATE SET "
+            "faltas = faltas + 1, ultima_regla = excluded.ultima_regla, ultima = excluded.ultima",
+            (uid, juego, regla, cuando),
+        )
+        faltas = int(c.execute(
+            "SELECT faltas FROM antitrampa_faltas WHERE uid = ? AND juego = ?",
+            (uid, juego),
+        ).fetchone()["faltas"])
+        if baneo_en > 0 and faltas >= baneo_en:
+            escalon, baneada = "baneo", True
+        elif baneo_en > 0 and faltas == baneo_en - 1:
+            escalon, baneada = "advertencia", False
+        else:
+            escalon, baneada = "expulsado", False
+        motivo = f"Antitrampa: {regla} ({faltas}.ª falta)"
+        if baneada:
+            c.execute(
+                "INSERT OR REPLACE INTO baneos (uid, juego, desde, quien, motivo, hasta) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (uid, juego, cuando, "antitrampa", motivo, None),
+            )
+        c.commit()
+    partes_det = [f"{regla} ({faltas}.ª falta)"]
+    if nick:
+        partes_det.append(nick)
+    if detalle:
+        partes_det.append(detalle)
+    det_txt = " · ".join(partes_det)
+    _auditar("antitrampa", "antitrampa · falta", uid, juego, det_txt)
+    if baneada:
+        _auditar("antitrampa", "antitrampa · baneo", uid, juego, f"permanente · {motivo}")
+    _log(f"antitrampa uid={uid} juego={juego} regla={regla} faltas={faltas} escalon={escalon}")
+    return 200, {"ok": True, "faltas": faltas, "escalon": escalon, "baneada": baneada}
+
+
 def usuario_interno(usuario, ficha_dada):
     """GET interno por nombre EXACTO (`Junior` != `junior`) -> `{uid, usuario, estado}` o 404.
     ⛔ Nunca devuelve nada de la contraseña."""
@@ -1329,10 +1424,14 @@ def admin_salir(token):
 
 
 def _auditar(uid_admin, accion, uid, juego, detalle):
+    if isinstance(uid_admin, str) and not uid_admin.isdigit():
+        quien = uid_admin
+    else:
+        quien = _login_de(uid_admin) or f"uid {uid_admin}"
     with _escribir:
         c = _propia()
         c.execute("INSERT INTO auditoria (cuando, quien, accion, uid, juego, detalle) VALUES (?, ?, ?, ?, ?, ?)",
-                  (_ahora_txt(), _login_de(uid_admin) or f"uid {uid_admin}", accion, uid, juego, str(detalle)[:200]))
+                  (_ahora_txt(), quien, accion, uid, juego, str(detalle)[:200]))
         c.commit()
 
 
@@ -1515,6 +1614,8 @@ def admin_desbanear(uid_admin, uid, pases, ahora=None):
         tocados = [p for p in pases if c.execute(
             "UPDATE baneos SET hasta = ? WHERE uid = ? AND juego = ? AND (hasta IS NULL OR hasta > ?)",
             (ahora, uid, p, ahora)).rowcount]
+        for p in tocados:
+            c.execute("UPDATE antitrampa_faltas SET faltas = 0 WHERE uid = ? AND juego = ?", (uid, p))
         c.commit()
     for p in pases:
         _auditar(uid_admin, "desbanear", uid, p, "" if p in tocados else "no estaba baneada")
@@ -1788,6 +1889,8 @@ class _Manejador(BaseHTTPRequestHandler):
                 return self._post_admin(p, d)
             if p and p[0] == CO.PREFIJO:                             # ★ 19-nov: el panel del Coordinador
                 return CO.atender(sys.modules[__name__], self, "POST", p[1:], d)
+            if p == ["interno", "antitrampa"]:
+                return self._mandar(*antitrampa_interna(d, self._ficha_interna()))
             if p == ["interno", "cuenta"]:
                 return self._mandar(*admin_interno_crear(
                     d.get("usuario"), d.get("pass_sha256_upper"), self._ficha_interna()))
@@ -2195,8 +2298,10 @@ def consola(args):
             resto = resto_aud
         else:                                # (desbanear: vence ahora; la fila queda como historial)
             ya = int(time.time())
-            c.execute("UPDATE baneos SET hasta = ? WHERE uid = ? AND juego = ? AND (hasta IS NULL OR hasta > ?)",
-                      (ya, uid, juego, ya))
+            cur = c.execute("UPDATE baneos SET hasta = ? WHERE uid = ? AND juego = ? AND (hasta IS NULL OR hasta > ?)",
+                            (ya, uid, juego, ya))
+            if cur.rowcount:
+                c.execute("UPDATE antitrampa_faltas SET faltas = 0 WHERE uid = ? AND juego = ?", (uid, juego))
         c.execute("INSERT INTO auditoria (cuando, quien, accion, uid, juego, detalle) VALUES (?, ?, ?, ?, ?, ?)",
                   (_ahora_txt(), f"consola ({quien})", orden, uid, juego, resto[:200]))
         c.commit()

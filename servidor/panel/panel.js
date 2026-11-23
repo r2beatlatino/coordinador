@@ -356,7 +356,8 @@ const ACC_TXT = { aprobar: ['aprobó a', 'check', 'verde'], quitar: ['le quitó 
   'torneos · crear': ['creó un torneo', 'trophy', 'oro'], 'torneos · editar': ['editó un torneo', 'trophy', ''], 'torneos · estado': ['cambió el estado de un torneo', 'trophy', 'rosa'],
   'torneos · fijar_hora': ['fijó la hora de un torneo', 'clock', 'cian'], 'torneos · resultado': ['cargó un resultado', 'sword', 'oro'], 'torneos · reiniciar': ['reinició un cruce', 'refresh', ''],
   'torneos · cancion': ['eligió la canción de un cruce', 'music', 'cian'], 'torneos · jugando': ['marcó un cruce en juego', 'play', 'rosa'], 'torneos · tercero': ['marcó el tercer puesto', 'trophy', 'oro'],
-  'torneos · quitar': ['quitó a un inscrito', 'x', ''] };
+  'torneos · quitar': ['quitó a un inscrito', 'x', ''],
+  'antitrampa · falta': ['detectó una falta de', 'alert', 'oro'], 'antitrampa · baneo': ['baneó por antitrampa a', 'ban', 'rojo'] };
 /* ★ fase C: «usuario/101/rcoin» -> «personaje #101 · rcoin» */
 const detGestion = d => esc(String(d || '').replace(/^usuario\/(\d+)\/?/, 'personaje #$1 · ').replace(/ · $/, ''));
 function tlItem(a) {
@@ -535,8 +536,9 @@ function pintarPersona(p) {
     if (puede('quitar') && x.aprobada) botones.push(`<button type="button" class="btn chico fantasma" data-accion="persona-accion" data-acc="quitar" data-pase="${esc(x.pase)}">${ic('x', 's14')}Quitar aprobación</button>`);
     if (puede('banear') && !x.baneada) botones.push(`<button type="button" class="btn chico fantasma" data-accion="persona-accion" data-acc="banear" data-pase="${esc(x.pase)}">${ic('ban', 's14')}Banear</button>`);
     if (puede('desbanear') && x.baneada) botones.push(`<button type="button" class="btn chico" data-accion="persona-accion" data-acc="desbanear" data-pase="${esc(x.pase)}">${ic('check', 's14')}Desbanear</button>`);
+    const atFaltas = Number(x.antitrampa_faltas) > 0 ? ` · <span class="tenue">Antitrampa: ${esc(x.antitrampa_faltas)} ${Number(x.antitrampa_faltas) === 1 ? 'falta' : 'faltas'}</span>` : '';
     return `<li><span class="etq-env ${x.entorno === 'test' ? 'test' : 'live'}">${x.entorno === 'extra' ? 'OTRO' : ENV_TXT[x.entorno]}</span>
-      <div class="t"><b>${esc(x.nombre)}</b><span>${x.permitido ? '<span style="color:var(--green)">Puede entrar</span>' : '<span style="color:var(--red)">No puede entrar</span>'}${x.abierto ? (!x.permitido && !x.baneada ? ' · todavía no abrió (lanzamiento): sólo el equipo y las aprobadas' : ' · para toda cuenta activa') : ' · sólo aprobadas'}${x.aprobada ? ' · aprobada' : ''}${x.baneada ? ` · <b style="color:var(--red)">baneada</b> <span style="color:var(--gold)">(${venceTxt(x.restante_seg)})</span>${x.motivo ? ` «${esc(x.motivo)}»` : ''}` : ''}</span></div>
+      <div class="t"><b>${esc(x.nombre)}</b><span>${x.permitido ? '<span style="color:var(--green)">Puede entrar</span>' : '<span style="color:var(--red)">No puede entrar</span>'}${x.abierto ? (!x.permitido && !x.baneada ? ' · todavía no abrió (lanzamiento): sólo el equipo y las aprobadas' : ' · para toda cuenta activa') : ' · sólo aprobadas'}${x.aprobada ? ' · aprobada' : ''}${x.baneada ? ` · <b style="color:var(--red)">baneada</b> <span style="color:var(--gold)">(${venceTxt(x.restante_seg)})</span>${x.motivo ? ` «${esc(x.motivo)}»` : ''}` : ''}${atFaltas}</span></div>
       <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${botones.join('')}</span></li>`;
   };
   raiz.innerHTML = barraHub('red') + `<main class="hub" id="contenido">

@@ -141,6 +141,28 @@ acumulativa 0/1/3/7. Cada éxito se audita como `gestión · licencia` («cambi�
 Pruebas: `pruebas/probar_gestion.py`, `pruebas/probar_torneos.py` y `pruebas/probar_paginas_panel.js` (con sus
 controles al revés de permisos, lista y ausencia de datos privados).
 
+### 2.4 · Antitrampa centralizado (23-nov-2026)
+
+El antitrampa de cada servidor de juego sólo **detecta, expulsa y avisa** al Coordinador; el que cuenta las faltas y
+**banea** es el Coordinador (un solo lugar para todos los baneos):
+
+- **Ruta interna:** `POST /cuentas/interno/antitrampa` (o `/interno/antitrampa`), con `X-R2: 1` y la ficha interna
+  `R2_CUENTAS_FICHA_INTERNA` (`Authorization: Bearer …` o `X-Ficha-Interna`). Recibe
+  `{"enenos_id": int, "juego": str, "regla": str, "detalle": str, "nick": str}` y devuelve
+  `{"ok": true, "faltas": n, "escalon": "expulsado"|"advertencia"|"baneo", "baneada": bool}`.
+- **Tabla `antitrampa_faltas`** en `portero.db` (`(uid, juego)` como clave): lleva el contador de faltas por cuenta y
+  servidor.
+- **Escalera** (`R2_ANTITRAMPA_BANEO_EN`, por omisión `3`; `0` = nunca banea): `< BANEO_EN-1` → `"expulsado"`;
+  `== BANEO_EN-1` → `"advertencia"`; `>= BANEO_EN` → `"baneo"` (inserta en `baneos` sólo en ese `juego`, permanente,
+  con `quien = "antitrampa"` y motivo `Antitrampa: <regla> (<n>.ª falta)`).
+- **Auditoría:** registra siempre `antitrampa · falta` y, al banear, `antitrampa · baneo`.
+- **Desbanear borra las faltas:** levantar el baneo desde el panel (`admin_desbanear`) o por consola deja
+  `antitrampa_faltas.faltas = 0` en ese juego, así la siguiente detección vuelve a empezar en 1.
+- **En el panel:** en la ficha de la persona («Permisos por juego»), cada servidor con faltas > 0 muestra
+  `Antitrampa: N falta(s)`; si llegó al baneo, aparece en `baneos` con autor `antitrampa` y su motivo, y se desbanea
+  desde ahí como cualquier otro baneo.
+- Prueba: `pruebas/probar_antitrampa_coordinador.py`.
+
 ## 3 · Las rutas (en Cuenta Eñeños; Caddy del dominio del panel les antepone `/coordinador`)
 
 | ruta | qué |
@@ -188,6 +210,7 @@ juego. En el repo sólo van el logo de Eñeños Team y las fuentes (OFL / Apache
 | `R2_PANEL_URL` | `cuentas` | la lista blanca de destinos: `https://coordinador.xn--eeos-gqab.link` (coma entre varios). Vacía = nadie entra |
 | `R2_PANEL_SALUD` | `cuentas` | `gunbound=http://gunbound:8371/salud;gunbound-prueba=http://gunbound-prueba:9371/gunbound-prueba/salud` (si están en la misma red de Docker) |
 | `R2_VEN_IPS` | `cuentas` | Eñeños-ID con coma; sólo ADMIN listados reciben las IP (y lo derivado) en gestión/torneos; vacía = nadie (§2.2) |
+| `R2_ANTITRAMPA_BANEO_EN` | `cuentas` | cuántas faltas del antitrampa banean en ese juego (entero; por omisión `3`; `0` = nunca banea) (§2.4) |
 | `R2_PANEL_ARTE` | `cuentas` | opcional: otra carpeta para el arte |
 | `R2_JUEGOS_CATALOGO` | `cuentas` | opcional: otro `juegos.json` (la imagen trae el del repo en `/app/juegos.json`) |
 | `WEB_COORDINADOR_NOMBRE` | `web` (Caddy) | `coordinador.xn--eeos-gqab.link` |
