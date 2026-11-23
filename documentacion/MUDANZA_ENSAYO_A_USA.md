@@ -97,6 +97,8 @@ necesario para nuestro dueño de cuentas».
   (quién da los pases, que el ensayo ya no usa Chile, las claves de la lista). CI 4/4 verde. Lo aprueban ellos.
 - **La tarea** `herramientas/contenedores/usa/eda_ensayo.sh` → `/opt/enenos/eda_ensayo.sh`, en
   `/etc/cron.d/enenos-eda-ensayo` cada 5 min, con el MISMO candado que el actualizador de prod (`/tmp/eda-prod.lock`).
+  ★ 23-nov: `2-59/5 * * * * root flock -w 180 /tmp/eda-prod.lock bash /opt/enenos/eda_ensayo.sh` — 2 min después del
+  de prod y ESPERANDO el candado. Con `*/5` y `flock -n` perdía siempre y no corrió del 22 al 23-nov.
   Su log está en `/opt/enenos/eda_ensayo.log`.
   1. Cuando cambia `/opt/eda/manifiesto/eda.json`, rearma la lista del ensayo: los mismos archivos, con `servidor` y
      `canje` del ensayo. La firma con la clave de EDA del VPS, dentro de un contenedor descartable de `eda-server:prod`

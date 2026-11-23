@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # ★ 18-nov — el EDA del ENSAYO sigue a PROD solo (Eñeños: «que eda ensayo use el mismo repo que usa el viejo
-#   launcher», «su trabajo manda»). Corre en el VPS de USA, cada 5 min (/etc/cron.d/enenos-eda-ensayo), con el MISMO
+#   launcher», «su trabajo manda»). Corre en el VPS de USA, cada 5 min (/etc/cron.d/enenos-eda-ensayo:
+#   ★ 23-nov «2-59/5 … flock -w 180 /tmp/eda-prod.lock»: con «*/5» y «flock -n» perdía SIEMPRE contra el actualizador
+#   de prod y no corrió del 22 al 23-nov — la dll de develop no llegaba a la lista de prueba), con el MISMO
 #   candado que el actualizador de prod (no arma mientras prod hace `git reset` en /opt/eda/prod).
 #
 #   1. LA LISTA DEL CLIENTE: cuando cambia /opt/eda/manifiesto/eda.json (lo que publica EDA), arma la del ensayo con
