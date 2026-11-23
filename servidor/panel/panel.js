@@ -932,15 +932,24 @@ function ponerPagina(J, d) {
 function edPagina(J) {
   const P = J.borr.pagina, ro = !puedeJc(J, 'pagina') || J.publicando;
   if (!P) return `<section class="caja"><div class="caja-cuerpo">${errBox(J.err.pagina)}<button class="btn" data-accion="jc-pg-recargar">Recargar página</button></div></section>`;
+  const presentacion = P.presentacion || { titulo: '', texto: '', arte: '1' }, voces = P.voces || [];
   const campo = (lab, k, v, max, i = '') => `<label class="lc-campo"><span class="lab">${lab}</span><input class="lc-in" data-jc="pg-${k}" data-i="${i}" maxlength="${max}" value="${esc(v)}"${dis(ro)}></label>`;
   const quitar = (tipo, i) => `<button class="btn chico" data-accion="jc-pg-quitar" data-t="${tipo}" data-i="${i}"${dis(ro)}>Quitar</button>`;
-  const lista = (titulo, tipo, limite, filas) => `<section class="caja"><div class="caja-cab"><h3>${titulo}</h3><span class="sub">${P[tipo].length}/${limite}</span></div><div class="caja-cuerpo jc-cfg pg-cfg">${filas}<button class="btn chico" data-accion="jc-pg-agregar" data-t="${tipo}"${dis(ro || P[tipo].length >= limite)}>Agregar</button></div></section>`;
+  const lista = (titulo, tipo, limite, filas) => `<section class="caja"><div class="caja-cab"><h3>${titulo}</h3><span class="sub">${(P[tipo] || []).length}/${limite}</span></div><div class="caja-cuerpo jc-cfg pg-cfg">${filas}<button class="btn chico" data-accion="jc-pg-agregar" data-t="${tipo}"${dis(ro || (P[tipo] || []).length >= limite)}>Agregar</button></div></section>`;
   return `${errBox(J.err.pagina)}<section class="caja"><div class="caja-cab"><h3>${ic('mega', 's16')}Banner</h3><span class="sub">${J.pagina.publicada ? 'Publicado' : 'Sin página publicada'}</span></div>
     <div class="caja-cuerpo jc-cfg pg-cfg">${campo('Sello · hasta 24 caracteres', 'sello', P.banner.sello, 24)}${campo('Título · hasta 48 caracteres', 'titulo', P.banner.titulo, 48)}
     <p class="jc-nota">Todo es texto plano. Los cambios llegan al launcher al publicar esta parte.</p>
     <button class="btn chico" data-accion="jc-pg-recargar"${dis(J.publicando)}>Recargar página y descartar cambios</button></div></section>
+    <section class="caja"><div class="caja-cab"><h3>Presentación</h3></div><div class="caja-cuerpo jc-cfg pg-cfg">
+      ${campo('Título · hasta 60 caracteres', 'presentacion-titulo', presentacion.titulo, 60)}
+      <label class="lc-campo"><span class="lab">Texto · <span id="pgPresentacionCuenta">${esc(presentacion.texto.length)}</span>/1200 caracteres</span><textarea class="lc-in" data-jc="pg-presentacion-texto" maxlength="1200" rows="8"${dis(ro)}>${esc(presentacion.texto)}</textarea></label>
+      <p class="jc-nota">Una línea en blanco empieza un párrafo nuevo.</p>
+      <label class="lc-campo"><span class="lab">Arte</span><select class="lc-in" data-jc="pg-presentacion-arte"${dis(ro)}>${['1', '2', '3'].map(x => `<option value="${esc(x)}"${presentacion.arte === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+      <button id="pgQuitarPresentacion" class="btn chico" data-accion="jc-pg-sin-presentacion"${P.presentacion ? '' : ' hidden'}${dis(ro)}>Quitar presentación</button>
+    </div></section>
     ${lista('Cajas', 'cajas', 4, P.cajas.map((x, i) => `<div class="jc-cfg">${campo('Título · hasta 40 caracteres', 'caja-titulo', x.titulo, 40, i)}${campo('Texto · hasta 200 caracteres', 'caja-texto', x.texto, 200, i)}${quitar('cajas', i)}</div>`).join(''))}
     ${lista('Idiomas del selector', 'idiomas', 8, P.idiomas.map((x, i) => `<div class="lc-fila">${campo('ID · 2 a 8 letras a-z', 'idioma-id', x.id, 8, i)}${campo('Nombre · hasta 24 caracteres', 'idioma-nombre', x.nombre, 24, i)}${quitar('idiomas', i)}</div>`).join(''))}
+    ${lista('Voces del selector', 'voces', 8, voces.map((x, i) => `<div class="lc-fila">${campo('ID · 2 a 10 letras a-z', 'voz-id', x.id, 10, i)}${campo('Nombre · hasta 24 caracteres', 'voz-nombre', x.nombre, 24, i)}${quitar('voces', i)}</div>`).join(''))}
     <section class="caja"><div class="caja-cab"><h3>Borradores</h3></div><div class="caja-cuerpo jc-cfg pg-cfg">
       <p class="jc-nota">Importar sólo agrega borradores. Publicar una versión la lleva al historial y la marca como actual. Publique o descarte los cambios de esta página antes de importar o publicar una versión.</p>
       <button class="btn chico" data-accion="jc-pg-importar"${dis(ro || suciasJc(J).includes('pagina'))}>Importar de NOVEDADES.json</button>
@@ -958,6 +967,8 @@ function previaPagina(J) {
   if (!P) return '<p class="tenue">Sin página disponible.</p>';
   return `<div class="caja-cuerpo jc-cfg pg-cfg"><span class="chip">${esc(P.banner.sello)}</span><h2>${esc(P.banner.titulo)}</h2>
     <p>Versión actual: <b>${esc(P.version_actual) || '—'}</b></p><p>${P.idiomas.map(x => esc(x.nombre)).join(' · ')}</p>
+    ${P.presentacion ? `<article><h3>${esc(P.presentacion.titulo)}</h3><span class="chip">Arte ${esc(P.presentacion.arte)}</span>${P.presentacion.texto.split('\n\n').map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('')}</article>` : ''}
+    ${(P.voces || []).length ? `<p>Voces: ${P.voces.map(x => esc(x.nombre)).join(' · ')}</p>` : ''}
     ${P.cajas.map(x => `<article><h3>${esc(x.titulo)}</h3><p>${esc(x.texto)}</p></article>`).join('')}
     ${P.versiones.map(x => `<details${x.version === P.version_actual ? ' open' : ''}><summary>${esc(x.version)} · ${esc(x.fecha)}</summary>${detalleVersion(x)}</details>`).join('')}</div>`;
 }
@@ -986,7 +997,9 @@ function accionPagina(J, a) {
   }
   if (k === 'jc-pg-agregar' && tipo === 'cajas' && P.cajas.length < 4) P.cajas.push({ titulo: '', texto: '' });
   else if (k === 'jc-pg-agregar' && tipo === 'idiomas' && P.idiomas.length < 8) P.idiomas.push({ id: '', nombre: '' });
-  else if (k === 'jc-pg-quitar' && ['cajas', 'idiomas', 'versiones'].includes(tipo)) {
+  else if (k === 'jc-pg-agregar' && tipo === 'voces' && (P.voces || []).length < 8) (P.voces ||= []).push({ id: '', nombre: '' });
+  else if (k === 'jc-pg-sin-presentacion') delete P.presentacion;
+  else if (k === 'jc-pg-quitar' && ['cajas', 'idiomas', 'voces', 'versiones'].includes(tipo)) {
     const quitada = P[tipo].splice(i, 1)[0];
     if (tipo === 'versiones' && quitada && P.version_actual === quitada.version) P.version_actual = (P.versiones[0] || {}).version || '';
   } else return;
@@ -1536,8 +1549,15 @@ function cambioJc(el, final) {
     if (J.publicando || !J.borr.pagina) return;
     const P = J.borr.pagina;
     if (k === 'pg-sello' || k === 'pg-titulo') P.banner[k.slice(3)] = v;
+    else if (['pg-presentacion-titulo', 'pg-presentacion-texto', 'pg-presentacion-arte'].includes(k)) {
+      const p = P.presentacion ||= { titulo: '', texto: '', arte: '1' };
+      p[k.slice(16)] = v;
+      const contador = $('#pgPresentacionCuenta'); if (contador) contador.textContent = String(p.texto.length);
+      const quitar = $('#pgQuitarPresentacion'); if (quitar) quitar.hidden = false;
+    }
     else if (k === 'pg-caja-titulo' || k === 'pg-caja-texto') P.cajas[i][k.slice(8)] = v;
     else if (k === 'pg-idioma-id' || k === 'pg-idioma-nombre') P.idiomas[i][k.slice(10)] = v;
+    else if (k === 'pg-voz-id' || k === 'pg-voz-nombre') P.voces[i][k.slice(7)] = v;
     cambioJ(); return;
   }
   const A = J.borr.asistencia, R = J.borr.ruleta, T = J.borr.tira;

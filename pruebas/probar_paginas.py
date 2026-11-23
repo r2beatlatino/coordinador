@@ -114,6 +114,8 @@ with tempfile.TemporaryDirectory(prefix="paginas_") as tmp:
         ok(cod == 200 and set(publica) == {"eda"} and set(publica["eda"]) == contrato,
            "guardar publica sólo el contrato en paginas.eda")
         ok(publica["eda"]["idiomas"] == PG.IDIOMAS_EDA, "EDA sin idiomas explícitos recibe es + en")
+        ok("presentacion" not in publica["eda"] and "voces" not in publica["eda"],
+           "EDA sin presentación ni voces conserva el contrato anterior")
         ok(pedir(path="/cuentas/lanzamientos")[1]["paginas"] == publica
            and pedir(path="/cuentas/coordinador/api/pagina?juego=eda")[0] == 200,
            "también funcionan los prefijos /cuentas del portero")
@@ -183,6 +185,40 @@ with tempfile.TemporaryDirectory(prefix="paginas_") as tmp:
         exceso("HTML en ítem", lambda p: p["versiones"][0].update(avisos=["<script>"]))
         exceso("HTML en caja", lambda p: p["cajas"][0].update(texto="<img>"))
         exceso("HTML en idioma", lambda p: p["idiomas"][0].update(nombre="<b>"))
+
+        print("3b · presentación y voces opcionales")
+        nueva = pagina()
+        nueva["presentacion"] = {"titulo": "Eñeñosbit 2027", "texto": "Primer párrafo.\r\nOtra línea.\r\n\r\nSegundo párrafo."}
+        nueva["voces"] = [{"id": "original", "nombre": "Original"}]
+        base_r2 = pedir(path="/coordinador/api/pagina?juego=r2beat-moderno")[1]["base"]
+        cod, _ = guardar(nueva, base=base_r2, juego="r2beat-moderno")
+        publicada = launcher()["r2beat-moderno"]
+        ok(cod == 200 and publicada["presentacion"] == {
+            "titulo": "Eñeñosbit 2027", "texto": "Primer párrafo.\nOtra línea.\n\nSegundo párrafo.", "arte": "1"}
+           and publicada["voces"] == nueva["voces"],
+           "presentación con párrafos, sin CR, arte por omisión y voz original llegan a lanzamientos")
+        v["presentacion"] = {"titulo": "t" * 60, "texto": "x" * 1200, "arte": "3"}
+        v["voces"] = [{"id": x, "nombre": "n" * 24} for x in
+                      ("es", "en", "fr", "pt", "de", "it", "original", "abcdefghij")]
+        ok(guardar(v)[0] == 200 and launcher()["eda"]["presentacion"] == v["presentacion"],
+           "presentación 60/1200, arte 3 y ocho voces (ID hasta 10) aceptan máximos exactos")
+        for campo, valor in (("texto", "<b>texto</b>"), ("texto", "x" * 1201), ("titulo", "x" * 61),
+                             ("titulo", "a\nb"), ("arte", "4"), ("arte", 1)):
+            exceso(f"presentación {campo} inválido {str(valor)[:25]!r}",
+                   lambda p, k=campo, x=valor: p["presentacion"].update({k: x}))
+        for control in ("\x00", "\t", "\x7f", "\x85", "\u200b"):
+            exceso(f"control en presentación {control!r}", lambda p, c=control: p["presentacion"].update(texto="a" + c + "b"))
+        exceso("presentación no es objeto", lambda p: p.update(presentacion=None))
+        for id_malo in ("ORIGINAL", "a", "abcdefghijk", "original\n", 123):
+            exceso(f"voz id inválido {id_malo!r}", lambda p, x=id_malo: p["voces"][0].update(id=x))
+        exceso("voces repetidas", lambda p: p["voces"].__setitem__(1, p["voces"][0]))
+        exceso("voces > 8", lambda p: p["voces"].append({"id": "zz", "nombre": "Z"}))
+        exceso("voz nombre > 24", lambda p: p["voces"][0].update(nombre="x" * 25))
+        exceso("HTML en voz", lambda p: p["voces"][0].update(nombre="<b>"))
+        exceso("voces no es lista", lambda p: p.update(voces=None))
+        sin_voces = dict(pagina(), voces=[])
+        ok(guardar(sin_voces)[0] == 200 and launcher()["eda"]["voces"] == []
+           and "presentacion" not in launcher()["eda"], "voces vacías explícitas y presentación ausente se respetan")
 
         print("4 · importar sin publicar, sin duplicados y con errores informados")
         ok(guardar(pagina())[0] == 200, "restablece una página pequeña")
@@ -266,7 +302,7 @@ with tempfile.TemporaryDirectory(prefix="paginas_") as tmp:
         datos = json.loads(ruta.read_text(encoding="utf-8"))
         datos["wolfteam"] = {"publicada": None, "borradores": [dict(version("futura"), importada=PG._ahora())]}
         ruta.write_text(json.dumps(datos), encoding="utf-8")
-        ok(set(launcher()) == {"eda"}, "⟲ un juego con sólo borradores no aparece en paginas")
+        ok(set(launcher()) == {"eda", "r2beat-moderno"}, "⟲ un juego con sólo borradores no aparece en paginas")
         antes = ruta.read_bytes()
         with patch.object(PG.os, "replace", side_effect=OSError("fallo de disco")):
             ok(guardar(pagina())[0] == 500 and ruta.read_bytes() == antes, "⟲ falla replace: no deja una publicación parcial")

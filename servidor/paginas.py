@@ -21,11 +21,14 @@ _lock = threading.RLock()
 IDIOMAS_EDA = [{"id": "es", "nombre": "Español"}, {"id": "en", "nombre": "English"}]
 
 
-def _texto(v, maximo, campo, vacio=True):
+def _texto(v, maximo, campo, vacio=True, multilinea=False):
+    if multilinea and isinstance(v, str):
+        v = v.replace("\r", "")
     if (not isinstance(v, str) or len(v) > maximo or (not vacio and not v.strip())
-            or any(c in "<>" or unicodedata.category(c).startswith("C") for c in v)):
+            or any(c in "<>" or (unicodedata.category(c).startswith("C")
+                                and not (multilinea and c == "\n")) for c in v)):
         raise ValueError(f"{campo}: texto plano, hasta {maximo} caracteres, sin controles ni < >.")
-    return v.strip()
+    return v if multilinea else v.strip()
 
 
 def _lista(v, maximo, campo):
@@ -75,6 +78,21 @@ def validar(v, jid):
         out["idiomas"].append({"id": x["id"], "nombre": _texto(x.get("nombre"), 24, "idioma nombre", False)})
     if len({x["id"] for x in out["idiomas"]}) != len(out["idiomas"]):
         raise ValueError("idiomas: ids repetidos.")
+    if "presentacion" in v:
+        p = v["presentacion"]
+        if not isinstance(p, dict) or p.get("arte", "1") not in ("1", "2", "3"):
+            raise ValueError("presentacion: título, texto y arte (1, 2 o 3).")
+        out["presentacion"] = {"titulo": _texto(p.get("titulo", ""), 60, "presentacion título"),
+                               "texto": _texto(p.get("texto", ""), 1200, "presentacion texto", multilinea=True),
+                               "arte": p.get("arte", "1")}
+    if "voces" in v:
+        out["voces"] = []
+        for x in _lista(v["voces"], 8, "voces"):
+            if not isinstance(x, dict) or not isinstance(x.get("id"), str) or not re.fullmatch(r"[a-z]{2,10}", x["id"]):
+                raise ValueError("voz id: de 2 a 10 letras minúsculas (a-z).")
+            out["voces"].append({"id": x["id"], "nombre": _texto(x.get("nombre"), 24, "voz nombre", False)})
+        if len({x["id"] for x in out["voces"]}) != len(out["voces"]):
+            raise ValueError("voces: ids repetidos.")
     return out
 
 

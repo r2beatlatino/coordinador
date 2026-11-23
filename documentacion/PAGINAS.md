@@ -4,9 +4,9 @@ El STAFF edita la página de EDA desde `#/j/eda/live/pagina`. La parte **Página
 aparece en PROD para los juegos del catálogo que no declaran una fuente propia en
 `R2_PANEL_CONTENIDO`. Los juegos con fuente conservan su editor actual.
 
-La página permite editar banner, cajas e idiomas, importar borradores de
+La página permite editar banner, presentación, cajas, idiomas y voces, importar borradores de
 `NOVEDADES.json`, publicar una versión y quitar versiones del historial. La vista
-previa usa los mismos datos del formulario. Los cambios de banner, cajas e idiomas
+previa usa los mismos datos del formulario. Los cambios de esos campos
 y las eliminaciones llegan al launcher con el botón superior **Publicar**.
 Antes de importar o publicar un borrador hay que publicar o descartar esos cambios.
 
@@ -38,6 +38,16 @@ caso en el log. `actualizada` la pone el servidor en UTC al publicar. EDA recibe
 Español (`es`) y English (`en`) cuando se omite `idiomas`; una lista explícita se
 respeta. Sin página no se crea una entrada EDA para los idiomas.
 
+`presentacion` es opcional: `{titulo, texto, arte}`. El título admite hasta 60
+caracteres y el texto hasta 1200. Sólo en ese texto se permiten saltos `\n`;
+`\n\n` empieza otro párrafo y se eliminan los `\r`. El arte es `"1"`, `"2"` o
+`"3"` (por omisión `"1"`). El panel muestra título, textarea con contador y
+selector de arte; **Quitar presentación** elimina la clave al publicar.
+`voces` es una lista opcional de hasta 8 objetos `{id, nombre}` sin IDs repetidos:
+el ID admite de 2 a 10 letras `a-z` (incluye `original`) y el nombre hasta 24
+caracteres. Ambas claves se omiten si no se enviaron; las voces ausentes equivalen
+a una lista vacía. EDA conserva sus valores anteriores.
+
 La importación usa `novedades_url` del catálogo (`juegos.json` en la raíz), timeout
 de 8 segundos y un máximo de descarga de 4 MiB. Acepta una lista raíz o un objeto
 con `versiones`. Omite `borrador: true`, valida cada entrada y devuelve
@@ -45,7 +55,7 @@ con `versiones`. Omite `borrador: true`, valida cada entrada y devuelve
 contra borradores y publicaciones; nunca publica por sí sola. La descarga se hace
 fuera del lock y la mezcla relee el estado vigente antes de guardarlo.
 
-El contrato usa texto plano, sin `<`, `>` ni controles, con los límites del
+El contrato usa texto plano, sin `<`, `>` ni controles (salvo los saltos indicados), con los límites del
 encargo. El historial se ordena por fecha descendente (versión como desempate),
 con hasta 10 entradas. Las cajas tienen hasta 4 entradas y los idiomas hasta 8.
 Sólo el POST de guardar página admite hasta 512 KiB para el historial completo y
@@ -57,3 +67,25 @@ HTML y controles, importación, publicación, bases viejas, dos guardados simult
 archivos rotos y fallo del reemplazo atómico, siempre con controles al revés.
 `node pruebas/probar_paginas_panel.js` verifica el flujo del editor y el escape
 del contenido ejecutando el JavaScript real con un DOM mínimo, sin dependencias.
+
+## Personajes de la cuenta en el launcher
+
+`GET /juego/r2beat-moderno/personajes?entorno=live|test` (también bajo `/cuentas`)
+requiere el Bearer de la sesión del launcher; sin sesión válida devuelve 401.
+El entorno por omisión es `live`; un entorno inválido devuelve 400. Otro juego
+devuelve 404. El UID siempre sale de la sesión: `enenos_id` del cliente se ignora.
+
+La fuente debe estar declarada en `R2_PANEL_GESTION` como `contrato1`, para el pase
+`r2beat-moderno` en live o `r2beat-moderno-prueba` en test. Sin esa fuente devuelve
+503. Se consulta `personajes` con `{enenos_id: uid}` mediante `gestion._http`,
+que incorpora la ficha interna, con actor `launcher:<uid>` y sin privilegios de admin.
+
+La respuesta pública es `{ok: true, personajes: [{id, nick, sexo, nivel, conectado}], maximo}`.
+Sólo pasan esos campos: ID entero, nick de hasta 24 caracteres, sexo `m`/`f`/`null`,
+nivel entero no negativo o `null` y conectado booleano. `maximo` es entero entre
+0 y 8 y limita la cantidad de personajes; los booleanos no cuentan como enteros.
+Una respuesta inválida o un fallo del servidor devuelve exclusivamente
+502 `{"error": "no pudimos traer tus personajes"}`.
+
+`pruebas/probar_personajes.py` usa sesiones reales y transporte interno inyectado
+para comprobar ambos entornos, aislamiento de cuentas, errores y límites del contrato.

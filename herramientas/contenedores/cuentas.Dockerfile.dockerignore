@@ -10,6 +10,7 @@
 !servidor/contenido.py
 !servidor/gestion.py
 !servidor/torneos.py
+!servidor/paginas.py
 !servidor/panel
 !juegos.json
 !servidor/portero_panel.html

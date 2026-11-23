@@ -31,6 +31,7 @@ LAS RUTAS (con o sin el prefijo `/cuentas`, para que Caddy pueda pasarlas como q
          (o {usuario, pass_sha256_upper}: el launcher ya calcula el hash, así la clave no viaja ni dentro del HTTPS)
     POST /pase {juego}     + Bearer      -> {pase, vence}            403 si no está aprobada o está baneada
     GET  /yo               + Bearer      -> {uid, juegos}
+    GET  /juego/<jid>/personajes?entorno=live|test + Bearer -> {ok, personajes, maximo}
     GET  /manifiesto/<juego> + Bearer    -> el manifest del cliente {version, base, files[path,size,md5]}
          ★ Eñeños (11-nov): «solo las aprobadas podrán descargar / jugar». Sin aprobación no hay manifest, o sea que el
          launcher no sabe QUÉ bajar ni DE DÓNDE: la `base` lleva un tramo secreto (`/files-eda/<release>-<azar>/`).
@@ -113,6 +114,7 @@ from . import vinculos as V          # ★ 16-nov: entrar / registrarse / vincul
 from . import social as SO           # ★ 16-nov: amigos, estado y chat de la plataforma
 from . import lanzamientos as LZ     # ★ 18-nov: cuándo se abre cada juego + invitaciones anticipadas (Discord)
 from . import coordinador as CO      # ★ 19-nov: el panel del Coordinador Eñeños (fase A: entrar, juegos, la red)
+from . import gestion as GE
 
 # ⚠ Este módulo NO se disfraza el `__file__` (ver CLAUDE.md §2): `RAIZ` es de verdad la carpeta de arriba de `servidor/`.
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1743,6 +1745,12 @@ class _Manejador(BaseHTTPRequestHandler):
                 if not uid:
                     return self._mandar(401, {"error": "Tienes que iniciar sesión."})
                 return self._mandar(200, {"uid": uid, "juegos": juegos_de(uid)})
+            if len(p) == 3 and p[0] == "juego" and p[2] == "personajes":
+                uid = sesion_de(self._token())
+                if not uid:
+                    return self._mandar(401, {"error": "Tienes que iniciar sesión."})
+                q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+                return self._mandar(*GE.personajes_launcher(uid, p[1], q.get("entorno", ["live"])[0]))
             if len(p) == 2 and p[0] == "manifiesto":
                 return self._mandar(*manifiesto(self._token(), p[1]))
             if p == ["interno", "enlaces"]:

@@ -33,6 +33,24 @@ function ok(cond, texto) {
 (async () => {
   ok(run(`tabsC(J).includes('pagina') && !suciasJc(J).length && J.borr.pagina.idiomas.map(x => x.id).join(',') === 'es,en'`),
     'Página inicia limpia, con idiomas EDA y pestaña propia');
+  ok(run(`!('presentacion' in J.borr.pagina) && !('voces' in J.borr.pagina)
+       && edPagina(J).includes('Presentación') && edPagina(J).includes('Voces del selector')
+       && /<textarea[^>]*data-jc="pg-presentacion-texto"[^>]*maxlength="1200"/.test(edPagina(J))
+       && !suciasJc(J).length`), 'renderizar los campos opcionales no cambia EDA ni agrega claves');
+  run(`const contador = {textContent:''};
+       document.querySelector = s => s === '#pgPresentacionCuenta' ? contador : null;
+       cambioJc({dataset:{jc:'pg-presentacion-titulo'},value:'Eñeñosbit 2027',type:'text'},false);
+       cambioJc({dataset:{jc:'pg-presentacion-texto'},value:'Primera línea.\\nOtra línea.\\n\\nSegundo párrafo.',type:'textarea'},false);
+       cambioJc({dataset:{jc:'pg-presentacion-arte'},value:'2',type:'select-one'},true);
+       accionJc({dataset:{accion:'jc-pg-agregar',t:'voces'}});
+       cambioJc({dataset:{jc:'pg-voz-id',i:'0'},value:'original',type:'text'},false);
+       cambioJc({dataset:{jc:'pg-voz-nombre',i:'0'},value:'Original',type:'text'},false);`);
+  ok(run(`J.borr.pagina.presentacion.titulo === 'Eñeñosbit 2027' && J.borr.pagina.presentacion.arte === '2'
+       && J.borr.pagina.presentacion.texto.includes('\\n\\n') && J.borr.pagina.voces[0].id === 'original'
+       && J.borr.pagina.voces[0].nombre === 'Original' && contador.textContent === String(J.borr.pagina.presentacion.texto.length)
+       && previaPagina(J).includes('Primera línea.<br>Otra línea.</p><p>Segundo párrafo.')
+       && /value="2" selected/.test(edPagina(J))`),
+    'presentación, arte y voces editan sus datos; contador y previa conservan líneas y párrafos');
   run(`cambioJc({dataset:{jc:'pg-sello'}, value:'BETA', type:'text'}, false);
        cambioJc({dataset:{jc:'pg-titulo'}, value:'EDA NOVIEMBRE', type:'text'}, false);
        accionJc({dataset:{accion:'jc-pg-agregar', t:'cajas'}});
@@ -52,29 +70,45 @@ function ok(cond, texto) {
        publicarJ();`);
   await run('pendiente');
   ok(run(`pedidos.length === 1 && pedidos[0].ruta === 'pagina' && pedidos[0].cuerpo.base === 'base-1'
-       && pedidos[0].cuerpo.publicada.banner.titulo === 'EDA NOVIEMBRE' && J.pagina.base === 'base-2' && !suciasJc(J).length`),
+       && pedidos[0].cuerpo.publicada.banner.titulo === 'EDA NOVIEMBRE'
+       && pedidos[0].cuerpo.publicada.presentacion.arte === '2' && pedidos[0].cuerpo.publicada.voces[0].id === 'original'
+       && J.pagina.base === 'base-2' && !suciasJc(J).length`),
     'Publicar usa POST pagina con su base y actualiza el estado confirmado');
   run(`J.d.puede_editar = false;
        cambioJc({dataset:{jc:'pg-titulo'}, value:'prohibido', type:'text'}, false);
+       cambioJc({dataset:{jc:'pg-presentacion-texto'},value:'prohibido',type:'textarea'},false);
+       cambioJc({dataset:{jc:'pg-voz-id',i:'0'},value:'prohibido',type:'text'},false);
+       accionJc({dataset:{accion:'jc-pg-sin-presentacion'}});
+       accionJc({dataset:{accion:'jc-pg-agregar',t:'voces'}});
        accionJc({dataset:{accion:'jc-pg-agregar', t:'cajas'}});`);
   ok(run(`J.borr.pagina.banner.titulo === 'EDA NOVIEMBRE' && J.borr.pagina.cajas.length === 1
        && /data-jc="pg-titulo"[^>]*disabled/.test(edPagina(J))`),
     '⟲ sólo lectura deshabilita campos y bloquea cambios y agregados');
+  ok(run(`J.borr.pagina.presentacion.texto.startsWith('Primera') && J.borr.pagina.voces.length === 1
+       && J.borr.pagina.voces[0].id === 'original'
+       && /data-jc="pg-presentacion-texto"[^>]*disabled/.test(edPagina(J))
+       && /data-jc="pg-presentacion-arte"[^>]*disabled/.test(edPagina(J))`),
+    '⟲ sólo lectura también protege presentación, arte y voces');
   run(`J.d.puede_editar = true;
-       for (let i=0; i<12; i++) { accionJc({dataset:{accion:'jc-pg-agregar',t:'cajas'}}); accionJc({dataset:{accion:'jc-pg-agregar',t:'idiomas'}}); }`);
-  ok(run(`J.borr.pagina.cajas.length === 4 && J.borr.pagina.idiomas.length === 8`),
-    '⟲ Agregar respeta máximos de cajas e idiomas');
+       for (let i=0; i<12; i++) { accionJc({dataset:{accion:'jc-pg-agregar',t:'cajas'}}); accionJc({dataset:{accion:'jc-pg-agregar',t:'idiomas'}}); accionJc({dataset:{accion:'jc-pg-agregar',t:'voces'}}); }`);
+  ok(run(`J.borr.pagina.cajas.length === 4 && J.borr.pagina.idiomas.length === 8 && J.borr.pagina.voces.length === 8`),
+    '⟲ Agregar respeta máximos de cajas, idiomas y voces');
   run(`descartarJ();`);
   await run('pendiente');
   ok(run(`!suciasJc(J).length && J.borr.pagina.cajas.length === 1`), 'Descartar restaura la página publicada');
+  run(`accionJc({dataset:{accion:'jc-pg-sin-presentacion'}});
+       accionJc({dataset:{accion:'jc-pg-quitar',t:'voces',i:'0'}});`);
+  ok(run(`!('presentacion' in J.borr.pagina) && J.borr.pagina.voces.length === 0 && suciasJc(J).includes('pagina')`),
+    'quitar presentación y voz elimina los datos del borrador');
   run(`const hostil = '<img src=x onerror=alert(1)>"&';
        const ver = {version:hostil,fecha:hostil,resumen:hostil,corregidos:[hostil],mejoras:[hostil],avisos:[hostil]};
        ponerPagina(J,{publicada:{banner:{sello:hostil,titulo:hostil},version_actual:hostil,versiones:[ver],
-         cajas:[{titulo:hostil,texto:hostil}],idiomas:[{id:hostil,nombre:hostil}]}, borradores:[ver],base:'hostil'});
+         cajas:[{titulo:hostil,texto:hostil}],idiomas:[{id:hostil,nombre:hostil}],
+         presentacion:{titulo:hostil,texto:hostil,arte:hostil},voces:[{id:hostil,nombre:hostil}]}, borradores:[ver],base:'hostil'});
        J.pgInforme = [hostil]; J.err.pagina = hostil;`);
   ok(run(`![edPagina(J), previaPagina(J)].some(h => h.includes('<img src=x'))
        && edPagina(J).includes('&lt;img') && previaPagina(J).includes('&lt;img')`),
-    '⟲ banner, cajas, idiomas, versiones, borradores e informes escapan HTML');
+    '⟲ banner, presentación, arte, voces, cajas, idiomas, versiones, borradores e informes escapan HTML');
   run(`ponerPagina(J, {publicada:{...paginaVacia('eda'), version_actual:'2',versiones:[{version:'2'}, {version:'1'}]},borradores:[],base:'orden'});
        accionJc({dataset:{accion:'jc-pg-quitar',t:'versiones',i:'0'}});`);
   ok(run(`J.borr.pagina.version_actual === '1' && J.borr.pagina.versiones.length === 1`),

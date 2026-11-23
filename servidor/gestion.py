@@ -179,6 +179,39 @@ def _http(url, ruta, query, cuerpo, quien, admin):
         return 503, {"error": "El servidor del juego no contesta ahora. Pruebe en un rato."}
 
 
+def personajes_launcher(uid, jid, entorno="live"):
+    """Personajes de la cuenta autenticada; contrato público cerrado, sin datos del panel."""
+    if jid != "r2beat-moderno":
+        return 404, {"error": "este juego no tiene personajes en el launcher"}
+    if entorno not in ("live", "test"):
+        return 400, {"error": "entorno: live o test"}
+    pase = jid + ("-prueba" if entorno == "test" else "")
+    fuente = fuentes().get(pase)
+    if not fuente or fuente[0] != "contrato1":
+        return 503, {"error": "el servidor de ese juego todavía no publica sus personajes"}
+    fallo = 502, {"error": "no pudimos traer tus personajes"}
+    try:
+        cod, datos = _http(fuente[1], "personajes", {"enenos_id": uid}, None, f"launcher:{uid}", False)
+    except (OSError, ValueError, TypeError):
+        return fallo
+    if cod != 200 or not isinstance(datos, dict):
+        return fallo
+    maximo, filas = datos.get("maximo"), datos.get("personajes")
+    if type(maximo) is not int or not 0 <= maximo <= 8 or not isinstance(filas, list) or len(filas) > maximo:
+        return fallo
+    personajes = []
+    campos = ("id", "nick", "sexo", "nivel", "conectado")
+    for p in filas:
+        if (not isinstance(p, dict) or any(k not in p for k in campos)
+                or type(p["id"]) is not int or not isinstance(p["nick"], str) or len(p["nick"]) > 24
+                or p["sexo"] not in ("m", "f", None)
+                or (p["nivel"] is not None and (type(p["nivel"]) is not int or p["nivel"] < 0))
+                or type(p["conectado"]) is not bool):
+            return fallo
+        personajes.append({k: p[k] for k in campos})
+    return 200, {"ok": True, "personajes": personajes, "maximo": maximo}
+
+
 def echar_de_los_juegos(eid, pases, quien, motivo=""):
     """★ 21-nov (Eñeños: «banear no desconecta al usuario»): el baneo vive en Cuenta Eñeños (no le da más pases), pero
     el que YA estaba adentro seguía jugando hasta salir. Después de banear, en cada server baneado que se gestiona se
