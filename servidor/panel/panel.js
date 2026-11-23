@@ -698,7 +698,7 @@ const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
 const DIAS_PL = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
 const DIAS_C = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const ORD_SEM = ['', 'primera', 'segunda', 'tercera', 'cuarta', 'quinta'];
-const JC_TABS = { asistencia: ['Asistencia', 'ticket'], ruleta: ['Ruleta', 'refresh'], tira: ['Avisos del lobby', 'mega'], lanzamiento: ['Lanzamiento', 'rocket'] };
+const JC_TABS = { pagina: ['Página', 'mega'], asistencia: ['Asistencia', 'ticket'], ruleta: ['Ruleta', 'refresh'], tira: ['Avisos del lobby', 'mega'], lanzamiento: ['Lanzamiento', 'rocket'] };
 const miles = n => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 const corto = n => { n = Number(n) || 0; return n >= 1000 ? (n % 1000 ? (n / 1000).toFixed(1).replace('.', ',') : n / 1000) + 'k' : String(n); };
 const clon = x => JSON.parse(JSON.stringify(x));
@@ -786,7 +786,7 @@ function nombresDe(J, mes) {
   if (!mes) return;
   mes.dias.forEach(x => [...(x.premios || []), ...(x.si_no || [])].forEach(p => { if (p.item != null && p.nombre) J.nombres[p.item] = p.nombre; }));
 }
-const tabsC = J => [...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
+const tabsC = J => [...(J.d.pagina_local ? ['pagina'] : []), ...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
 const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas'] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
 const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
 const suciasJc = J => Object.keys(J.borr).filter(k => puedeJc(J, k) && ser(J.borr[k]) !== J.orig[k]);
@@ -828,6 +828,12 @@ async function vistaJuego(jid, env, tab, sel) {
     return;
   }
   S.jc = nuevoJc(r.ok ? r.d : {}, jid, env);
+  if (S.jc.d.pagina_local) {
+    const pr = await api(`pagina?juego=${encodeURIComponent(jid)}`);
+    if (S.ruta !== ruta0) return;
+    if (!S.jc) return;
+    if (pr.ok) ponerPagina(S.jc, pr.d); else S.jc.err.pagina = (pr.d && pr.d.error) || `Error ${pr.status}`;
+  }
   S.jc.g = g;
   S.jc.t = tOk ? nuevoT(tr.d) : null;
   if (!r.ok) S.jc.cErr = (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
@@ -859,7 +865,7 @@ function pintarJ(foco) {
   const avisos = [], enG = esG(J.tab);
   if (!enG && J.cErr) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('info', 's20')}<div>No se pudo leer el contenido del launcher.<small>${esc(J.cErr)}</small></div></div>`);
   if (!enG && !J.d.puede_editar && J.d.servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('lock', 's20')}<div>Su cuenta puede mirar este juego, pero no cambiar su contenido.</div></div>`);
-  if (!enG && !J.d.servidor && J.d.sin_servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('info', 's20')}<div>${esc(J.d.sin_servidor)}${ts.length ? '<small>Por ahora, de este servidor sólo se puede ver el lanzamiento.</small>' : ''}</div></div>`);
+  if (!enG && !J.d.servidor && !J.d.pagina_local && J.d.sin_servidor) avisos.push(`<div class="conclusion mirar jc-aviso">${ic('info', 's20')}<div>${esc(J.d.sin_servidor)}${ts.length ? '<small>Por ahora, de este servidor sólo se puede ver el lanzamiento.</small>' : ''}</div></div>`);
   main.innerHTML = cabJuego(j, J.env, J) + avisos.join('') +
     (ts.length ? `<div class="jc-barra"><div class="pest jc-pest" role="tablist" aria-label="Partes del juego" id="jcTabs"></div><div class="jc-acc" id="jcAcc"></div></div>
       <div id="jcCuerpo"></div>` : `<section class="caja" style="max-width:560px;margin:8px auto 0">${vacio('Todavía no hay nada para manejar aquí', J.g && J.g.mios && J.g.mios.gestionable ? `El servidor ${envTxt(J.env)} todavía no está conectado al Coordinador: ni su gestión (tablero y personas) ni el contenido del launcher.` : esc(J.d.sin_servidor || 'Este servidor todavía no tiene gestión ni contenido dinámico en el Coordinador.'), '<a class="btn chico" href="#/juegos">Volver a los juegos</a>')}</section>`) +
@@ -873,6 +879,7 @@ function pintarJ(foco) {
 function pintarAccJ() {
   const J = S.jc, tabs = $('#jcTabs'), acc = $('#jcAcc'); if (!J || !tabs) return;
   const sucias = suciasJc(J);
+  $$('[data-accion="jc-pg-importar"], [data-accion="jc-pg-version"]').forEach(b => { b.disabled = !puedeJc(J, 'pagina') || J.publicando || sucias.includes('pagina'); });
   const boton = k => `<button type="button" role="tab" id="jcTab-${k}" aria-controls="jcCuerpo" aria-selected="${J.tab === k}" tabindex="${J.tab === k ? 0 : -1}" data-accion="jc-tab" data-k="${k}">${ic(JC_TABS[k][1], 's14')}${JC_TABS[k][0]}${sucias.includes(k) ? '<span class="lc-pt" title="Sin publicar"></span><span class="sr"> (sin publicar)</span>' : ''}</button>`;
   const tg = tabsJc(J).filter(esG), tc = tabsC(J);
   /* ★ fase C: dos grupos — Gestión | Launcher (el contenido dinámico) */
@@ -901,15 +908,90 @@ function pintarCuerpoJ(foco) {
     if (foco) { const f = $(foco); if (f) f.focus(); } else if (J.tab === 'personas' && !J.sel) { const f = $('#gBusq'); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
     return;
   }
-  const ed = { asistencia: edAsistencia, ruleta: edRuleta, tira: edTira, lanzamiento: edLanz }[J.tab](J);
+  const ed = { pagina: edPagina, asistencia: edAsistencia, ruleta: edRuleta, tira: edTira, lanzamiento: edLanz }[J.tab](J);
   c.innerHTML = `<div class="lc-grid" role="tabpanel" aria-labelledby="jcTab-${J.tab}"><div class="lc-ed">${ed}</div>
     <aside class="lc-previa" aria-label="Vista previa"><div class="lc-previa-cab">${ic('eye', 's14')}Así lo ve el jugador <span class="etq-env ${J.env === 'test' ? 'test' : 'live'}">${envTxt(J.env)}</span></div><div id="jcPrevia">${previaJ(J)}</div></aside></div>`;
   if (foco) { const f = $(foco); if (f) f.focus(); }
   tic();
 }
-const previaJ = J => ({ asistencia: previaAsis, ruleta: previaRuleta, tira: previaTira, lanzamiento: previaLanz }[J.tab](J));
+const previaJ = J => ({ pagina: previaPagina, asistencia: previaAsis, ruleta: previaRuleta, tira: previaTira, lanzamiento: previaLanz }[J.tab](J));
 function pintarPreviaJ() { const J = S.jc, p = $('#jcPrevia'); if (J && p && !esG(J.tab)) { p.innerHTML = previaJ(J); tic(); } }
 function cambioJ() { pintarAccJ(); pintarPreviaJ(); }
+
+/* ══════════════ PÁGINA LOCAL (PROD, juegos sin fuente propia) ══════════════ */
+function paginaVacia(jid) {
+  return { banner: { sello: '', titulo: '' }, version_actual: '', versiones: [], cajas: [],
+    idiomas: jid === 'eda' ? [{ id: 'es', nombre: 'Español' }, { id: 'en', nombre: 'English' }] : [] };
+}
+function ponerPagina(J, d) {
+  J.pagina = d;
+  J.borr.pagina = clon(d.publicada || paginaVacia(J.jid));
+  J.orig.pagina = ser(J.borr.pagina);
+  J.err.pagina = null;
+}
+function edPagina(J) {
+  const P = J.borr.pagina, ro = !puedeJc(J, 'pagina') || J.publicando;
+  if (!P) return `<section class="caja"><div class="caja-cuerpo">${errBox(J.err.pagina)}<button class="btn" data-accion="jc-pg-recargar">Recargar página</button></div></section>`;
+  const campo = (lab, k, v, max, i = '') => `<label class="lc-campo"><span class="lab">${lab}</span><input class="lc-in" data-jc="pg-${k}" data-i="${i}" maxlength="${max}" value="${esc(v)}"${dis(ro)}></label>`;
+  const quitar = (tipo, i) => `<button class="btn chico" data-accion="jc-pg-quitar" data-t="${tipo}" data-i="${i}"${dis(ro)}>Quitar</button>`;
+  const lista = (titulo, tipo, limite, filas) => `<section class="caja"><div class="caja-cab"><h3>${titulo}</h3><span class="sub">${P[tipo].length}/${limite}</span></div><div class="caja-cuerpo jc-cfg pg-cfg">${filas}<button class="btn chico" data-accion="jc-pg-agregar" data-t="${tipo}"${dis(ro || P[tipo].length >= limite)}>Agregar</button></div></section>`;
+  return `${errBox(J.err.pagina)}<section class="caja"><div class="caja-cab"><h3>${ic('mega', 's16')}Banner</h3><span class="sub">${J.pagina.publicada ? 'Publicado' : 'Sin página publicada'}</span></div>
+    <div class="caja-cuerpo jc-cfg pg-cfg">${campo('Sello · hasta 24 caracteres', 'sello', P.banner.sello, 24)}${campo('Título · hasta 48 caracteres', 'titulo', P.banner.titulo, 48)}
+    <p class="jc-nota">Todo es texto plano. Los cambios llegan al launcher al publicar esta parte.</p>
+    <button class="btn chico" data-accion="jc-pg-recargar"${dis(J.publicando)}>Recargar página y descartar cambios</button></div></section>
+    ${lista('Cajas', 'cajas', 4, P.cajas.map((x, i) => `<div class="jc-cfg">${campo('Título · hasta 40 caracteres', 'caja-titulo', x.titulo, 40, i)}${campo('Texto · hasta 200 caracteres', 'caja-texto', x.texto, 200, i)}${quitar('cajas', i)}</div>`).join(''))}
+    ${lista('Idiomas del selector', 'idiomas', 8, P.idiomas.map((x, i) => `<div class="lc-fila">${campo('ID · 2 a 8 letras a-z', 'idioma-id', x.id, 8, i)}${campo('Nombre · hasta 24 caracteres', 'idioma-nombre', x.nombre, 24, i)}${quitar('idiomas', i)}</div>`).join(''))}
+    <section class="caja"><div class="caja-cab"><h3>Borradores</h3></div><div class="caja-cuerpo jc-cfg pg-cfg">
+      <p class="jc-nota">Importar sólo agrega borradores. Publicar una versión la lleva al historial y la marca como actual. Publique o descarte los cambios de esta página antes de importar o publicar una versión.</p>
+      <button class="btn chico" data-accion="jc-pg-importar"${dis(ro || suciasJc(J).includes('pagina'))}>Importar de NOVEDADES.json</button>
+      <div id="pgInforme" role="status">${(J.pgInforme || []).map(x => `<p class="jc-nota">${esc(x)}</p>`).join('')}</div>
+      ${(J.pagina.borradores || []).map((x, i) => `<article><h4>${esc(x.version)} · ${esc(x.fecha)}</h4>${detalleVersion(x)}<button class="btn chico" data-accion="jc-pg-version" data-i="${i}"${dis(ro || suciasJc(J).includes('pagina'))}>Publicar</button></article>`).join('') || '<p class="tenue">No hay borradores.</p>'}
+    </div></section>
+    <section class="caja"><div class="caja-cab"><h3>Versiones publicadas · hasta 10</h3></div><div class="caja-cuerpo jc-cfg pg-cfg"><p>Versión actual: <b>${esc(P.version_actual) || '—'}</b></p>
+      ${P.versiones.map((x, i) => `<article><h4>${esc(x.version)} · ${esc(x.fecha)}</h4>${detalleVersion(x)}${quitar('versiones', i)}</article>`).join('') || '<p class="tenue">Todavía no se publicó ninguna versión.</p>'}</div></section>`;
+}
+function detalleVersion(v) {
+  return `<p>${esc(v.resumen)}</p>${['corregidos', 'mejoras', 'avisos'].map(k => (v[k] || []).length ? `<b>${cap(k)}</b><ul>${v[k].map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '').join('')}`;
+}
+function previaPagina(J) {
+  const P = J.borr.pagina;
+  if (!P) return '<p class="tenue">Sin página disponible.</p>';
+  return `<div class="caja-cuerpo jc-cfg pg-cfg"><span class="chip">${esc(P.banner.sello)}</span><h2>${esc(P.banner.titulo)}</h2>
+    <p>Versión actual: <b>${esc(P.version_actual) || '—'}</b></p><p>${P.idiomas.map(x => esc(x.nombre)).join(' · ')}</p>
+    ${P.cajas.map(x => `<article><h3>${esc(x.titulo)}</h3><p>${esc(x.texto)}</p></article>`).join('')}
+    ${P.versiones.map(x => `<details${x.version === P.version_actual ? ' open' : ''}><summary>${esc(x.version)} · ${esc(x.fecha)}</summary>${detalleVersion(x)}</details>`).join('')}</div>`;
+}
+async function operacionPagina(J, accion, version) {
+  if (J.publicando || (accion !== 'recargar' && suciasJc(J).includes('pagina'))) return;
+  J.publicando = true; pintarJ();
+  const r = accion === 'recargar' ? await api(`pagina?juego=${encodeURIComponent(J.jid)}`)
+    : await api(`pagina/${accion}`, { juego: J.jid, base: J.pagina.base, version });
+  if (S.jc !== J) return;
+  J.publicando = false;
+  if (r.ok) {
+    ponerPagina(J, r.d);
+    if (accion === 'importar') J.pgInforme = [`${r.d.importadas} versiones importadas.`, ...(r.d.invalidas || []).map(x => `Entrada ${x.entrada}: ${x.error}`)];
+    toast({ t: accion === 'importar' ? 'Importación terminada' : accion === 'recargar' ? 'Página recargada' : 'Versión publicada' });
+  } else J.err.pagina = (r.d && r.d.error) || `Error ${r.status}`;
+  pintarJ();
+}
+function accionPagina(J, a) {
+  const k = a.dataset.accion, tipo = a.dataset.t, i = Number(a.dataset.i), P = J.borr.pagina;
+  if (k === 'jc-pg-recargar') return confirmar({ titulo: '¿Recargar la página?', txt: 'Se descartan los cambios de esta página y se lee lo publicado.', ok: 'Recargar', icono: 'refresh', alAceptar: () => operacionPagina(J, 'recargar') });
+  if (!puedeJc(J, 'pagina') || J.publicando || !P) return;
+  if (k === 'jc-pg-importar') return operacionPagina(J, 'importar');
+  if (k === 'jc-pg-version') {
+    const v = J.pagina.borradores[i]; if (!v) return;
+    return confirmar({ titulo: `¿Publicar ${esc(v.version)}?`, txt: 'Llega al launcher como versión actual y queda en la auditoría.', ok: 'Publicar', icono: 'send', alAceptar: () => operacionPagina(J, 'publicar', v.version) });
+  }
+  if (k === 'jc-pg-agregar' && tipo === 'cajas' && P.cajas.length < 4) P.cajas.push({ titulo: '', texto: '' });
+  else if (k === 'jc-pg-agregar' && tipo === 'idiomas' && P.idiomas.length < 8) P.idiomas.push({ id: '', nombre: '' });
+  else if (k === 'jc-pg-quitar' && ['cajas', 'idiomas', 'versiones'].includes(tipo)) {
+    const quitada = P[tipo].splice(i, 1)[0];
+    if (tipo === 'versiones' && quitada && P.version_actual === quitada.version) P.version_actual = (P.versiones[0] || {}).version || '';
+  } else return;
+  pintarCuerpoJ(); cambioJ();
+}
 
 /* ══════════════ ASISTENCIA ══════════════ */
 /* «semana_mes 2» -> «semana_mes:2». ⛔ Sólo valores conocidos (va a clases y atributos) */
@@ -1351,10 +1433,12 @@ function publicarJ() {
     extra: `<span class="lab">Se publica</span><ul class="lc-cambios">${partes.map(k => `<li>${ic(JC_TABS[k][1], 's14')}${JC_TABS[k][0]}</li>`).join('')}</ul>`,
     alAceptar: async () => {
       J.publicando = true; pintarAccJ();
+      if (J.tab === 'pagina') pintarCuerpoJ();
       const hechas = [];
       for (const k of partes) {
         const valor = k === 'tira' ? JSON.parse(ser(J.borr.tira)).map(f => (f.siempre ? Object.assign(f, { vence: null }) : f)) : JSON.parse(ser(J.borr[k]));
-        const r = await api('contenido', { juego: J.jid, entorno: J.env, clave: k, valor });
+        const r = k === 'pagina' ? await api('pagina', { juego: J.jid, base: J.pagina.base, publicada: valor })
+          : await api('contenido', { juego: J.jid, entorno: J.env, clave: k, valor });
         if (S.jc !== J) return;
         if (!r.ok) {
           J.publicando = false; J.err[k] = (r.d && (r.d.error || r.d.texto)) || `Error ${r.status}`;
@@ -1372,7 +1456,9 @@ function publicarJ() {
 }
 function refrescarClave(J, k, d) {
   J.err[k] = null;
-  if (k === 'lanzamiento') {
+  if (k === 'pagina') {
+    ponerPagina(J, d);
+  } else if (k === 'lanzamiento') {
     J.d.lanzamiento = d.lanzamiento || J.d.lanzamiento;
     J.borr.lanzamiento = { desde_peru: J.d.lanzamiento.desde_peru, etiqueta: J.d.lanzamiento.etiqueta || '' };
   } else {
@@ -1404,6 +1490,7 @@ function descartarJ() {
 function accionJc(a) {
   const J = S.jc; if (!J) return;
   const i = Number(a.dataset.i), k = a.dataset.accion;
+  if (k.startsWith('jc-pg-')) return accionPagina(J, a);
   if (k === 'jc-tab') { if (J.tab !== a.dataset.k || (J.tab === 'personas' && J.sel)) { J.tab = a.dataset.k; J.sel = null; const tecla = document.activeElement && document.activeElement.matches('[role="tab"]:focus-visible'); pintarJ(tecla || !esG(J.tab) ? `#jcTab-${J.tab}` : null); } return; }
   if (k === 'jc-publicar') return publicarJ();
   if (k === 'jc-descartar') return descartarJ();
@@ -1445,6 +1532,14 @@ function cambioJc(el, final) {
   const k = el.dataset.jc, i = Number(el.dataset.i), v = el.type === 'checkbox' ? el.checked : el.value;
   if (k === 'as-alcance') { J.alcance = v; repintarDia(J); return; }
   if (!puedeJc(J, J.tab)) return;
+  if (k.startsWith('pg-')) {
+    if (J.publicando || !J.borr.pagina) return;
+    const P = J.borr.pagina;
+    if (k === 'pg-sello' || k === 'pg-titulo') P.banner[k.slice(3)] = v;
+    else if (k === 'pg-caja-titulo' || k === 'pg-caja-texto') P.cajas[i][k.slice(8)] = v;
+    else if (k === 'pg-idioma-id' || k === 'pg-idioma-nombre') P.idiomas[i][k.slice(10)] = v;
+    cambioJ(); return;
+  }
   const A = J.borr.asistencia, R = J.borr.ruleta, T = J.borr.tira;
   const num = (a, b) => { if (v === '' && !final) return null; const n = entre(v, a, b); if (final && String(n) !== String(el.value)) el.value = n; return n; };
   switch (k) {

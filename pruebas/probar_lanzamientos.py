@@ -128,11 +128,12 @@ try:
     ok(LZ.cerrado_para(P, beto, "eda-prueba", t["eda"]["desde_t"] + 1) is True, "★ 21-nov: y su server de PRUEBA también (mismo lanzamiento)")
     os.makedirs(os.path.join(tmp, "config"), exist_ok=True)
     open(os.path.join(tmp, "config", "lanzamientos.json"), "w").write(json.dumps({"eda": {"desde": "2020-01-01T00:00:00-05:00"}}))
-    ok(P.permitido(beto, "eda"), "un lanzamientos.json con la fecha pasada lo abre YA, sin publicar nada")
-    ok(not P.permitido(malo, "eda"), "⟲ un baneado sigue afuera")
-    ok(not P.permitido(beto, "gunbound"), "⟲ GunBound (su fecha no cambió) sigue cerrado")
+    # El control usa el mismo instante anterior a las aperturas, también después del día de estreno.
+    ok(P.permitido(beto, "eda", antes), "un lanzamientos.json con la fecha pasada lo abre YA, sin publicar nada")
+    ok(not P.permitido(malo, "eda", antes), "⟲ un baneado sigue afuera")
+    ok(not P.permitido(beto, "gunbound", antes), "⟲ GunBound (su fecha no cambió) sigue cerrado")
     os.remove(os.path.join(tmp, "config", "lanzamientos.json"))
-    ok(not P.permitido(beto, "eda"), "⟲ sin el archivo, vuelve a la fecha de fábrica (cerrado)")
+    ok(not P.permitido(beto, "eda", antes), "⟲ sin el archivo, vuelve a la fecha de fábrica (cerrado)")
 
     print("4 · pedir la invitación")
     r = LZ.pedir(P, str(ana), "eda", antes)

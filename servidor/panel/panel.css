@@ -1791,3 +1791,13 @@ body.test .t-cruce { background: linear-gradient(180deg, rgba(42,35,24,.97), rgb
 @media (prefers-reduced-motion: reduce) { .t-ln.vivo, .t-cruce.vivo { animation: none; } }
 .t-det .caja-cab, .t-lista .caja-cab { flex-wrap: wrap; row-gap: 2px; }
 .t-det .caja-cab h3, .t-lista .caja-cab h3 { white-space: nowrap; }
+
+/* Página del launcher: los mismos campos y cajas, con lectura vertical del historial. */
+.pg-cfg { flex-direction: column; align-items: stretch; }
+.pg-cfg > .btn, .pg-cfg > .chip { align-self: flex-start; }
+.pg-cfg > .jc-cfg { align-items: flex-end; }
+.pg-cfg .lc-campo { flex: 1 1 180px; }
+.pg-cfg > .lc-campo { flex: none; }
+.pg-cfg article, .pg-cfg details { overflow-wrap: anywhere; padding: 12px 0; border-top: 1px solid var(--line); }
+.pg-cfg article p, .pg-cfg details p { margin: 8px 0; }
+.pg-cfg ul { padding-left: 20px; margin: 6px 0 12px; }

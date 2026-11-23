@@ -117,6 +117,7 @@ def _ultima(P, uid, clave):
 def lista(P, token, ahora=None):
     """GET /lanzamientos — con sesión, además: si puede entrar ya y cómo va su invitación."""
     from . import social as SO
+    from . import paginas as PG
     ahora = time.time() if ahora is None else ahora
     uid = SO._sesion(P, token, ahora) if token else None
     out = {}
@@ -127,7 +128,7 @@ def lista(P, token, ahora=None):
             f = _ultima(P, uid, k)
             d["invitacion"] = f["estado"] if f else None
         out[k] = d
-    return 200, {"ahora": int(ahora), "juegos": out}
+    return 200, {"ahora": int(ahora), "juegos": out, "paginas": PG.publicadas(P)}
 
 
 def pedir(P, token, juego, ahora=None):

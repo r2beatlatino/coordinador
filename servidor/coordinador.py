@@ -37,6 +37,10 @@ LAS RUTAS (en el portero, con o sin `/cuentas`; Caddy del dominio del panel les 
     GET  /coordinador/api/contenido?juego=&entorno=live|test   ★ 20-nov fase B: asistencia, ruleta, tira y lanzamiento
     GET  /coordinador/api/contenido/items?juego=&entorno=&q=   buscar ítems para los premios
     GET  /coordinador/api/novedades                    el acordeón de noticias del launcher (cada una con `editable`)
+    GET  /coordinador/api/pagina?juego=                {publicada, borradores, base, puede_editar}
+    POST /coordinador/api/pagina {juego, base, publicada}   la página local del launcher (paginas.py)
+    POST /coordinador/api/pagina/importar {juego}       NOVEDADES.json del catálogo → sólo borradores
+    POST /coordinador/api/pagina/publicar {juego, version, base}   borrador → versión actual
     POST /coordinador/api/contenido {juego, entorno, clave, valor}   asistencia | ruleta | tira | lanzamiento (admin)
     POST /coordinador/api/contenido/previa {juego, entorno, clave, valor, mes?}   validar sin guardar
     POST /coordinador/api/novedades {noticias, base}   el moderador sólo toca las de sus juegos (ver contenido.py)
@@ -86,6 +90,7 @@ import urllib.parse
 import urllib.request
 
 from . import contenido as CT
+from . import paginas as PG
 from . import gestion as GE
 from . import lanzamientos as LZ
 from . import social as SO
@@ -946,6 +951,8 @@ def atender(P, H, metodo, p, d):
             return H._mandar(*equipo(P, viewer))
         if api == ["contenido"]:                                     # ★ 20-nov fase B (contenido.py)
             return H._mandar(*CT.leer(_yo(), P, viewer, q.get("juego"), q.get("entorno") or "live", time.time()))
+        if api == ["pagina"]:
+            return H._mandar(*PG.leer(_yo(), P, viewer, q.get("juego")))
         if api == ["contenido", "items"]:
             return H._mandar(*CT.items(_yo(), P, viewer, q.get("juego"), q.get("entorno") or "live", q.get("q")))
         if api == ["novedades"]:
@@ -975,6 +982,12 @@ def atender(P, H, metodo, p, d):
         return H._mandar(*cambiar_equipo(P, viewer, d))
     if api == ["contenido"]:                                         # ★ 20-nov fase B (contenido.py)
         return H._mandar(*CT.guardar(_yo(), P, viewer, d, time.time()))
+    if api == ["pagina"]:
+        return H._mandar(*PG.cambiar(_yo(), P, viewer, d))
+    if api == ["pagina", "importar"]:
+        return H._mandar(*PG.cambiar(_yo(), P, viewer, d, "importar"))
+    if api == ["pagina", "publicar"]:
+        return H._mandar(*PG.cambiar(_yo(), P, viewer, d, "publicar"))
     if api == ["contenido", "previa"]:
         return H._mandar(*CT.previa(_yo(), P, viewer, d))
     if api == ["novedades"]:

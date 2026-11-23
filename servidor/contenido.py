@@ -15,6 +15,8 @@ DE DÓNDE SALE CADA COSA (no hay copias: el panel edita la fuente que ya lee el 
   Cada juego del catálogo dice con qué nombre aparece ahí: `juegos.json` → `"noticias": "gunbound"` (el server sólo
   acepta r2beat · eda · love · gunbound · general).
 - LANZAMIENTO (fecha de apertura y etiqueta): `config/lanzamientos.json` de Cuenta Eñeños (acá mismo).
+- PÁGINA del juego sin fuente propia: `config/paginas.json` junto a portero.db (paginas.py).
+  Importar NOVEDADES crea borradores; sólo publicar los lleva a GET /lanzamientos → paginas.
 
 QUIÉN PUEDE
 - Ver: el que ve ese juego (ADMIN, o el moderador que lo tiene).
@@ -131,6 +133,7 @@ def leer(CO, P, viewer, jid, entorno, ahora):
     out = {"juego": jid, "entorno": entorno, "pase": pase, "puede_editar": puede_editar(P, viewer, jid),
            "es_admin": P.rol_de(viewer) == "admin", "lanzamiento": _lanzamiento(CO, P, jid, ahora),
            "servidor": None, "sin_servidor": None}
+    out["pagina_local"] = entorno == "live" and not fuentes().get(pase)
     if not pase:
         out["sin_servidor"] = "Este juego no tiene servidor de " + ("prueba." if entorno == "test" else "producción.")
         return 200, out

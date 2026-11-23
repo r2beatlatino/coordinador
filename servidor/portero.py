@@ -183,6 +183,7 @@ PASE_SEGUNDOS = 300
 INTENTOS_MAX = 8
 INTENTOS_VENTANA = 15 * 60
 CUERPO_MAX = 4096
+CUERPO_PAGINA_MAX = 512 << 10   # historial completo (10 versiones); admite JSON con Unicode escapado
 
 # ★ 15-nov (Cuenta Eñeños dueña de las cuentas):
 #   · las cuentas NUEVAS arrancan desde un número alto para no chocar con los `usn` de los personajes 2-4 de R2Beat;
@@ -1764,7 +1765,9 @@ class _Manejador(BaseHTTPRequestHandler):
             if self.headers.get("X-R2") != "1":
                 return self._mandar(403, {"error": "pedido no permitido"})
             largo = int(self.headers.get("Content-Length") or 0)
-            if largo < 0 or largo > CUERPO_MAX:
+            p = self._partes()
+            tope = CUERPO_PAGINA_MAX if p == [CO.PREFIJO, "api", "pagina"] else CUERPO_MAX
+            if largo < 0 or largo > tope:
                 return self._mandar(413, {"error": "pedido demasiado grande"})
             try:
                 d = json.loads(self.rfile.read(largo).decode("utf-8") or "{}")

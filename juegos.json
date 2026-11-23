@@ -54,6 +54,7 @@
       "nota": "Todo en Miami: entra con Cuenta Eñeños (launcher nuevo) y se actualiza solo desde main. El EDA viejo, atado al login de Chile, se retiró el 20-nov. Su prueba (eda-prueba, develop) tiene pase propio desde el 21-nov: botón «Servidor de prueba» en las opciones de EDA del launcher.",
       "corto": "EDA",
       "noticias": "eda",
+      "novedades_url": "https://raw.githubusercontent.com/r2beatlatino/EDA/main/NOVEDADES.json",
       "panel": {
         "color": "179,139,255",
         "arte": "eda-fondo.jpg",
