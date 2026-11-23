@@ -59,7 +59,7 @@
 	}
 	# ★ 18-nov: GUNBOUND (otro juego, repo propio gunbound-servidor). Dos servers: prod y PRUEBA.
 	#   · /gunbound/lista.jws       la lista FIRMADA de su cliente (clave de publicación de la plataforma), sin caché
-	#   · /files-gunbound/<versión>/  los archivos del cliente (carpetas por versión: nunca cambian, se cachean)
+	#   · /files-gunbound/  ⛔ cerrada el 23-nov: los archivos del cliente salen SÓLO por la CDN (cdn.eñeños.link/gunbound/)
 	#   · /gunbound/*  /gunbound-prueba/*   el canje del pase y la pantalla de personajes (el server acepta el prefijo)
 	#   Todo sale de GUNBOUND_WEB_ORIGEN (-> /gunbound-web, sólo lectura). Si GunBound no está prendido: 502 / 404.
 	handle /gunbound/lista.jws {
@@ -68,10 +68,11 @@
 		rewrite * /lista.jws
 		file_server
 	}
-	handle_path /files-gunbound/* {
-		header Cache-Control "public, max-age=86400"
-		root * /gunbound-web/cliente
-		file_server
+	# ★ 23-nov (Eñeños: «que el VPS no sirva archivos a nadie más que a Cloudflare»): /files-gunbound/ servía el
+	#   cliente entero (1,4 GB) DIRECTO, sin Cloudflare ni pase. La lista firmada manda a la CDN
+	#   (cdn.eñeños.link/gunbound/<versión>, que sólo contesta a Cloudflare): esta ruta ya no la usaba nadie.
+	handle /files-gunbound/* {
+		respond 404
 	}
 	handle /gunbound-prueba/* {
 		reverse_proxy {$WEB_GUNBOUND_PRUEBA_DESTINO:gunbound-prueba:9371}
