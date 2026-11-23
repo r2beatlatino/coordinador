@@ -75,7 +75,14 @@ def validar(v, jid):
     for x in _lista(v.get("idiomas", IDIOMAS_EDA if jid == "eda" else []), 8, "idiomas"):
         if not isinstance(x, dict) or not isinstance(x.get("id"), str) or not re.fullmatch(r"[a-z]{2,8}", x["id"]):
             raise ValueError("idioma id: de 2 a 8 letras minúsculas (a-z).")
-        out["idiomas"].append({"id": x["id"], "nombre": _texto(x.get("nombre"), 24, "idioma nombre", False)})
+        idioma = {"id": x["id"], "nombre": _texto(x.get("nombre"), 24, "idioma nombre", False)}
+        # ★ 23-nov (Eñeños): el % de traducción de cada idioma, al lado de su nombre en el launcher. Opcional; lo mide
+        #   `herramientas/avance_traduccion.py` del repo del R2Beat 2013 sobre el cliente, no se escribe a ojo.
+        if x.get("avance") is not None:
+            if type(x["avance"]) is not int or not 0 <= x["avance"] <= 100:
+                raise ValueError("idioma avance: un entero de 0 a 100.")
+            idioma["avance"] = x["avance"]
+        out["idiomas"].append(idioma)
     if len({x["id"] for x in out["idiomas"]}) != len(out["idiomas"]):
         raise ValueError("idiomas: ids repetidos.")
     if "presentacion" in v:

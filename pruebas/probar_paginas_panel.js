@@ -57,7 +57,13 @@ function ok(cond, texto) {
        cambioJc({dataset:{jc:'pg-caja-titulo', i:'0'}, value:'Comunidad', type:'text'}, false);
        cambioJc({dataset:{jc:'pg-caja-texto', i:'0'}, value:'Texto de prueba', type:'text'}, false);
        cambioJc({dataset:{jc:'pg-idioma-id', i:'1'}, value:'pt', type:'text'}, false);
-       cambioJc({dataset:{jc:'pg-idioma-nombre', i:'1'}, value:'Português', type:'text'}, false);`);
+       cambioJc({dataset:{jc:'pg-idioma-nombre', i:'1'}, value:'Português', type:'text'}, false);
+       cambioJc({dataset:{jc:'pg-idioma-avance', i:'1'}, value:'39', type:'text'}, false);
+       cambioJc({dataset:{jc:'pg-idioma-avance', i:'0'}, value:'250', type:'text'}, false);`);
+  ok(run(`J.borr.pagina.idiomas[1].avance === 39 && J.borr.pagina.idiomas[0].avance === 100`),
+    'el % de traducción se guarda como número y se recorta a 0..100');
+  run(`cambioJc({dataset:{jc:'pg-idioma-avance', i:'0'}, value:'', type:'text'}, false);`);
+  ok(run(`!('avance' in J.borr.pagina.idiomas[0])`), '⟲ vaciar el % lo quita (no se muestra en el launcher)');
   ok(run(`J.borr.pagina.banner.sello === 'BETA' && J.borr.pagina.banner.titulo === 'EDA NOVIEMBRE'
        && J.borr.pagina.cajas[0].titulo === 'Comunidad' && J.borr.pagina.cajas[0].texto === 'Texto de prueba'
        && J.borr.pagina.idiomas[1].id === 'pt' && J.borr.pagina.idiomas[1].nombre === 'Português'`),

@@ -178,6 +178,15 @@ with tempfile.TemporaryDirectory(prefix="paginas_") as tmp:
         for id_malo in ("e", "abcdefghi", "ES", "es-BO", "es\n", 123):
             exceso(f"idioma id inválido {id_malo!r}", lambda p, x=id_malo: p["idiomas"][0].update(id=x))
         exceso("idiomas repetidos", lambda p: p["idiomas"].__setitem__(1, p["idiomas"][0]))
+        # ★ 23-nov: el % de traducción por idioma (opcional, entero 0..100)
+        for malo in (101, -1, 40.5, "40", True):
+            exceso(f"idioma avance inválido {malo!r}", lambda p, x=malo: p["idiomas"][0].update(avance=x))
+        con = copy.deepcopy(v); con["idiomas"][0]["avance"] = 40; con["idiomas"][1]["avance"] = 0
+        con["idiomas"][2]["avance"] = 100
+        ok(guardar(con)[0] == 200 and [x.get("avance") for x in launcher()["eda"]["idiomas"][:4]] == [40, 0, 100, None],
+           "avance 40 / 0 / 100 pasa tal cual; sin avance, la clave no aparece")
+        ok(guardar(v)[0] == 200 and all("avance" not in x for x in launcher()["eda"]["idiomas"]),
+           "⟲ volver a guardar sin avance lo quita")
         exceso("fecha imposible", lambda p: p["versiones"][0].update(fecha="2026-02-30"))
         exceso("versión actual fuera del historial", lambda p: p.update(version_actual="inexistente"))
         for texto in ("<b>HTML</b>", "a>b", "a\x00b", "a\nb", "a\tb", "a\x7fb", "a\x85b"):

@@ -949,7 +949,7 @@ function edPagina(J) {
       <button id="pgQuitarPresentacion" class="btn chico" data-accion="jc-pg-sin-presentacion"${P.presentacion ? '' : ' hidden'}${dis(ro)}>Quitar presentación</button>
     </div></section>
     ${lista('Cajas', 'cajas', 4, P.cajas.map((x, i) => `<div class="jc-cfg">${campo('Título · hasta 40 caracteres', 'caja-titulo', x.titulo, 40, i)}${campo('Texto · hasta 200 caracteres', 'caja-texto', x.texto, 200, i)}${quitar('cajas', i)}</div>`).join(''))}
-    ${lista('Idiomas del selector', 'idiomas', 8, P.idiomas.map((x, i) => `<div class="lc-fila">${campo('ID · 2 a 8 letras a-z', 'idioma-id', x.id, 8, i)}${campo('Nombre · hasta 24 caracteres', 'idioma-nombre', x.nombre, 24, i)}${quitar('idiomas', i)}</div>`).join(''))}
+    ${lista('Idiomas del selector', 'idiomas', 8, P.idiomas.map((x, i) => `<div class="lc-fila">${campo('ID · 2 a 8 letras a-z', 'idioma-id', x.id, 8, i)}${campo('Nombre · hasta 24 caracteres', 'idioma-nombre', x.nombre, 24, i)}${campo('Traducido % · opcional', 'idioma-avance', x.avance ?? '', 3, i)}${quitar('idiomas', i)}</div>`).join(''))}
     ${lista('Voces del selector', 'voces', 8, voces.map((x, i) => `<div class="lc-fila">${campo('ID · 2 a 10 letras a-z', 'voz-id', x.id, 10, i)}${campo('Nombre · hasta 24 caracteres', 'voz-nombre', x.nombre, 24, i)}${quitar('voces', i)}</div>`).join(''))}
     <section class="caja"><div class="caja-cab"><h3>Borradores</h3></div><div class="caja-cuerpo jc-cfg pg-cfg">
       <p class="jc-nota">Importar sólo agrega borradores. Publicar una versión la lleva al historial y la marca como actual. Publique o descarte los cambios de esta página antes de importar o publicar una versión.</p>
@@ -1558,6 +1558,10 @@ function cambioJc(el, final) {
     }
     else if (k === 'pg-caja-titulo' || k === 'pg-caja-texto') P.cajas[i][k.slice(8)] = v;
     else if (k === 'pg-idioma-id' || k === 'pg-idioma-nombre') P.idiomas[i][k.slice(10)] = v;
+    else if (k === 'pg-idioma-avance') {           // ★ 23-nov: el % de traducción (vacío = no se muestra)
+      const n = String(v).trim() === '' ? null : Math.max(0, Math.min(100, parseInt(v, 10) || 0));
+      if (n === null) delete P.idiomas[i].avance; else P.idiomas[i].avance = n;
+    }
     else if (k === 'pg-voz-id' || k === 'pg-voz-nombre') P.voces[i][k.slice(7)] = v;
     cambioJ(); return;
   }
