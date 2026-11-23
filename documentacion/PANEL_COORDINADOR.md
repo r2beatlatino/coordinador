@@ -118,9 +118,10 @@ No poner cuentas reales en el repo: configurar esta lista sólo en el entorno de
 
 El filtro se aplica en el servidor, recursivamente, a respuestas de gestión R2Beat y contrato1 (conectados,
 búsqueda, ficha, historia, día/sesiones, chat, alertas y todas las acciones), tanto éxitos como errores. También
-a consultas y cambios de torneos. Quita `ip`, `ips`, `login`, `username`, `geoip`, correos y datos de IP compartida
-(`misma_ip`, `comparte_ip`, variantes y **sus contadores**); en contrato1 quita pares `{nombre, valor}` rotulados
-como IP/login. El país independiente puede seguir visible. El panel omite las IPs y «Comparten su IP» cuando
+a consultas y cambios de torneos. A un ADMIN fuera de la lista le quita SÓLO las IP: `ip`, `ips`, `geoip` y todo
+campo que tenga «ip» como palabra (`misma_ip`, `comparte_ip`, `ultima_ip`… y **sus contadores**); en contrato1, los
+pares `{nombre, valor}` rotulados así. El login y el correo los sigue viendo (se usan para encontrar cuentas). A un
+moderador, como siempre, se le quita todo lo privado (`_SIN_PRIVADOS`: también login, username y correo). El país independiente puede seguir visible. El panel omite las IPs y «Comparten su IP» cuando
 no llegan, sin poner «oculta» ni dejar una caja vacía. Los nombres de autores de auditoría mantienen las reglas
 de cada rol. El panel chico del portero no publica IPs ni sesiones de terceros.
 
@@ -186,7 +187,7 @@ juego. En el repo sólo van el logo de Eñeños Team y las fuentes (OFL / Apache
 |---|---|---|
 | `R2_PANEL_URL` | `cuentas` | la lista blanca de destinos: `https://coordinador.xn--eeos-gqab.link` (coma entre varios). Vacía = nadie entra |
 | `R2_PANEL_SALUD` | `cuentas` | `gunbound=http://gunbound:8371/salud;gunbound-prueba=http://gunbound-prueba:9371/gunbound-prueba/salud` (si están en la misma red de Docker) |
-| `R2_VEN_IPS` | `cuentas` | Eñeños-ID con coma; sólo ADMIN listados reciben IPs y datos privados de gestión/torneos; vacía = nadie (§2.2) |
+| `R2_VEN_IPS` | `cuentas` | Eñeños-ID con coma; sólo ADMIN listados reciben las IP (y lo derivado) en gestión/torneos; vacía = nadie (§2.2) |
 | `R2_PANEL_ARTE` | `cuentas` | opcional: otra carpeta para el arte |
 | `R2_JUEGOS_CATALOGO` | `cuentas` | opcional: otro `juegos.json` (la imagen trae el del repo en `/app/juegos.json`) |
 | `WEB_COORDINADOR_NOMBRE` | `web` (Caddy) | `coordinador.xn--eeos-gqab.link` |
