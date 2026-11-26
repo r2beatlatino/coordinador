@@ -290,6 +290,9 @@ services:
       TZ: ${TZ:-America/Lima}
       PUERTA_PROD: r2beat2013:${JUEGO_LOGIN_PUERTO:-47004}
       PUERTA_PRUEBA: r2beat2013-prueba:49004
+      # ★ 26-nov: a qué destinos les manda la IP del jugador (PROXY protocol). SÓLO a un server que la entiende
+      #   (R2_PUERTA_IPS): a uno viejo le rompe el login. Prod recién con R2beat-2013 #17 + #19.
+      PUERTA_PROXY_A: ${PUERTA_PROXY_A:-}
     volumes:
       - puerta_datos:/datos
     ports:
@@ -307,6 +310,8 @@ services:
       R2_PUBLIC_IP: ${R2_IP_PUBLICA:-}
       R2_LOGIN: ${PRUEBA_LOGIN:-pase}
       R2_PASE_JUEGO: r2beat2013-prueba
+      # ★ 26-nov: el login entra por la puerta; su línea PROXY trae la IP del jugador (el lobby la exige igual al login)
+      R2_PUERTA_IPS: ${PRUEBA_PUERTA_IPS:-puerta}
       # ★ 16-nov (Eñeños): en el server de PRUEBA todos con licencia SOL (Estrella|Luna|Sol = 7)
       R2_LICENCIA_MINIMA: ${PRUEBA_LICENCIA_MINIMA:-7}
       # ★ 16-nov: el .npc para todos en el de prueba, y su presencia (para los amigos y Discord) en un puerto propio
