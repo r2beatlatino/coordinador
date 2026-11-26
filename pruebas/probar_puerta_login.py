@@ -15,6 +15,7 @@ import base64
 import importlib.util
 import json
 import os
+import re
 import socket
 import struct
 import sys
@@ -68,7 +69,7 @@ class Falso:
     sesión de OTRO personaje; a lo demás, un paquete con su nombre."""
 
     def __init__(self, nombre, usn, vcode):
-        self.nombre, self.usn, self.vcode, self.vistos = nombre, usn, vcode, []
+        self.nombre, self.usn, self.vcode, self.vistos, self.proxys = nombre, usn, vcode, [], []
         self.elegido = (usn + 100, vcode ^ 0x5555)
         self.puerto = libre()
         self.s = socket.socket()
@@ -95,6 +96,9 @@ class Falso:
                     break
                 buf += d
                 self.vistos.append(d)
+                if buf.startswith(b"PROXY ") and b"\r\n" in buf:     # ★ 26-nov: la línea de la puerta (como el 2013)
+                    linea, _, buf = buf.partition(b"\r\n")
+                    self.proxys.append(linea)
                 fs, buf = parse_frames(buf)
                 for _m, cmd, pl in fs:
                     if cmd == 0x01 and len(pl) > 12 and pl[4] == 0x50:
@@ -218,6 +222,24 @@ def main():
     ok(hablar(pp4, armar_login_pase(pase_falso("r2beat2013-prueba"))) == b"", "prueba apagado: se corta (no cae en prod)")
     ok(hablar(pp4, armar_login_pase(pase_falso("r2beat2013"))) == resp_login_launcher(7, prod.vcode),
        "…y prod sigue andando igual")
+
+    print("6 · ★ la IP del jugador (PROXY protocol), sólo a los destinos de PUERTA_PROXY_A")
+    pp5 = libre()
+    prod.proxys.clear()
+    prueba.proxys.clear()
+    arrancar_puerta(dict(env, PUERTA_ESCUCHAR="127.0.0.1:%d" % pp5, PUERTA_PROXY_A="prueba"))
+    os.environ.pop("PUERTA_PROXY_A")
+    r = hablar(pp5, armar_login_pase(pase_falso("r2beat2013-prueba")), trozos=3)
+    ok(r == resp_login_launcher(7, prueba.vcode), "con la línea delante, el login de PRUEBA contesta igual")
+    ok(len(prueba.proxys) == 1 and re.fullmatch(rb"PROXY TCP4 127\.0\.0\.1 127\.0\.0\.1 [0-9]+ %d" % pp5, prueba.proxys[0]),
+       "PRUEBA recibe la línea PROXY con la IP y el puerto del jugador (%r)" % (prueba.proxys[:1],))
+    r = hablar(pp5, armar_login_pase(pase_falso("r2beat2013")))
+    ok(r == resp_login_launcher(7, prod.vcode) and not prod.proxys, "⟲ revés: PROD (no está en PUERTA_PROXY_A) no recibe ninguna línea")
+    hablar(pp, armar_login_pase(pase_falso("r2beat2013-prueba")))
+    ok(len(prueba.proxys) == 1, "⟲ revés: una puerta sin PUERTA_PROXY_A no la manda")
+    ok(m1.linea_proxy(("::ffff:10.1.2.3", 5), ("::ffff:172.18.0.5", 48004)) == b"PROXY TCP4 10.1.2.3 172.18.0.5 5 48004\r\n",
+       "una IPv4 escrita como IPv6 sale como TCP4")
+    ok(m1.linea_proxy(("?", 0), ("1.2.3.4", 1)) == b"", "⟲ revés: si no se sabe la IP, no se manda línea (el server sigue con la que ve)")
 
     print("\n%s" % ("✔ probar_puerta_login: todo bien" if not fallos else "✘ %d fallo(s): %s" % (len(fallos), fallos)))
     return 1 if fallos else 0
