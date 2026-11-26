@@ -1801,3 +1801,18 @@ body.test .t-cruce { background: linear-gradient(180deg, rgba(42,35,24,.97), rgb
 .pg-cfg article, .pg-cfg details { overflow-wrap: anywhere; padding: 12px 0; border-top: 1px solid var(--line); }
 .pg-cfg article p, .pg-cfg details p { margin: 8px 0; }
 .pg-cfg ul { padding-left: 20px; margin: 6px 0 12px; }
+
+/* ★ 26-nov · la SEGURIDAD de R2Beat 2013 (lo de Hysteria) */
+.g-seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.g-seg-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.g-seg-lista li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.g-seg-lista li > span { flex: 1; min-width: 140px; }
+.g-seg-lista li small { flex-basis: 100%; color: var(--tenue, #9aa); font-size: 12px; }
+.g-seg-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.g-seg-q { max-width: 220px; }
+.g-seg-ev, .g-seg-pc { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.g-seg-ev li, .g-seg-pc li { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.03); }
+.g-seg-ev-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.g-seg-ev-quien { font-weight: 600; }
+.g-seg-ev p, .g-seg-pc p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.g-seg-ev .accs, .g-seg-pc + .accs { margin-top: 8px; }

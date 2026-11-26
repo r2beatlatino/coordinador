@@ -790,8 +790,8 @@ function nombresDe(J, mes) {
   mes.dias.forEach(x => [...(x.premios || []), ...(x.si_no || [])].forEach(p => { if (p.item != null && p.nombre) J.nombres[p.item] = p.nombre; }));
 }
 const tabsC = J => [...(J.d.pagina_local ? ['pagina'] : []), ...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
-const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas'] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
-const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
+const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas', ...(tieneSeg(J) ? ['seguridad'] : [])] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
+const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' || k === 'seguridad' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
 const suciasJc = J => Object.keys(J.borr).filter(k => puedeJc(J, k) && ser(J.borr[k]) !== J.orig[k]);
 const juegoCat = jid => S.catalogo.find(x => x.id === jid) || S.juegos.find(x => x.id === jid) || { id: jid, nombre: jid, color: '' };
 const envTxt = env => ENV_TXT[env] || 'PROD';
@@ -904,8 +904,9 @@ function pintarCuerpoJ(foco) {
     return;
   }
   if (esG(J.tab)) {                                        // ★ fase C
-    c.innerHTML = J.tab === 'resumen' ? edTablero(J) : edPersonas(J);
+    c.innerHTML = J.tab === 'resumen' ? edTablero(J) : J.tab === 'seguridad' ? edSeguridad(J) : edPersonas(J);
     if (J.tab === 'resumen') { pintarTableroCab(J); if (Date.now() - J.g.t > 10000) cargarTablero(J); }
+    if (J.tab === 'seguridad' && (!J.g.seg || Date.now() - (J.g.seg.t || 0) > 15000)) cargarSeguridad(J);      // ★ 26-nov
     if (J.tab === 'personas' && J.sel) { const F = J.g.fichas[String(J.sel)]; if (!F || !F.f || F.dias !== J.g.dias) cargarFicha(J, J.sel); }
     if (J.tab === 'personas' && !J.sel && J.g.q && !J.g.res) buscarPersonas(J, J.g.q);
     if (foco) { const f = $(foco); if (f) f.focus(); } else if (J.tab === 'personas' && !J.sel) { const f = $('#gBusq'); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }
@@ -1649,7 +1650,7 @@ function elegirItem(id) {
    hacer lo dice `gestion/mios` (acciones y cupos): un botón que no puede usar se ve apagado, con «Lo asigna un ADMIN».
    ⛔ A un moderador el Coordinador le saca IP, login y «misma IP»: nada de esto se rompe si faltan.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
-const G_TABS = ['resumen', 'personas'];
+const G_TABS = ['resumen', 'personas', 'seguridad'];
 JC_TABS.resumen = ['Tablero', 'dash'];
 JC_TABS.personas = ['Personas', 'users'];
 const esG = k => G_TABS.includes(k);
@@ -1686,6 +1687,157 @@ function gBtn(J, accion, { acc, icono, txt, datos = '', cls = 'btn chico', off =
 }
 function nuevoG(mios) {
   return { mios, tipo: mios.tipo || 'r2beat', cap: null, ok: false, dias: 14, q: '', res: null, fichas: {}, filtro: '', estado: 'todos', t: 0, verTabla: false };
+}
+
+/* ══════════════ ★ 26-nov · SEGURIDAD (R2Beat 2013) — lo de Hysteria: el antitrampa central, la PC de cada cuenta
+   (la máquina / HWID) y los interruptores de los topes, que valen AL INSTANTE (sin reiniciar el juego). Rutas del
+   juego: `servidor/seguridad_panel.py`. La acción «seguridad» se asigna a moderadores; los interruptores son SÓLO de
+   ADMIN («seguridad/ajustes»). ⛔ A un moderador el Coordinador le saca el login de las cuentas (va como `login`). ══ */
+JC_TABS.seguridad = ['Seguridad', 'lock'];
+const RIESGO_EV = { informativo: ['Info', ''], bajo: ['Bajo', ''], medio: ['Medio', 'oro'], alto: ['Alto', 'rojo'], critico: ['Crítico', 'rojo'] };
+const ESTADO_EV = { nuevo: 'Nuevo', revisado: 'Revisado', confirmado: 'Confirmado', descartado: 'Descartado', sancionado: 'Sancionado' };
+const EV_ID = /^[0-9a-f]{8,64}$/;
+const tieneSeg = J => !!(J && J.g && J.g.ok && !esC(J) && puedeG(J, 'seguridad'));
+async function cargarSeguridad(J) {
+  const G = J.g; if (!G || G.segCargando) return;
+  G.seg = G.seg || { estado: 'nuevo', riesgo: '', jugador: '' };
+  G.segCargando = true;
+  const q = new URLSearchParams({ limite: '100' });
+  if (G.seg.estado) q.set('estado', G.seg.estado);
+  if (G.seg.riesgo) q.set('riesgo_min', G.seg.riesgo);
+  if (G.seg.jugador) q.set('jugador', G.seg.jugador);
+  const [r, e] = await Promise.all([api(gRuta(J, 'seguridad')), api(gRuta(J, 'seguridad/eventos?' + q))]);
+  G.segCargando = false;
+  if (S.jc !== J) return;
+  G.seg.r = r.ok ? r.d : null; G.seg.err = r.ok ? null : errTxt(r);
+  G.seg.ev = e.ok ? e.d.eventos || [] : null; G.seg.everr = e.ok ? null : errTxt(e);
+  G.seg.t = Date.now();
+  if (J.tab === 'seguridad') { const c = $('#gSeg'); if (c) c.innerHTML = cuerpoSeguridad(J); }
+}
+function edSeguridad(J) { return `<div id="gSeg" role="tabpanel" aria-labelledby="jcTab-seguridad">${cuerpoSeguridad(J)}</div>`; }
+const topeTxt = n => (Number(n) ? `<b>${Number(n)}</b> a la vez` : '<b>sin tope</b>');
+function cuerpoSeguridad(J) {
+  const G = J.g, s = G.seg;
+  if (!s || !s.t) return `<div class="caja g-cargando"><span class="esq" style="height:120px"></span><span class="esq" style="height:240px"></span><span class="tenue">Cargando la seguridad…</span></div>`;
+  if (!s.r) return `<section class="caja">${vacio('No se pudo leer la seguridad del juego', s.err || 'Pruebe en un rato.')}</section>`;
+  const a = s.r.ajustes || {}, m = s.r.maquina || {}, h = s.r.eventos_hoy || {};
+  const admin = puedeG(J, 'seguridad/ajustes');
+  const fila = (t, v, sub = '') => `<li><span>${t}</span>${v}${sub ? `<small>${sub}</small>` : ''}</li>`;
+  const inter = `<section class="caja" aria-labelledby="gSegInt"><div class="caja-cab"><h3 id="gSegInt">${ic('lock', 's16')}Interruptores</h3><span class="sub">valen al instante, sin reiniciar</span></div>
+    <ul class="g-seg-lista">${fila('Cuentas por PC', topeTxt(a.max_cuentas_maquina))}${fila('Baneo por PC', `<b>${a.baneo_maquina ? 'Prendido' : 'Apagado'}</b>`, 'banear una cuenta banea también sus PC')}${fila('Cuentas por IP', topeTxt(a.max_cuentas_ip))}</ul>
+    ${!Number(a.max_cuentas_maquina) && !a.baneo_maquina ? `<p class="tenue g-nota">${ic('info', 's14')} La máquina sólo <b>anota</b>: registra qué cuentas entran desde cada PC, pero todavía no rechaza a nadie.</p>` : ''}
+    <div class="accs">${admin ? `<button type="button" class="btn chico" data-accion="g-seg-ajustes">${ic('lock', 's14')}Cambiar</button>`
+      : `<button type="button" class="btn chico g-sin" disabled title="Sólo ADMIN">${ic('lock', 's14')}Cambiar<span class="sr"> (sólo ADMIN)</span></button>`}</div></section>`;
+  const maq = `<section class="caja" aria-labelledby="gSegMaq"><div class="caja-cab"><h3 id="gSegMaq">${ic('users', 's16')}La máquina (HWID)</h3><span class="sub">cada PC por una huella, nunca la MAC</span></div>
+    <ul class="g-seg-lista">${fila('PC anotadas', `<b>${miles(m.pcs)}</b>`)}${fila('Cuentas', `<b>${miles(m.cuentas)}</b>`)}${fila('PC con más de una cuenta', `<b>${miles(m.pcs_compartidas)}</b>`)}${fila('La PC con más cuentas', `<b>${miles(m.max_cuentas_en_una_pc)}</b>`)}${fila('PC baneadas', `<b>${miles(m.pcs_baneadas)}</b>`)}</ul>
+    <p class="tenue g-nota">${ic('info', 's14')} Qué cuentas comparten PC se ve en la ficha de cada personaje.</p></section>`;
+  const rh = h.riesgo || {};
+  const hoy = `<section class="caja" aria-labelledby="gSegHoy"><div class="caja-cab"><h3 id="gSegHoy">${ic('alert', 's16')}Antitrampa · hoy</h3><span class="sub">${miles(h.total)} ${Number(h.total) === 1 ? 'evento' : 'eventos'} · ${miles(h.cuentas)} ${Number(h.cuentas) === 1 ? 'cuenta' : 'cuentas'}</span></div>
+    <div class="chips">${Object.keys(RIESGO_EV).filter(k => rh[k]).map(k => `<span class="chip ${RIESGO_EV[k][1]}">${RIESGO_EV[k][0]} <b>${miles(rh[k])}</b></span>`).join('') || '<span class="tenue">Nada hoy.</span>'}</div></section>`;
+  const boton = (acc, k, v, t) => `<button type="button" class="chipb" data-accion="${acc}" data-k="${k}" aria-pressed="${v === k}">${t}</button>`;
+  const filtros = `<div class="g-seg-filtros">
+    <div class="chips" role="group" aria-label="Estado">${boton('g-seg-estado', 'nuevo', s.estado, 'Sin revisar')}${boton('g-seg-estado', '', s.estado, 'Todos')}</div>
+    <div class="chips" role="group" aria-label="Riesgo">${boton('g-seg-riesgo', '', s.riesgo, 'Cualquier riesgo')}${boton('g-seg-riesgo', 'medio', s.riesgo, 'Medio o más')}${boton('g-seg-riesgo', 'alto', s.riesgo, 'Alto o más')}</div>
+    <label class="campo g-seg-q"><span class="sr">Jugador</span><input id="gSegQ" maxlength="60" autocomplete="off" placeholder="Apodo o usn" value="${esc(s.jugador)}"></label>
+    <button type="button" class="btn chico" data-accion="g-seg-buscar">${ic('search', 's14')}Buscar</button>
+    <button type="button" class="btn chico fantasma" data-accion="g-seg-recargar">${ic('refresh', 's14')}Actualizar</button></div>`;
+  const evs = s.ev;
+  const filasEv = !evs ? vacio('No se pudieron leer los eventos', s.everr || '')
+    : !evs.length ? vacio('No hay eventos con ese filtro', s.estado === 'nuevo' ? 'Todo lo que detectó el antitrampa ya fue revisado.' : 'Pruebe con otro filtro.')
+    : `<ul class="g-seg-ev">${evs.map(e => {
+      const r = RIESGO_EV[e.riesgo] || [esc(e.riesgo), ''];
+      const quien = e.uid != null ? `<a href="${urlPj(J, e.uid)}">${esc(e.nick || '#' + e.uid)}</a>` : esc(e.nick || (e.usn != null ? 'usn ' + e.usn : '—'));
+      const abierto = e.estado === 'nuevo' || e.estado === 'revisado' || e.estado === 'confirmado';
+      const ok = EV_ID.test(String(e.evento || ''));
+      return `<li><div class="g-seg-ev-cab"><span class="chip ${r[1]}">${r[0]}</span><b>${esc(e.regla)}</b><span class="tenue">${esc(e.categoria || '')}</span>
+          <span class="g-seg-ev-quien">${quien}</span><span class="tenue">${fechaTxt(e.cuando)}${Number(e.repeticiones) > 1 ? ` · ×${miles(e.repeticiones)}` : ''}</span>
+          <span class="chip">${ESTADO_EV[e.estado] || esc(e.estado)}</span></div>
+        ${e.descripcion ? `<p>${esc(e.descripcion)}</p>` : ''}
+        ${e.nota || e.revisado_por ? `<p class="tenue">${e.revisado_por ? `por ${esc(e.revisado_por)}` : ''}${e.nota ? ` · «${esc(e.nota)}»` : ''}</p>` : ''}
+        ${abierto && ok ? `<div class="accs">${e.estado === 'nuevo' ? gBtn(J, 'seguridad', { acc: 'g-seg-ev', icono: 'eye', txt: 'Revisado', datos: `data-k="revisar" data-ev="${esc(e.evento)}"` }) : ''}
+          ${gBtn(J, 'seguridad', { acc: 'g-seg-ev', icono: 'check', txt: 'Falso positivo', datos: `data-k="descartar" data-ev="${esc(e.evento)}"`, cls: 'btn chico fantasma' })}</div>` : ''}</li>`;
+    }).join('')}</ul>`;
+  return `<div class="g-seg">${inter}${maq}${hoy}</div>
+    <section class="caja" aria-labelledby="gSegEv"><div class="caja-cab"><h3 id="gSegEv">${ic('eye', 's16')}Eventos del antitrampa</h3><span class="sub">el más nuevo primero · revisar no sanciona a nadie</span></div>
+      ${filtros}${filasEv}</section>`;
+}
+function accionEvento(J, ev, k) {
+  if (!puedeG(J, 'seguridad') || !EV_ID.test(String(ev || ''))) return;
+  const T = { revisar: ['¿Marcar como revisado?', 'Queda anotado que lo miró una persona. No sanciona a nadie.', 'Marcar revisado', 'eye'],
+    descartar: ['¿Es un falso positivo?', 'El evento queda descartado y, si esperaba la tanda de sanciones, no suma falta.', 'Descartar', 'check'] }[k];
+  if (!T) return;
+  confirmar({ titulo: T[0], txt: T[1], ok: T[2], icono: T[3], peligro: false,
+    extra: '<span class="lab">Nota (opcional, queda en la auditoría)</span><label class="campo"><span class="sr">Nota</span><input id="mdExtra" maxlength="300" autocomplete="off"></label>',
+    alAceptar: async nota => {
+      const r = await gPost(J, `seguridad/evento/${ev}`, { accion: k, nota: String(nota || '').trim() });
+      toast(r.ok ? { t: esc((r.d && r.d.mensaje) || 'Listo') } : { t: 'No se pudo', sub: errTxt(r), tipo: 'err' });
+      cargarSeguridad(J);
+    } });
+}
+function formAjustesSeg(J) {
+  const s = J.g.seg; if (!puedeG(J, 'seguridad/ajustes') || !s || !s.r) return;
+  const a = s.r.ajustes || {};
+  const num = (id, t, v, sub) => `<div><span class="lab">${t}</span><label class="campo" style="max-width:220px"><span class="sr">${t}</span><input id="${id}" type="number" min="0" max="20" step="1" value="${Number(v) || 0}" inputmode="numeric"><span class="tenue" style="font-size:13px">0 = sin tope</span></label><p class="tenue g-nota">${sub}</p></div>`;
+  const pn = abrirCapa(`<div class="modal ancho" role="dialog" aria-modal="true" aria-labelledby="sgTit">
+    <div class="modal-cab"><span class="ic">${ic('lock', 's20')}</span><div><h2 id="sgTit">Interruptores de seguridad</h2><p>Valen al instante en el juego, sin reiniciar, y quedan guardados.</p></div></div>
+    <div class="modal-cuerpo" style="display:flex;flex-direction:column;gap:16px">
+      ${num('sgMaq', 'Cuentas a la vez por PC', a.max_cuentas_maquina, 'Desde la misma PC (aunque cambien de IP). La que pasa el tope no entra al lobby.')}
+      <div><span class="lab">Baneo por PC</span><div class="chips" role="group" aria-label="Baneo por PC">
+        <button type="button" class="chipb" data-sg="1" aria-pressed="${!!a.baneo_maquina}">Prendido</button><button type="button" class="chipb" data-sg="0" aria-pressed="${!a.baneo_maquina}">Apagado</button></div>
+        <p class="tenue g-nota">Prendido: banear una cuenta banea también las PC desde las que entró.</p></div>
+      ${num('sgIp', 'Cuentas a la vez por IP', a.max_cuentas_ip, 'Los cibers y las IP de la lista libre no tienen tope.')}
+      <div class="cuenta-txt"><span id="sgErr" style="color:var(--red)"></span></div>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-accion="cerrar-capa">Cancelar</button><button type="button" class="btn prim" id="sgOk">Guardar</button></div></div>`);
+  let ban = !!a.baneo_maquina;
+  const err = t => { $('#sgErr', pn).textContent = t || ''; };
+  $$('[data-sg]', pn).forEach(b => b.addEventListener('click', () => { ban = b.dataset.sg === '1'; $$('[data-sg]', pn).forEach(x => x.setAttribute('aria-pressed', x === b)); err(''); }));
+  $('#sgOk', pn).addEventListener('click', async () => {
+    const maq = Number($('#sgMaq', pn).value), ip = Number($('#sgIp', pn).value);
+    if (![maq, ip].every(n => Number.isInteger(n) && n >= 0 && n <= 20)) return err('Los topes van de 0 a 20 (0 = sin tope).');
+    const cambios = {};
+    if (maq !== (Number(a.max_cuentas_maquina) || 0)) cambios.max_cuentas_maquina = maq;
+    if (ban !== !!a.baneo_maquina) cambios.baneo_maquina = ban;
+    if (ip !== (Number(a.max_cuentas_ip) || 0)) cambios.max_cuentas_ip = ip;
+    if (!Object.keys(cambios).length) return err('No cambió nada.');
+    const b = $('#sgOk', pn); b.disabled = true;
+    const r = await gPost(J, 'seguridad/ajustes', cambios);
+    b.disabled = false;
+    if (!r.ok) return err((r.d && r.d.error) || `Error ${r.status}`);
+    cerrarCapa();
+    toast({ t: 'Interruptores guardados', sub: 'Ya valen en el juego.' });
+    cargarSeguridad(J);
+  });
+}
+/* en la FICHA: las PC de esta cuenta y quién más entró desde ellas */
+function pcHtml(J, F) {
+  if (!tieneSeg(J)) return '';
+  const p = F.pc;
+  const cab = `<div class="caja-cab"><h3 id="gTPc">${ic('users', 's16')}Sus PC</h3><span class="sub">la máquina (HWID)</span></div>`;
+  if (!p) return `<section class="caja" aria-labelledby="gTPc">${cab}<p class="tenue">${F.pcErr ? esc(F.pcErr) : 'Cargando…'}</p></section>`;
+  if (!p.pcs.length) return `<section class="caja" aria-labelledby="gTPc">${cab}<p class="tenue">Todavía no se anotó ninguna PC de esta cuenta.</p></section>`;
+  return `<section class="caja" aria-labelledby="gTPc">${cab}
+    <ul class="g-seg-pc">${p.pcs.map(x => `<li><div><b>PC ${esc(x.pc)}…</b>${x.baneada ? ` <span class="chip rojo">${ic('ban', 's14')}Baneada</span>` : ''}
+        <span class="tenue">desde ${fechaTxt(x.primera)} · última ${fechaTxt(x.ultima)} · ${miles(x.veces)} ${Number(x.veces) === 1 ? 'vez' : 'veces'}</span></div>
+      ${x.otras_cuentas.length ? `<p>También entraron: ${x.otras_cuentas.map(o => o.uid != null ? `<a href="${urlPj(J, o.uid)}">${esc(o.nick || '#' + o.uid)}</a>` : esc(o.nick || '—')).join(', ')}</p>` : '<p class="tenue">Nadie más entró desde esta PC.</p>'}</li>`).join('')}</ul>
+    ${p.alguna_baneada ? `<div class="accs">${gBtn(J, 'seguridad', { acc: 'g-pc-perdonar', icono: 'check', txt: 'Perdonar sus PC' })}</div>` : ''}</section>`;
+}
+function perdonarPc(J) {
+  const f = fichaSel(J); if (!f || !puedeG(J, 'seguridad')) return;
+  confirmar({ titulo: `¿Perdonar las PC de ${esc(f.nick)}?`, txt: 'Saca el baneo de las PC desde las que entró esta cuenta: otras cuentas vuelven a poder entrar desde ellas. No desbanea la cuenta.', ok: 'Perdonar', icono: 'check', peligro: false,
+    alAceptar: async () => {
+      const r = await gPost(J, `usuario/${f.uid}/maquina/perdonar`, {});
+      toast(r.ok ? { t: `PC perdonadas: ${miles(r.d.pcs_perdonadas)}` } : { t: 'No se pudo', sub: errTxt(r), tipo: 'err' });
+      cargarPcs(J, f.uid);
+    } });
+}
+async function cargarPcs(J, uid) {
+  if (!tieneSeg(J)) return;
+  const k = String(uid), r = await api(gRuta(J, `usuario/${uid}/maquinas`));
+  if (S.jc !== J) return;
+  const F = J.g.fichas[k] = J.g.fichas[k] || {};
+  F.pc = r.ok ? r.d : null; F.pcErr = r.ok ? null : errTxt(r);
+  if (J.tab === 'personas' && String(J.sel) === k) repintarFicha(J);
 }
 
 /* ══════════════ el TABLERO ══════════════ */
@@ -2045,6 +2197,7 @@ async function cargarFicha(J, uid, solo) {
     F.pjs = r.ok ? (r.d.filas || []).filter(x => x.enenos_id === F.f.enenos_id && x.uid != null) : [];
   }
   if (J.tab === 'personas' && String(J.sel) === k) { repintarFicha(J); pintarAccJ(); }
+  if (!solo && !F.pc) cargarPcs(J, uid);                     // ★ 26-nov: sus PC (si su cuenta ve la seguridad)
 }
 function fichaHtml(J) {
   if (esC(J)) return fichaHtmlC(J);
@@ -2088,6 +2241,7 @@ function fichaHtml(J) {
       </div>
       <div class="g-col-der">
         ${herramientasHtml(J, f)}
+        ${pcHtml(J, F)}
         ${inventarioHtml(J, f)}
         ${admin && (f.ips || f.misma_ip) ? conexionesHtml(J, f) : ''}
         ${equipoHtml(f)}
@@ -2715,6 +2869,13 @@ function accionG(a) {
   const k = a.dataset.accion;
   switch (k) {
     case 'g-recargar': cargarTablero(J); break;
+    case 'g-seg-recargar': cargarSeguridad(J); break;                                            // ★ 26-nov: seguridad
+    case 'g-seg-estado': J.g.seg.estado = a.dataset.k; cargarSeguridad(J); break;
+    case 'g-seg-riesgo': J.g.seg.riesgo = a.dataset.k; cargarSeguridad(J); break;
+    case 'g-seg-buscar': { const i = $('#gSegQ'); J.g.seg.jugador = i ? i.value.trim().slice(0, 60) : ''; cargarSeguridad(J); break; }
+    case 'g-seg-ev': accionEvento(J, a.dataset.ev, a.dataset.k); break;
+    case 'g-seg-ajustes': formAjustesSeg(J); break;
+    case 'g-pc-perdonar': perdonarPc(J); break;
     case 'g-estado': J.g.estado = a.dataset.k; $$('[data-accion="g-estado"]').forEach(b => b.setAttribute('aria-pressed', b === a)); { const l = $('#gCon'); if (l) l.innerHTML = filasConectados(J); } break;
     case 'g-aviso': formAviso(J, a.dataset.a, a.dataset.id, a.dataset.nom || ''); break;
     case 'g-lugar': { J.g.filtro = J.g.filtro === a.dataset.k ? '' : a.dataset.k; const i = $('#gFiltro'); if (i) i.value = J.g.filtro;

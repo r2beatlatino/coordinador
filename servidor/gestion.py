@@ -54,17 +54,24 @@ ASIGNABLES = {
     "moneda": ("Dar o quitar monedas del juego", "moneda"),     # ★ contrato1: con cupo por moneda
     "torneos": ("Manejar los torneos", None),                     # ★ 20-nov: torneos.py (crear, estados, la llave)
     "clave": ("Restablecer contraseña", None),                    # ★ 21-nov: de TODA LA RED (fila `_red`)
+    # ★ 26-nov: lo de Hysteria en R2Beat 2013 — los eventos del antitrampa central (revisar / descartar), qué cuentas
+    #   comparten PC (la máquina / HWID) y perdonar una PC. Los INTERRUPTORES de los topes son de SOLO_ADMIN.
+    "seguridad": ("Seguridad: antitrampa y PC compartidas", None),
 }
+# ★ 26-nov: acciones que NO se asignan: sólo un ADMIN (el permiso no existe para un moderador).
+SOLO_ADMIN = {"seguridad/ajustes": "Cambiar los interruptores de seguridad (topes por PC / IP, baneo por PC)"}
 RED = "_red"                       # la «fila» de los permisos de toda la red (la cuenta Eñeños, no un juego)
 ASIGNABLES_RED = ("clave",)
 # lo que se puede asignar en cada tipo de servidor
-ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "licencia", "gorila", "chat", "torneos"),
+ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "licencia", "gorila", "chat", "torneos",
+                            "seguridad"),
                  "contrato1": ("moneda",)}
 _MONEDA_ID = re.compile(r"^[a-z0-9_]{1,20}$")
 CUPOS = ("rcoin", "exp")
 CUPO_MAX = 100_000_000
 
 _N = r"\d{1,12}"
+_EV = r"[0-9a-f]{8,64}"              # ★ 26-nov: el id de un evento del antitrampa central
 # (método, regex de la ruta) -> acción que pide
 RUTAS = [
     ("GET", r"salud", "ver"),
@@ -89,6 +96,13 @@ RUTAS = [
     ("POST", rf"usuario/{_N}/apodo", "apodo"),
     ("POST", rf"usuario/{_N}/licencia", "licencia"),
     ("POST", rf"usuario/{_N}/gorila", "gorila"),
+    # ★ 26-nov: la SEGURIDAD (servidor/seguridad_panel.py del juego)
+    ("GET", r"seguridad", "seguridad"),
+    ("GET", r"seguridad/eventos", "seguridad"),
+    ("GET", rf"usuario/{_N}/maquinas", "seguridad"),
+    ("POST", rf"seguridad/evento/{_EV}", "seguridad"),
+    ("POST", rf"usuario/{_N}/maquina/perdonar", "seguridad"),
+    ("POST", r"seguridad/ajustes", "seguridad/ajustes"),
 ]
 _RUTAS = [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS]
 _ID = r"[A-Za-z0-9_.-]{1,40}"
@@ -321,7 +335,7 @@ def permisos(P, viewer, jid):
     """{rol, acciones: [...], cupos: {rcoin: {cupo, dado, queda}, exp: …, "moneda:oro": …}} de esa cuenta en ese juego."""
     rol = P.rol_de(viewer)
     if rol == "admin":
-        return {"rol": "admin", "acciones": list(BASE) + list(ASIGNABLES), "cupos": None, "poner": True}
+        return {"rol": "admin", "acciones": list(BASE) + list(ASIGNABLES) + list(SOLO_ADMIN), "cupos": None, "poner": True}
     mios = P.juegos_de_moderador(viewer) if rol == "moderador" else None
     if rol != "moderador" or mios is None or jid not in mios:
         return {"rol": rol, "acciones": [], "cupos": None, "poner": False}
