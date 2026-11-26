@@ -217,5 +217,30 @@ function ok(cond, texto) {
   run(`proxima={ok:true,d:{sesiones:[{inicio:1,fin:2,ip:'192.0.2.5',pais:'PE'}]}};`);
   await run(`abrirDia(JL,'2026-11-23')`);
   ok(run(`diaLic.innerHTML.includes('PE 192.0.2.5')`), '⟲ sesiones autorizadas muestran país e IP');
+  // ★ 26-nov · la SEGURIDAD de R2Beat 2013: pestaña con permiso, interruptores sólo ADMIN, todo escapado
+  run(`const mkS = acciones => { const X = {jid:'r2beat2013', env:'live', d:{}, g:nuevoG({tipo:'r2beat', rol:'moderador', acciones})}; X.g.ok = true; return X; };
+    var JS1 = mkS(['ver','seguridad']), JS0 = mkS(['ver']), JSA = mkS(['ver','seguridad','seguridad/ajustes']);
+    var segR = {ajustes:{max_cuentas_maquina:0, baneo_maquina:false, max_cuentas_ip:0}, maquina:{pcs:38, cuentas:39, pcs_compartidas:1, max_cuentas_en_una_pc:2, pcs_baneadas:0},
+      eventos_hoy:{total:3, cuentas:2, riesgo:{alto:1, bajo:2}}};
+    var segEv = [{evento:'ab'.repeat(16), cuando:'2026-11-26 18:30:00', uid:7, nick:'<img src=x onerror=alert(1)>', regla:'<b>proceso</b>', categoria:'herramienta',
+        riesgo:'alto', estado:'nuevo', repeticiones:2, descripcion:'<script>x</script>'},
+      {evento:'cd'.repeat(16), cuando:'2026-11-26 18:31:00', uid:8, nick:'Ana', regla:'reloj', riesgo:'bajo', estado:'descartado'}];
+    for (const X of [JS1, JSA]) X.g.seg = {estado:'nuevo', riesgo:'', jugador:'', r: segR, ev: segEv, t: 1};`);
+  ok(run(`tabsJc(JS1).includes('seguridad') && !tabsJc(JS0).includes('seguridad')`), 'Seguridad: la pestaña sólo con el permiso «seguridad» (⟲ sin él no aparece)');
+  ok(run(`!cuerpoSeguridad(JS1).includes('data-accion="g-seg-ajustes"') && cuerpoSeguridad(JS1).includes('Sólo ADMIN')
+      && cuerpoSeguridad(JSA).includes('data-accion="g-seg-ajustes"')`), 'Seguridad: «Cambiar» los interruptores sólo ADMIN (⟲ el moderador lo ve apagado)');
+  ok(run(`const h1 = cuerpoSeguridad(JS1); !h1.includes('<img') && !h1.includes('<script>') && !h1.includes('<b>proceso') && h1.includes('&lt;img')`),
+    'Seguridad: apodo, regla y descripción de un evento van escapados (no se ejecutan)');
+  ok(run(`cuerpoSeguridad(JS1).includes('sólo <b>anota</b>')`), 'Seguridad: con los topes en 0 avisa que la máquina sólo anota');
+  run(`JS1.g.seg.r = Object.assign({}, segR, {ajustes:{max_cuentas_maquina:2, baneo_maquina:true, max_cuentas_ip:0}});`);
+  ok(run(`!cuerpoSeguridad(JS1).includes('sólo <b>anota</b>') && cuerpoSeguridad(JS1).includes('<b>2</b> a la vez')`), '⟲ con tope 2 ya no dice que sólo anota');
+  ok(run(`const h2 = cuerpoSeguridad(JS1); (h2.match(/data-accion="g-seg-ev"/g) || []).length === 2 && h2.includes('data-ev="' + 'ab'.repeat(16))
+      && !h2.includes('data-ev="' + 'cd'.repeat(16))`), 'Seguridad: botones sólo en el evento abierto (⟲ el descartado no tiene)');
+  run(`var Fpc = {pc:{pcs:[{pc:'02fab1d8', primera:'2026-11-26 13:10', ultima:'2026-11-26 13:11', veces:3, baneada:false,
+      otras_cuentas:[{uid:9, nick:'<i>Beto</i>'}]}], alguna_baneada:false}};`);
+  ok(run(`const h3 = pcHtml(JS1, Fpc); h3.includes('#/j/r2beat2013/live/personas/9') && h3.includes('&lt;i&gt;Beto') && !h3.includes('g-pc-perdonar')`),
+    'Ficha: sus PC con link a la otra cuenta, escapado (⟲ sin baneo no ofrece perdonar)');
+  run(`Fpc.pc.alguna_baneada = true; Fpc.pc.pcs[0].baneada = true;`);
+  ok(run(`pcHtml(JS1, Fpc).includes('g-pc-perdonar') && pcHtml(JS0, Fpc) === ''`), 'Ficha: con una PC baneada ofrece perdonar (⟲ sin permiso, nada)');
   process.stdout.write(`\n✔ probar_paginas_panel: ${controles} controles, 0 fallas\n`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

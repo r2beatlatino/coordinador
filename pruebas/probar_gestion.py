@@ -178,6 +178,32 @@ for licencia in ("ninguna", "estrella", "luna", "sol"):
 ok(P._propia().execute("SELECT COUNT(*) FROM auditoria WHERE accion = 'gestión · licencia'").fetchone()[0] == 5,
    "las cinco licencias cambiadas quedan en gestión · licencia")
 
+# ★ 26-nov · la SEGURIDAD de R2Beat 2013 (lo de Hysteria): «seguridad» se asigna; los interruptores, SÓLO ADMIN
+EV = "ab" * 16
+n = len(VISTO)
+cod, _ = pedir(MR2, "GET", "seguridad")
+ok(cod == 403 and len(VISTO) == n, "⟲ seguridad sin el permiso: 403 y no viaja")
+cod, d = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MR2, "juego": "r2beat2013", "acciones": ["licencia", "seguridad"]})
+ok(cod == 200 and "seguridad" in d["asignables_de"]["r2beat2013"] and "seguridad" not in GE.ASIGNABLES_DE["contrato1"],
+   "«seguridad» se asigna en R2Beat (no en GunBound, que no la tiene)")
+for metodo, ruta in (("GET", "seguridad"), ("GET", "seguridad/eventos"), ("GET", "usuario/5/maquinas"),
+                     ("POST", f"seguridad/evento/{EV}"), ("POST", "usuario/5/maquina/perdonar")):
+    cod, _ = pedir(MR2, metodo, ruta, {} if metodo == "POST" else None)
+    ok(cod == 200 and VISTO[-1]["ruta"].split("?")[0].endswith(ruta), f"moderador con seguridad: {metodo} {ruta} pasa")
+n = len(VISTO)
+cod, _ = pedir(MR2, "POST", "seguridad/ajustes", {"max_cuentas_maquina": 2})
+ok(cod == 403 and len(VISTO) == n, "⟲ los interruptores: un moderador (aun con seguridad) 403 y no viaja")
+cod, _ = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MR2, "juego": "r2beat2013", "acciones": ["seguridad/ajustes"]})
+ok(cod == 400, f"⟲ «seguridad/ajustes» no se puede asignar: 400 ({cod})")
+ok("seguridad/ajustes" in GE.permisos(P, JEFA, "r2beat2013")["acciones"]
+   and "seguridad/ajustes" not in GE.permisos(P, MR2, "r2beat2013")["acciones"], "el ADMIN lo tiene; el moderador no")
+cod, _ = pedir(JEFA, "POST", "seguridad/ajustes", {"max_cuentas_maquina": 2})
+ok(cod == 200 and VISTO[-1]["ruta"].endswith("seguridad/ajustes") and VISTO[-1]["cuerpo"] == {"max_cuentas_maquina": 2},
+   "el ADMIN cambia los interruptores (viaja tal cual)")
+n = len(VISTO)
+cod, _ = pedir(JEFA, "POST", "seguridad/evento/NO-ES-UN-ID", {})
+ok(cod == 404 and len(VISTO) == n, "⟲ un id de evento con otra forma: 404 y no viaja")
+
 print("2 · lo de BASE del moderador")
 for ruta in ("aviso", "usuario/5/echar", "usuario/5/mute"):
     cod, _ = pedir(MR2, "POST", ruta, {"texto": "hola", "horas": 1})
@@ -337,7 +363,7 @@ for lista in (None, "", "inválido", str(MR2), f" {JEFA + 1}, 00{JEFA}, {MR2} ")
     autorizado = lista is not None and f"00{JEFA}" in lista
     for jid, rutas in (("r2beat2013", GE.RUTAS), ("gunbound", GE.RUTAS_CONTRATO1)):
         for metodo, patron, _ in rutas:
-            ruta = patron.replace(GE._N, "5").replace(GE._ID, "abc-12")
+            ruta = patron.replace(GE._N, "5").replace(GE._ID, "abc-12").replace(GE._EV, "ab" * 16)
             cod, d = pedir(JEFA, metodo, ruta, {} if metodo == "POST" else None, juego=jid)
             ok(cod == 200 and (d["filas"][0].get("ip") == PRIVADOS["ip"] and len(d["campos"]) == 4 if autorizado
                               else sin_ips(d) and d["campos"] == [{"nombre": "Login", "valor": "cuenta5"},
