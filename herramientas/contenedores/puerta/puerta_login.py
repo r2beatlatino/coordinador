@@ -19,12 +19,17 @@ LOGIN no: el exe entra SIEMPRE por el 48004 (el puerto que le pasa el launcher n
 
 ⚠ Lo anotado vive en memoria y en `PUERTA_MAPA` (si está): si la puerta se reinicia sin ese archivo, alguien en el
   server de prueba que cambia de canal cae en prod y le dice «Imposible conectarse» (vuelve a entrar y listo).
-⚠ El server ve la IP de la puerta en el LOGIN (sólo la usa para el log). Los canales van directo: ahí ve la de verdad.
+⚠ El server ve la IP de la puerta en el LOGIN. Los canales van directo: ahí ve la de verdad. ★ 26-nov: el 2013 (desde
+  el antitrampa central) exige que el lobby venga de la MISMA IP que el login, y detrás de la puerta no entraba nadie.
+  Por eso, a los destinos de `PUERTA_PROXY_A` (ej. `prueba` o `prod,prueba`) la puerta les manda ANTES del primer
+  paquete la línea del PROXY protocol v1 con la IP del jugador (`PROXY TCP4 <jugador> <puerta> <puerto> <puerto>`).
+  ⛔ Sólo a un server que la entiende (`R2_PUERTA_IPS` con esta puerta): a uno viejo esa línea le rompe el login.
 
     PUERTA_ESCUCHAR=0.0.0.0:48004 PUERTA_PROD=r2beat2013:47004 PUERTA_PRUEBA=r2beat2013-prueba:49004 python puerta_login.py
 """
 import asyncio
 import base64
+import ipaddress
 import json
 import os
 import re
@@ -38,6 +43,7 @@ ESPERA_PRIMERO_S = float(os.environ.get("PUERTA_ESPERA_S") or 20)   # el primer 
 TOPE_PRIMERO = 16384             # un pase mide ~300 B: más que esto no es un primer paquete nuestro
 JWT = re.compile(rb"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{8,}")
 
+PROXY_A = {x.strip() for x in (os.environ.get("PUERTA_PROXY_A") or "").split(",") if x.strip()}
 _mapa = {}                        # (usn, vcode) -> (destino, vence)
 _ruta_mapa = os.environ.get("PUERTA_MAPA") or ""
 
@@ -213,6 +219,19 @@ async def _caño(lector, escritor, al_dar_sesion=None):
             pass
 
 
+def linea_proxy(jugador, puerta):
+    """La línea v1 del PROXY protocol: `PROXY TCP4 <ip jugador> <ip puerta> <puerto jugador> <puerto puerta>` y CRLF.
+    b"" si las direcciones no se entienden (el server sigue con la IP que ve)."""
+    try:
+        a, b = ipaddress.ip_address(jugador[0]), ipaddress.ip_address(puerta[0])
+        a, b = (a.ipv4_mapped or a) if a.version == 6 else a, (b.ipv4_mapped or b) if b.version == 6 else b
+        if a.version != b.version:
+            return b""
+        return ("PROXY TCP%d %s %s %d %d\r\n" % (a.version, a, b, int(jugador[1]), int(puerta[1]))).encode("ascii")
+    except (ValueError, TypeError, IndexError):
+        return b""
+
+
 async def atender(lector, escritor, destinos):
     quien = escritor.get_extra_info("peername") or ("?", 0)
     buf = b""
@@ -237,6 +256,8 @@ async def atender(lector, escritor, destinos):
         escritor.close()
         return
     log(f"{quien[0]} {motivo} -> {destino}")
+    if destino in PROXY_A:                                   # ★ 26-nov: la IP del jugador, antes de todo
+        e2.write(linea_proxy(quien, escritor.get_extra_info("sockname") or ("?", 0)))
     e2.write(buf)
     await e2.drain()
 
