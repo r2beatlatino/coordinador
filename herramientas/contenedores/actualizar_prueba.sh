@@ -42,8 +42,14 @@ PANEL="$DIR/panel"
 PROD_IMAGEN="$(grep -E '^JUEGO_IMAGEN=' "$CONJUNTO/.env" 2>/dev/null | cut -d= -f2-)"
 CORRE_PROD="$(docker image inspect -f '{{index .Config.Labels "enenos.privado"}}' "$IMAGEN" 2>/dev/null || true)"
 [ -f "$PANEL/Dockerfile" ] && [ -n "$PROD_IMAGEN" ] || PROD_IMAGEN=""
+# ★ 27-nov: lo PRIVADO que todavía NO está en prod (p. ej. el enganche de las cuentas GM NPC en contenido_interno.py)
+#   va en $DIR/panel_encima/ y PISA lo sacado de prod, sólo en el de prueba. ⚠ Se congela: cuando eso llegue a prod,
+#   se borra de ahí (si no, el de prueba se queda con la versión vieja de ese archivo). Si cambia, se rearma.
+ENCIMA="$DIR/panel_encima"
+SUMA_ENCIMA="$( (cd "$ENCIMA" 2>/dev/null && find . -type f -print0 | sort -z | xargs -0 -r md5sum) | md5sum | cut -c1-12)"
+CORRE_ENCIMA="$(docker image inspect -f '{{index .Config.Labels "enenos.encima"}}' "$IMAGEN" 2>/dev/null || true)"
 if [ "${1:-}" != "--forzar" ]; then
-    [ "$AHORA" = "$CORRE" ] && [ "$PROD_IMAGEN" = "$CORRE_PROD" ] && exit 0   # nada nuevo
+    [ "$AHORA" = "$CORRE" ] && [ "$PROD_IMAGEN" = "$CORRE_PROD" ] && [ "$SUMA_ENCIMA" = "$CORRE_ENCIMA" ] && exit 0   # nada nuevo
     [ "$AHORA" = "$(cat "$DIR/fallido" 2>/dev/null)" ] && exit 0         # ya falló: espera otro commit
 fi
 echo "$(date '+%F %T') prueba ($RAMA): ${CORRE:-nada} → $AHORA"
@@ -57,11 +63,16 @@ if [ -n "$PROD_IMAGEN" ]; then
     # ⛔ estos archivos NO están en ningún repo público: salen de la imagen de prod, al armar (ver prueba_panel/)
     rm -rf "$PANEL/servidor" && mkdir -p "$PANEL/servidor"
     TMPC="$(docker create "$PROD_IMAGEN")"
-    for f in api_web.py asistencia.py clasificacion.py geoip_paises.bin launcher_api.py launcher_contenido.py              npc_charla.py panel_admin.py portero.py portero_panel.html portero_panel.js respaldo.py ruleta.py              ruleta_mayor.json ruleta_ropa.json tienda_launcher.py contenido_interno.py; do
+    for f in api_web.py seguridad_panel.py asistencia.py clasificacion.py geoip_paises.bin launcher_api.py launcher_contenido.py              npc_charla.py panel_admin.py portero.py portero_panel.html portero_panel.js respaldo.py ruleta.py              ruleta_mayor.json ruleta_ropa.json tienda_launcher.py contenido_interno.py; do
         docker cp -q "$TMPC:/app/servidor/$f" "$PANEL/servidor/" || echo "$(date '+%F %T') ⚠ $f no está en $PROD_IMAGEN"
     done
     docker rm -f "$TMPC" >/dev/null
-    if ! docker build -q --build-arg BASE="${IMAGEN}-nueva" --label "enenos.privado=$PROD_IMAGEN"             -t "${IMAGEN}-nueva" "$PANEL" ; then
+    if [ -d "$ENCIMA" ] && [ -n "$(ls -A "$ENCIMA")" ]; then
+        cp -f "$ENCIMA"/* "$PANEL/servidor/"
+        echo "$(date '+%F %T') panel: ENCIMA de prod (sólo prueba): $(ls "$ENCIMA" | tr '
+' ' ')"
+    fi
+    if ! docker build -q --build-arg BASE="${IMAGEN}-nueva" --label "enenos.privado=$PROD_IMAGEN" --label "enenos.encima=$SUMA_ENCIMA"             -t "${IMAGEN}-nueva" "$PANEL" ; then
         echo "$(date '+%F %T') ⛔ el panel no se pudo poner encima de $AHORA ($PROD_IMAGEN). Sigue el anterior."
         echo "$AHORA" > "$DIR/fallido"
         exit 1
