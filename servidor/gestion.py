@@ -61,6 +61,9 @@ ASIGNABLES = {
     #   ítem elegido, cuántos cupones y cuántos usos cada uno, sólo para ropa»). Sin Rcoin: `_cupon_de_ropa` rearma el
     #   pedido (un ítem, que sea ropa) — el juego ve al Coordinador como ADMIN y no le cobraría cupo a nadie.
     "cupones": ("Cupones de ropa: generar (una prenda, sin Rcoin)", None),
+    # ★ 27-nov (Eñeños: «cuentas GM NPC desechables, de 1 solo uso, y sus acciones quedan registradas como que el
+    #   moderador generó y usó la cuenta»). El juego (`gm_npc.py`) crea todo y devuelve la clave UNA vez.
+    "gm_npc": ("Cuentas GM NPC: crear cuentas de una sesión (NPC en la sala, rates, campanas, anuncios)", None),
 }
 # ★ 26-nov: acciones que NO se asignan: sólo un ADMIN (el permiso no existe para un moderador).
 SOLO_ADMIN = {"seguridad/ajustes": "Cambiar los interruptores de seguridad (topes por PC / IP, baneo por PC)"}
@@ -68,7 +71,7 @@ RED = "_red"                       # la «fila» de los permisos de toda la red 
 ASIGNABLES_RED = ("clave",)
 # lo que se puede asignar en cada tipo de servidor
 ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "licencia", "gorila", "chat", "torneos",
-                            "seguridad", "cupones"),
+                            "seguridad", "cupones", "gm_npc"),
                  "contrato1": ("moneda",)}
 _MONEDA_ID = re.compile(r"^[a-z0-9_]{1,20}$")
 CUPOS = ("rcoin", "exp")
@@ -110,6 +113,10 @@ RUTAS = [
     # ★ 27-nov: los CUPONES DE ROPA (cupon.py del juego, por su panel: `cupones`). El POST lo rearma `_cupon_de_ropa`.
     ("GET", r"cupones", "cupones"),
     ("POST", r"cupones", "cupones"),
+    # ★ 27-nov: las cuentas GM NPC (gm_npc.py del juego). El POST lo rearma `_gm_npc`.
+    ("GET", r"gmnpc", "gm_npc"),
+    ("POST", r"gmnpc", "gm_npc"),
+    ("POST", r"gmnpc/cerrar", "gm_npc"),
 ]
 _RUTAS = [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS]
 _ID = r"[A-Za-z0-9_.-]{1,40}"
@@ -453,6 +460,23 @@ def es_ropa(fila):
     return f.startswith("wardrobe_") or f in ROPA_FAMILIAS
 
 
+GM_NPCS = ("king", "silver", "lindsey", "marie", "nari", "sue")
+
+
+def _gm_npc(ruta, cuerpo):
+    """★ 27-nov · el pedido de las cuentas GM NPC, REARMADO: crear lleva SÓLO el NPC (de la lista); cerrar, SÓLO el usn.
+    -> (cuerpo, None) o (None, (código, error))."""
+    if ruta == "gmnpc":
+        npc = str(cuerpo.get("npc") or "").strip().lower()
+        if npc not in GM_NPCS:
+            return None, (400, {"error": "Elija uno de los NPC."})
+        return {"npc": npc}, None
+    usn = cuerpo.get("usn")
+    if isinstance(usn, bool) or not isinstance(usn, int) or usn <= 0:
+        return None, (400, {"error": "Falta la cuenta."})
+    return {"usn": usn}, None
+
+
 def _cupon_de_ropa(url, cuerpo, quien, admin):
     """★ 27-nov · el pedido de cupones, REARMADO acá: lo que mande el navegador no pasa tal cual.
     -> (cuerpo limpio, None) o (None, (código, error)). Una sola PRENDA (la tienda la vende por plazo: 7/30/365 días o
@@ -521,6 +545,10 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
     quien = "coordinador:" + (P._login_de(viewer) or f"uid {viewer}")
     if accion == "cupones" and metodo == "POST":                # ★ 27-nov: sólo ropa, rearmado (ver `_cupon_de_ropa`)
         cuerpo, mal = _cupon_de_ropa(url, cuerpo, quien, admin)
+        if mal:
+            return mal
+    if accion == "gm_npc" and metodo == "POST":                 # ★ 27-nov: sólo el NPC / el usn (ver `_gm_npc`)
+        cuerpo, mal = _gm_npc(ruta, cuerpo)
         if mal:
             return mal
     cod, d = _http(url, ruta, q, cuerpo if metodo == "POST" else None, quien, admin)

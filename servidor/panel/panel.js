@@ -790,8 +790,8 @@ function nombresDe(J, mes) {
   mes.dias.forEach(x => [...(x.premios || []), ...(x.si_no || [])].forEach(p => { if (p.item != null && p.nombre) J.nombres[p.item] = p.nombre; }));
 }
 const tabsC = J => [...(J.d.pagina_local ? ['pagina'] : []), ...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
-const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas', ...(tieneSeg(J) ? ['seguridad'] : []), ...(tieneCup(J) ? ['cupones'] : [])] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
-const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' || k === 'seguridad' || k === 'cupones' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
+const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas', ...(tieneSeg(J) ? ['seguridad'] : []), ...(tieneCup(J) ? ['cupones'] : []), ...(tieneGmn(J) ? ['gmnpc'] : [])] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
+const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' || k === 'seguridad' || k === 'cupones' || k === 'gmnpc' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
 const suciasJc = J => Object.keys(J.borr).filter(k => puedeJc(J, k) && ser(J.borr[k]) !== J.orig[k]);
 const juegoCat = jid => S.catalogo.find(x => x.id === jid) || S.juegos.find(x => x.id === jid) || { id: jid, nombre: jid, color: '' };
 const envTxt = env => ENV_TXT[env] || 'PROD';
@@ -904,8 +904,9 @@ function pintarCuerpoJ(foco) {
     return;
   }
   if (esG(J.tab)) {                                        // ★ fase C
-    c.innerHTML = J.tab === 'resumen' ? edTablero(J) : J.tab === 'seguridad' ? edSeguridad(J) : J.tab === 'cupones' ? edCupones(J) : edPersonas(J);
+    c.innerHTML = J.tab === 'resumen' ? edTablero(J) : J.tab === 'seguridad' ? edSeguridad(J) : J.tab === 'cupones' ? edCupones(J) : J.tab === 'gmnpc' ? edGmNpc(J) : edPersonas(J);
     if (J.tab === 'cupones') { montarCupones(J); if (!J.g.cup || !J.g.cup.lt || Date.now() - J.g.cup.lt > 30000) cargarCupones(J); }      // ★ 27-nov
+    if (J.tab === 'gmnpc' && (!J.g.gmn || !J.g.gmn.lt || Date.now() - J.g.gmn.lt > 30000)) cargarGmNpc(J);      // ★ 27-nov: GM NPC
     if (J.tab === 'resumen') { pintarTableroCab(J); if (Date.now() - J.g.t > 10000) cargarTablero(J); }
     if (J.tab === 'seguridad' && (!J.g.seg || Date.now() - (J.g.seg.t || 0) > 15000)) cargarSeguridad(J);      // ★ 26-nov
     if (J.tab === 'personas' && J.sel) { const F = J.g.fichas[String(J.sel)]; if (!F || !F.f || F.dias !== J.g.dias) cargarFicha(J, J.sel); }
@@ -1651,7 +1652,7 @@ function elegirItem(id) {
    hacer lo dice `gestion/mios` (acciones y cupos): un botón que no puede usar se ve apagado, con «Lo asigna un ADMIN».
    ⛔ A un moderador el Coordinador le saca IP, login y «misma IP»: nada de esto se rompe si faltan.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
-const G_TABS = ['resumen', 'personas', 'seguridad', 'cupones'];
+const G_TABS = ['resumen', 'personas', 'seguridad', 'cupones', 'gmnpc'];
 JC_TABS.resumen = ['Tablero', 'dash'];
 JC_TABS.personas = ['Personas', 'users'];
 const esG = k => G_TABS.includes(k);
@@ -1893,6 +1894,90 @@ function generarCupones(J) {
       C.hecho = { codigos: r.d.codigos || [], txt: `«${it.nombre}» · ${plazoTxt(C.dias).toLowerCase()} · ${u} ${u === 1 ? 'uso' : 'usos'} cada uno` };
       toast({ t: `${miles(C.hecho.codigos.length)} ${C.hecho.codigos.length === 1 ? 'cupón generado' : 'cupones generados'}`, sub: esc(it.nombre) });
       C.lt = 0; cargarCupones(J);
+    } });
+}
+
+/* ══════════════ ★ 27-nov · CUENTAS «GM NPC» (R2Beat 2013) — Eñeños: «cuentas desechables […] de poder npc, rate exp o
+   rate rcoin o tocar campanas […] con los nombres o ropas del rar […] de 1 solo uso y sus acciones quedan registradas
+   como que moderador generó y usó la cuenta». Ruta del juego: `gmnpc` (servidor/gm_npc.py), que crea TODO: la cuenta
+   Eñeños, el personaje con el traje puesto y las campanas. La clave llega UNA vez y sólo vive en esta pantalla.
+   La acción «gm_npc» se asigna a moderadores. ══ */
+JC_TABS.gmnpc = ['GM NPC', 'crown'];
+const GMN_NPCS = [['king', 'King', 'chico'], ['silver', 'Silver', 'chico'], ['lindsey', 'Lindsey', 'chica'],
+  ['marie', 'Marie', 'chica'], ['nari', 'Nari', 'chica'], ['sue', 'Sue', 'chica']];
+const GMN_ESTADO = { 'sin usar': ['Sin usar', 'azul'], 'en uso': ['En uso', 'verde'], cerrada: ['Cerrada', ''], vencida: ['Vencida', ''] };
+const tieneGmn = J => !!(J && J.g && J.g.ok && !esC(J) && puedeG(J, 'gm_npc'));
+const gmnEstado = J => (J.g.gmn = J.g.gmn || { npc: 'king', hecho: null, lista: null, lt: 0, h: 12 });
+function edGmNpc(J) { return `<div id="gGmn" role="tabpanel" aria-labelledby="jcTab-gmnpc">${cuerpoGmNpc(J)}</div>`; }
+function cuerpoGmNpc(J) {
+  const G = gmnEstado(J), h = G.hecho;
+  const npcs = `<div class="g-gmn-npcs" role="radiogroup" aria-label="El NPC">${GMN_NPCS.map(([k, n, s]) =>
+    `<button type="button" class="g-gmn-npc" role="radio" data-accion="g-gmn-npc" data-k="${k}" aria-checked="${G.npc === k}"><span class="g-gmn-ini" aria-hidden="true">${n[0]}</span><b>${n}</b><small>${s}</small></button>`).join('')}</div>`;
+  const nombre = (GMN_NPCS.find(x => x[0] === G.npc) || [, ''])[1];
+  const form = `<section class="caja"><div class="caja-cab"><h3>${ic('crown', 's16')}Crear una cuenta GM NPC</h3><span class="sub">de UNA sesión</span></div>
+      ${npcs}
+      <ul class="g-gmn-poderes">
+        <li>${ic('users', 's14')}<span><b>Llenar la sala con NPC</b> · <code>.npc full</code> · <code>.npc 3</code> · <code>.npc off</code></span></li>
+        <li>${ic('coins', 's14')}<span><b>Rates de EXP y Rcoin</b> · <code>.rate exp 2</code> · <code>.rate coin 1.5</code> · <code>.rate off</code></span></li>
+        <li>${ic('bell', 's14')}<span><b>Tocar campanas</b> · trae de oro y de plata (normales y «+») en el inventario</span></li>
+        <li>${ic('mega', 's14')}<span><b>Anuncios</b> · <code>.aviso texto</code> · <code>.gm1 texto</code></span></li>
+      </ul>
+      <p class="tenue">Todo lo que haga queda en la auditoría <b>a su nombre</b>. Se cierra sola al salir del juego (cambiar de canal no la cierra) o si nadie entra en ${Number(G.h) || 12} h.</p>
+      <div class="accs"><button type="button" class="btn prim" data-accion="g-gmn-crear"${G.creando ? ' disabled' : ''}>${G.creando ? '<span class="giro-btn" aria-hidden="true"></span>Creando…' : `${ic('plus', 's16')}Crear GM-${esc(nombre)}`}</button>
+        <span class="g-cup-err" role="alert">${G.err ? esc(G.err) : ''}</span></div></section>`;
+  const listo = h ? `<section class="caja g-gmn-hecho" aria-labelledby="gGmnHecho"><div class="caja-cab"><h3 id="gGmnHecho">${ic('check', 's16')}Lista: ${esc(h.nick)}</h3><span class="sub">anótela ahora: la clave no se vuelve a mostrar</span></div>
+      <dl class="g-gmn-datos"><dt>Usuario</dt><dd><code>${esc(h.usuario)}</code></dd><dt>Clave</dt><dd><code>${esc(h.clave)}</code></dd></dl>
+      <div class="accs"><button type="button" class="btn" data-accion="g-gmn-copiar">${ic('copy', 's14')}Copiar usuario y clave</button>
+        <button type="button" class="btn fantasma" data-accion="g-gmn-anotada">Ya la anoté</button></div>
+      <p class="tenue">Se entra con el launcher, como cualquier cuenta. Sirve para una sola sesión.</p></section>` : '';
+  return `<div class="g-cup-grid"><div>${form}</div><div>${listo}${listaGmNpc(J)}</div></div>`;
+}
+function listaGmNpc(J) {
+  const G = gmnEstado(J), L = G.lista;
+  const cab = `<div class="caja-cab"><h3>${ic('history', 's16')}Últimas cuentas GM NPC</h3><button type="button" class="btn icono fantasma" data-accion="g-gmn-recargar" aria-label="Actualizar" title="Actualizar">${ic('refresh', 's16')}</button></div>`;
+  if (!L) return `<section class="caja">${cab}${G.lerr ? vacio('No se pudo leer la lista', esc(G.lerr)) : '<span class="esq" style="height:120px"></span>'}</section>`;
+  if (!L.length) return `<section class="caja">${cab}${vacio('Todavía no hay cuentas GM NPC', 'Las que cree aparecen acá.')}</section>`;
+  return `<section class="caja">${cab}<ul class="g-cup-lista">${L.slice(0, 30).map(c => {
+    const [t, tipo] = GMN_ESTADO[c.estado] || [c.estado, 'tenue'];
+    const abierta = c.estado === 'sin usar' || c.estado === 'en uso';
+    return `<li><b>${esc(c.nick)}</b><span class="chip ${tipo}">${esc(t)}</span><span class="tenue">${c.motivo ? esc(c.motivo) : ''}</span>
+      <small class="tenue">${c.creado ? fechaEpoch(c.creado) : ''}${c.creado_por ? ' · ' + esc(String(c.creado_por).replace(/^coordinador:/, '')) : ''}</small>
+      ${abierta ? `<button type="button" class="btn chico fantasma" data-accion="g-gmn-cerrar" data-k="${Number(c.usn)}">Cerrar ya</button>` : ''}</li>`;
+  }).join('')}</ul></section>`;
+}
+function pintarGmNpc(J) { const c = $('#gGmn'); if (c && J.tab === 'gmnpc') c.innerHTML = cuerpoGmNpc(J); }
+async function cargarGmNpc(J) {
+  const G = gmnEstado(J); if (G.lcargando) return;
+  G.lcargando = true;
+  const r = await api(gRuta(J, 'gmnpc'));
+  G.lcargando = false; if (S.jc !== J) return;
+  G.lista = r.ok ? r.d.cuentas || [] : null; G.lerr = r.ok ? null : errTxt(r); G.lt = Date.now();
+  if (r.ok && r.d.sin_usar_h) G.h = r.d.sin_usar_h;
+  pintarGmNpc(J);
+}
+function crearGmNpc(J) {
+  const G = gmnEstado(J), npc = GMN_NPCS.find(x => x[0] === G.npc);
+  if (!npc || !puedeG(J, 'gm_npc') || G.creando) return;
+  confirmar({ titulo: `¿Crear la cuenta GM-${npc[1]}?`, icono: 'crown', peligro: false, ok: 'Crear',
+    txt: 'Es de una sola sesión, y lo que haga queda a su nombre en la auditoría.',
+    alAceptar: async () => {
+      G.creando = true; G.err = null; G.hecho = null; pintarGmNpc(J);
+      const r = await gPost(J, 'gmnpc', { npc: npc[0] });
+      G.creando = false;
+      if (!r.ok) { G.err = (r.d && r.d.error) || `Error ${r.status}`; pintarGmNpc(J); return; }
+      G.hecho = { usuario: r.d.usuario, clave: r.d.clave, nick: r.d.nick };
+      toast({ t: 'Cuenta GM NPC creada', sub: esc(r.d.nick) });
+      G.lt = 0; cargarGmNpc(J);
+    } });
+}
+function cerrarGmNpc(J, usn) {
+  const G = gmnEstado(J), c = (G.lista || []).find(x => Number(x.usn) === Number(usn)); if (!c) return;
+  confirmar({ titulo: `¿Cerrar ${esc(c.nick)}?`, icono: 'lock', peligro: true, ok: 'Cerrar',
+    txt: 'No se puede volver a usar. Si está jugando, sale del juego.',
+    alAceptar: async () => {
+      const r = await gPost(J, 'gmnpc/cerrar', { usn: Number(usn) });
+      if (!r.ok) { toast({ t: 'No se pudo cerrar', sub: esc((r.d && r.d.error) || `Error ${r.status}`), tipo: 'error' }); return; }
+      G.lista = r.d.cuentas || G.lista; G.lt = Date.now(); pintarGmNpc(J);
     } });
 }
 
@@ -3015,6 +3100,12 @@ function accionG(a) {
     case 'g-cup-generar': generarCupones(J); break;
     case 'g-cup-copiar': { const t = (J.g.cup.hecho && J.g.cup.hecho.codigos || []).join('\n'); const ok = () => toast({ t: 'Copiados', sub: `${miles(J.g.cup.hecho.codigos.length)} códigos`, tipo: 'info' }); try { navigator.clipboard.writeText(t).then(ok, ok); } catch (err) { ok(); } break; }
     case 'g-cup-recargar': cargarCupones(J); break;
+    case 'g-gmn-npc': gmnEstado(J).npc = a.dataset.k; gmnEstado(J).err = null; pintarGmNpc(J); break;      // ★ 27-nov: GM NPC
+    case 'g-gmn-crear': crearGmNpc(J); break;
+    case 'g-gmn-cerrar': cerrarGmNpc(J, a.dataset.k); break;
+    case 'g-gmn-recargar': cargarGmNpc(J); break;
+    case 'g-gmn-anotada': gmnEstado(J).hecho = null; pintarGmNpc(J); break;
+    case 'g-gmn-copiar': { const h = gmnEstado(J).hecho; if (!h) break; const ok = () => toast({ t: 'Copiados', sub: 'usuario y clave', tipo: 'info' }); try { navigator.clipboard.writeText(`Usuario: ${h.usuario}\nClave: ${h.clave}`).then(ok, ok); } catch (err) { ok(); } break; }
     case 'g-pc-perdonar': perdonarPc(J); break;
     case 'g-estado': J.g.estado = a.dataset.k; $$('[data-accion="g-estado"]').forEach(b => b.setAttribute('aria-pressed', b === a)); { const l = $('#gCon'); if (l) l.innerHTML = filasConectados(J); } break;
     case 'g-aviso': formAviso(J, a.dataset.a, a.dataset.id, a.dataset.nom || ''); break;

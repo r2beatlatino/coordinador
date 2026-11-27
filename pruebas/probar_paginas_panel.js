@@ -263,5 +263,21 @@ function ok(cond, texto) {
   run(`JC1.g.cup.cantidad = 1; JC1.g.cup.hecho = {codigos:['AB<script>CD'], txt:'x'}; JC1.g.cup.lista = [{codigo:'Z<q>1', premios:[{item:1, dias:0, nombre:'<i>P</i>'}], usos:2, usados:1, activo:true, creado:1, creador:'<u>yo</u>'}];`);
   ok(run(`const hc4 = cuerpoCupones(JC1); !hc4.includes('<script>') && !hc4.includes('<q>1') && hc4.includes('Z&lt;q&gt;1') && !hc4.includes('<i>P') && !hc4.includes('<u>yo') && hc4.includes('1/2 usos')`),
     'Cupones: códigos, lista y creador van escapados; la lista dice usados/usos');
+  // ★ 27-nov · las cuentas GM NPC: pestaña con permiso, los 6 NPC, la clave sólo en «Lista», todo escapado
+  run(`var JG1 = mkS(['ver','gm_npc']), JG0 = mkS(['ver','cupones']);`);
+  ok(run(`tabsJc(JG1).includes('gmnpc') && !tabsJc(JG0).includes('gmnpc')`), 'GM NPC: la pestaña sólo con el permiso «gm_npc» (⟲ sin él no aparece)');
+  ok(run(`const hg1 = cuerpoGmNpc(JG1); (hg1.match(/data-accion="g-gmn-npc"/g) || []).length === 6 && hg1.includes('aria-checked="true"') && hg1.includes('Crear GM-King')
+      && !hg1.includes('Usuario</dt>')`), 'GM NPC: los 6 NPC, King elegido, y ⟲ sin cuenta creada no hay usuario ni clave');
+  run(`JG1.g.gmn.npc = 'sue';`);
+  ok(run(`cuerpoGmNpc(JG1).includes('Crear GM-Sue')`), 'GM NPC: elegir otro NPC cambia el botón');
+  run(`JG1.g.gmn.hecho = {usuario:'gmnpc_<b>x', clave:'<img src=x onerror=alert(1)>', nick:'GM-<i>Sue'};
+       JG1.g.gmn.lista = [{usn:9, nick:'<u>GM-Sue</u>', estado:'en uso', creado:1, creado_por:'coordinador:<s>mod', motivo:''},
+                          {usn:8, nick:'GM-King', estado:'cerrada', creado:1, creado_por:'coordinador:mod', motivo:'salió del juego'}];`);
+  ok(run(`const hg2 = cuerpoGmNpc(JG1); !hg2.includes('<img') && hg2.includes('&lt;img') && !hg2.includes('<b>x') && !hg2.includes('<i>Sue')
+      && !hg2.includes('<u>GM') && !hg2.includes('<s>mod')`), 'GM NPC: usuario, clave, apodos y creador van escapados');
+  ok(run(`const hg3 = cuerpoGmNpc(JG1); (hg3.match(/data-accion="g-gmn-cerrar"/g) || []).length === 1 && hg3.includes('data-k="9"') && !hg3.includes('data-k="8"')`),
+    'GM NPC: «Cerrar ya» sólo en la abierta (⟲ la cerrada no lo tiene)');
+  run(`JG1.g.gmn.hecho = null;`);
+  ok(run(`!cuerpoGmNpc(JG1).includes('&lt;img')`), 'GM NPC: con «Ya la anoté» la clave desaparece de la pantalla');
   process.stdout.write(`\n✔ probar_paginas_panel: ${controles} controles, 0 fallas\n`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

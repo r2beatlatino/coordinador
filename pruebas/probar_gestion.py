@@ -102,6 +102,8 @@ class Juego(BaseHTTPRequestHandler):
         self._anotar(d)
         if d.get("valor") == 333 or d.get("cantidad") == 222:
             return self._mandar(400, dict(respuesta(), error="ese uid no tiene personaje"))
+        if self.path.split("?")[0].endswith("/gmnpc") and d.get("npc"):      # ★ 27-nov: la GM NPC recién creada
+            return self._mandar(200, dict(respuesta(), ok=True, usuario="gmnpc_ab12cd34", clave="Cl4ve-de-1-uso", nick="GM-King"))
         return self._mandar(200, dict(respuesta(), ok=True, antes="luna", despues=d.get("licencia", "luna")))
 
 
@@ -252,6 +254,42 @@ for nombre, cuerpo in (("una campana (no es ropa)", {"item": 1000200, "dias": 0,
 cod, _ = pedir(JEFA, "POST", "cupones", {"item": 30220852, "dias": 7, "cantidad": 1, "usos": 1, "rcoin": 9})
 ok(cod == 200 and posts()[-1]["cuerpo"]["rcoin"] == 0 and posts()[-1]["cuerpo"]["premios"][0]["dias"] == 7,
    "un ADMIN también pasa por el rearmado (sin Rcoin; el plazo elegido, 7 días)")
+
+# ★ 27-nov · las cuentas GM NPC: «gm_npc» se asigna; el pedido lo REARMA el Coordinador (sólo el NPC / sólo el usn)
+print("1d · cuentas GM NPC")
+n = len(VISTO)
+cod, _ = pedir(MR2, "GET", "gmnpc")
+ok(cod == 403 and len(VISTO) == n, "⟲ GM NPC sin el permiso: 403 y no viaja")
+cod, _ = pedir(MR2, "POST", "gmnpc", {"npc": "king"})
+ok(cod == 403 and len(VISTO) == n, "⟲ crear sin el permiso: 403 y no viaja")
+cod, d = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MR2, "juego": "r2beat2013",
+                                                  "acciones": ["licencia", "seguridad", "cupones", "gm_npc"]})
+ok(cod == 200 and "gm_npc" in d["asignables_de"]["r2beat2013"] and "gm_npc" not in GE.ASIGNABLES_DE["contrato1"],
+   "«gm_npc» se asigna en R2Beat (no en GunBound)")
+cod, _ = pedir(MR2, "GET", "gmnpc")
+ok(cod == 200 and VISTO[-1]["ruta"].split("?")[0].endswith("/gmnpc"), "con el permiso: la lista pasa")
+np_ = len(posts())
+cod, d = pedir(MR2, "POST", "gmnpc", {"npc": " King ", "usn": 5, "rcoin": 999999, "comandos": ["sanciones"]})
+ok(cod == 200 and len(posts()) == np_ + 1 and posts()[-1]["ruta"].endswith("/gmnpc") and posts()[-1]["cuerpo"] == {"npc": "king"},
+   "crear viaja REARMADO: sólo el NPC (lo demás que mande el navegador no pasa)")
+ok(d.get("usuario") == "gmnpc_ab12cd34" and d.get("clave") == "Cl4ve-de-1-uso",
+   "al moderador le llegan el usuario y la clave (la limpieza de privados no se los come)")
+np_ = len(posts())
+cod, _ = pedir(MR2, "POST", "gmnpc/cerrar", {"usn": 7, "npc": "king"})
+ok(cod == 200 and len(posts()) == np_ + 1 and posts()[-1]["ruta"].endswith("/gmnpc/cerrar") and posts()[-1]["cuerpo"] == {"usn": 7},
+   "cerrar viaja REARMADO: sólo el usn")
+for ruta, nombre, cuerpo in (("gmnpc", "un NPC que no está en la lista", {"npc": "dragon"}),
+                             ("gmnpc", "sin NPC", {}),
+                             ("gmnpc/cerrar", "cerrar sin usn", {}),
+                             ("gmnpc/cerrar", "cerrar con el usn en texto", {"usn": "7"}),
+                             ("gmnpc/cerrar", "cerrar con un usn negativo", {"usn": -1}),
+                             ("gmnpc/cerrar", "cerrar con true", {"usn": True})):
+    np_ = len(posts())
+    cod, d = pedir(MR2, "POST", ruta, cuerpo)
+    ok(cod == 400 and len(posts()) == np_ and d.get("error"), f"⟲ {nombre}: 400 y no viaja ({cod})")
+n = len(VISTO)
+cod, _ = pedir(MR2, "POST", "gmnpc/otra", {"npc": "king"})
+ok(cod == 404 and len(VISTO) == n, "⟲ una sub-ruta que no está en la lista cerrada: 404 y no viaja")
 
 print("2 · lo de BASE del moderador")
 for ruta in ("aviso", "usuario/5/echar", "usuario/5/mute"):
@@ -414,7 +452,9 @@ for lista in (None, "", "inválido", str(MR2), f" {JEFA + 1}, 00{JEFA}, {MR2} ")
         for metodo, patron, _ in rutas:
             ruta = patron.replace(GE._N, "5").replace(GE._ID, "abc-12").replace(GE._EV, "ab" * 16)
             # (★ 27-nov: a «cupones» un `{}` se le rechaza antes de viajar —eso lo controla la sección 1c—: acá uno válido)
-            vale = {"item": 30220852, "dias": 0, "cantidad": 1, "usos": 1} if (jid, metodo, ruta) == ("r2beat2013", "POST", "cupones") else {}
+            vale = {("r2beat2013", "POST", "cupones"): {"item": 30220852, "dias": 0, "cantidad": 1, "usos": 1},
+                    ("r2beat2013", "POST", "gmnpc"): {"npc": "king"},                      # ★ 27-nov: ídem GM NPC
+                    ("r2beat2013", "POST", "gmnpc/cerrar"): {"usn": 5}}.get((jid, metodo, ruta), {})
             cod, d = pedir(JEFA, metodo, ruta, vale if metodo == "POST" else None, juego=jid)
             ok(cod == 200 and (d["filas"][0].get("ip") == PRIVADOS["ip"] and len(d["campos"]) == 4 if autorizado
                               else sin_ips(d) and d["campos"] == [{"nombre": "Login", "valor": "cuenta5"},
