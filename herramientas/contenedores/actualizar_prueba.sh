@@ -46,7 +46,9 @@ CORRE_PROD="$(docker image inspect -f '{{index .Config.Labels "enenos.privado"}}
 #   va en $DIR/panel_encima/ y PISA lo sacado de prod, sólo en el de prueba. ⚠ Se congela: cuando eso llegue a prod,
 #   se borra de ahí (si no, el de prueba se queda con la versión vieja de ese archivo). Si cambia, se rearma.
 ENCIMA="$DIR/panel_encima"
-SUMA_ENCIMA="$( (cd "$ENCIMA" 2>/dev/null && find . -type f -print0 | sort -z | xargs -0 -r md5sum) | md5sum | cut -c1-12)"
+# ⛔ `|| true`: sin la carpeta, el `cd` falla y con `set -e` + `pipefail` el script se cortaba ACÁ en cada vuelta (27-nov:
+#   el de prueba no se rearmó en 25 min tras subir ensayo40). La suma de «nada» es la de una entrada vacía.
+SUMA_ENCIMA="$( (cd "$ENCIMA" 2>/dev/null && find . -type f -print0 | sort -z | xargs -0 -r md5sum) | md5sum | cut -c1-12)" || true
 CORRE_ENCIMA="$(docker image inspect -f '{{index .Config.Labels "enenos.encima"}}' "$IMAGEN" 2>/dev/null || true)"
 if [ "${1:-}" != "--forzar" ]; then
     [ "$AHORA" = "$CORRE" ] && [ "$PROD_IMAGEN" = "$CORRE_PROD" ] && [ "$SUMA_ENCIMA" = "$CORRE_ENCIMA" ] && exit 0   # nada nuevo
