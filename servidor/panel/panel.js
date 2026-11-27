@@ -1772,8 +1772,12 @@ const CUP_MAX = 1000, CUP_USOS_MAX = 1000;
 const PLAZO_DIAS = { P7: 7, P30: 30, P365: 365, PI: 0 };
 const plazoTxt = d => (Number(d) === 0 ? 'Permanente' : `${Number(d)} días`);
 const ROPA_FAM = ['fullset', 'head_accessory'];             // ★ igual que gestion.es_ropa: wardrobe_*, trajes enteros, accesorios de cabeza
-const esRopa = x => !!(x && !x.cargas && (/^wardrobe_/.test(String(x.familia || '')) || ROPA_FAM.includes(x.familia)) && (x.duraciones || []).some(k => k in PLAZO_DIAS));
-const plazosDe = x => [...new Set((x.duraciones || []).filter(k => k in PLAZO_DIAS).map(k => PLAZO_DIAS[k]))].sort((a, b) => (a === 0) - (b === 0) || b - a);
+// ★ 27-nov: además de la ROPA, los ítems COLLAB del Excel (`colab` lo marca el Coordinador en el catálogo): tarjetas,
+//   slots, poses, auras, monturas, anillos… por sus plazos; los de uso único, una unidad (permanente). Nada con cargas.
+const esPrenda = x => /^wardrobe_/.test(String(x.familia || '')) || ROPA_FAM.includes(x.familia);
+const esRopa = x => !!(x && !x.cargas && (x.colab || esPrenda(x)) && plazosDe(x).length);
+const plazosDe = x => { const p = [...new Set((x.duraciones || []).filter(k => k in PLAZO_DIAS).map(k => PLAZO_DIAS[k]))].sort((a, b) => (a === 0) - (b === 0) || b - a); return p.length ? p : (x.colab && (x.duraciones || []).includes('PN') ? [0] : []); };
+const icCup = x => (x && x.colab && !esPrenda(x) ? 'sparkle' : 'shirt');
 const tieneCup = J => !!(J && J.g && J.g.ok && !esC(J) && puedeG(J, 'cupones'));
 const cupEstado = J => (J.g.cup = J.g.cup || { q: '', filas: null, elegido: null, dias: 0, cantidad: 1, usos: 1, nota: '', hecho: null, lista: null, lt: 0 });
 function edCupones(J) { return `<div id="gCup" role="tabpanel" aria-labelledby="jcTab-cupones">${cuerpoCupones(J)}</div>`; }
@@ -1781,16 +1785,16 @@ function cuerpoCupones(J) {
   const C = cupEstado(J), it = C.elegido;
   const paso = (n, t, sub = '') => `<div class="caja-cab"><h3><span class="g-cup-n" aria-hidden="true">${n}</span>${t}</h3>${sub ? `<span class="sub">${sub}</span>` : ''}</div>`;
   const prenda = it
-    ? `<div class="g-item-elegido"><span class="ip svg" style="--c:243,38,134">${ic('shirt')}</span><div><b>${esc(it.nombre)}</b><small>#${Number(it.id)}</small></div><button type="button" class="btn chico fantasma" data-accion="g-cup-otra">Elegir otra</button></div>`
-    : `<label class="campo">${ic('search', 's16')}<span class="sr">Nombre o código de la prenda</span><input id="gCupQ" value="${esc(C.q)}" placeholder="Nombre o código de la prenda…" autocomplete="off" spellcheck="false"></label>
+    ? `<div class="g-item-elegido"><span class="ip svg" style="--c:243,38,134">${ic(icCup(it))}</span><div><b>${esc(it.nombre)}</b><small>#${Number(it.id)}</small></div><button type="button" class="btn chico fantasma" data-accion="g-cup-otra">Elegir otra</button></div>`
+    : `<label class="campo">${ic('search', 's16')}<span class="sr">Nombre o código (ropa o collab)</span><input id="gCupQ" value="${esc(C.q)}" placeholder="Nombre o código (ropa o collab)…" autocomplete="off" spellcheck="false"></label>
       <div class="jc-bus-res g-items" id="gCupRes" role="listbox" aria-label="Prendas">${resCupones(C)}</div>`;
   const ps = it ? plazosDe(it) : [];
   const total = (Number(C.cantidad) || 0) * (Number(C.usos) || 0);
   const listo = it && ps.includes(C.dias) && C.cantidad >= 1 && C.cantidad <= CUP_MAX && C.usos >= 1 && C.usos <= CUP_USOS_MAX;
-  const form = `<section class="caja g-cup">${paso(1, 'La prenda', 'sólo ropa')}${prenda}</section>
+  const form = `<section class="caja g-cup">${paso(1, 'El ítem', 'ropa o collab')}${prenda}</section>
     <section class="caja g-cup"${it ? '' : ' aria-disabled="true"'}>${paso(2, 'Por cuánto tiempo', 'los plazos con que la vende la tienda')}
       ${it ? `<div class="chips" role="group" aria-label="Duración">${ps.map(d => `<button type="button" class="chipb" data-accion="g-cup-dias" data-k="${d}" aria-pressed="${d === C.dias}">${plazoTxt(d)}</button>`).join('')}</div>`
-        : '<p class="tenue">Primero elija la prenda.</p>'}</section>
+        : '<p class="tenue">Primero elija el ítem.</p>'}</section>
     <section class="caja g-cup"${it ? '' : ' aria-disabled="true"'}>${paso(3, 'Cuántos cupones')}
       <div class="g-cup-num">
         <label class="campo"><span>Cupones</span><input id="gCupN" type="number" min="1" max="${CUP_MAX}" inputmode="numeric" value="${Number(C.cantidad) || 1}"${it ? '' : ' disabled'}></label>
@@ -1817,8 +1821,8 @@ function resCupones(C) {
   if (C.err_q) return `<p class="tenue g-nada">${esc(C.err_q)}</p>`;
   if (!C.filas) return '<p class="tenue g-nada">Buscando…</p>';
   const ropa = C.filas.filter(esRopa);
-  if (!ropa.length) return `<p class="tenue g-nada">No hay ropa con «${esc(C.q)}»${C.filas.length ? ` (hay ${miles(C.filas.length)} ítems que no son prendas)` : ''}.</p>`;
-  return ropa.slice(0, 40).map(x => `<button type="button" data-cup-it="${Number(x.id)}"><span class="ip svg chico" style="--c:243,38,134">${ic('shirt')}</span><span>${esc(x.nombre)}</span><small>#${Number(x.id)}</small></button>`).join('');
+  if (!ropa.length) return `<p class="tenue g-nada">No hay ropa ni ítems collab con «${esc(C.q)}»${C.filas.length ? ` (hay ${miles(C.filas.length)} ítems que no se dan por acá)` : ''}.</p>`;
+  return ropa.slice(0, 40).map(x => `<button type="button" data-cup-it="${Number(x.id)}"><span class="ip svg chico" style="--c:243,38,134">${ic(icCup(x))}</span><span>${esc(x.nombre)}${x.colab && !esPrenda(x) ? ' <span class="chip violeta g-cup-colab">collab</span>' : ''}</span><small>#${Number(x.id)}</small></button>`).join('');
 }
 /* ★ 27-nov (Eñeños: «que salga quién los ha creado, más remarcado; los demás no ven el código entero, pero sí su estado y
    nota; cancelar los no reclamados; los usados no desaparecen: van a su categoría, con quién los usó»). El servidor del

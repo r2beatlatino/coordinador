@@ -464,6 +464,37 @@ def es_ropa(fila):
     return f.startswith("wardrobe_") or f in ROPA_FAMILIAS
 
 
+# ★ 27-nov (Eñeños: «que generar cupón incluya, aparte de ropa, la categoría del Excel collab que hemos fabricado»).
+#   Los códigos salen del Excel (`exportar_colab.py` → `cupones_colab.json`, al lado de este archivo; ⛔ sólo números).
+#   Tarjetas, slots, poses, auras, monturas, anillos, caras-ítem…: van por SUS plazos de la tienda; los de «uso único»
+#   (PN: anillos, gemas), una unidad que no vence. Lo que se gasta por cargas (campanas, megáfonos), NO.
+_COLAB = {"ruta": os.path.join(os.path.dirname(os.path.abspath(__file__)), "cupones_colab.json"), "fecha": None,
+          "ids": frozenset()}
+
+
+def colab_ids():
+    """Los códigos collab (se relee si el archivo cambió). Sin archivo: ninguno (sólo ropa, como antes)."""
+    try:
+        f = os.path.getmtime(_COLAB["ruta"])
+    except OSError:
+        return frozenset()
+    if f != _COLAB["fecha"]:
+        try:
+            with open(_COLAB["ruta"], encoding="utf-8") as fh:
+                _COLAB["ids"] = frozenset(int(x) for x in json.load(fh).get("ids", []))
+            _COLAB["fecha"] = f
+        except (OSError, ValueError, TypeError):
+            return _COLAB["ids"]
+    return _COLAB["ids"]
+
+
+def es_colab(fila):
+    try:
+        return int((fila or {}).get("id") or 0) in colab_ids()
+    except (TypeError, ValueError):
+        return False
+
+
 GM_NPCS = ("king", "silver", "lindsey", "marie", "nari", "sue")
 
 
@@ -572,8 +603,13 @@ def _cupon_de_ropa(url, cuerpo, quien, admin):
     if not fila:
         return None, (400, {"error": f"El ítem {item} no está en la tienda del juego."})
     plazos = sorted({DURACION[k] for k in (fila.get("duraciones") or []) if k in DURACION})
-    if fila.get("cargas") or not plazos or not es_ropa(fila):
-        return None, (400, {"error": f"«{fila.get('nombre') or item}» no es ropa: esta sección es sólo para prendas."})
+    colab = es_colab(fila) and not es_ropa(fila)
+    if colab and not plazos and "PN" in (fila.get("duraciones") or []):
+        plazos = [0]                                  # (uso único —anillos, gemas—: una unidad, no vence)
+    #   ⛔ Un plazo que el cupón no maneja (la pose 1000265 «P1» = 1 día) NO pasa: se daría permanente.
+    if fila.get("cargas") or not plazos or not (es_ropa(fila) or colab):
+        return None, (400, {"error": f"«{fila.get('nombre') or item}» no es ropa ni un ítem collab: esta sección es sólo "
+                                     f"para eso."})
     if dias not in plazos:
         return None, (400, {"error": f"«{fila.get('nombre') or item}» se da por "
                                      + " / ".join("permanente" if x == 0 else f"{x} días" for x in plazos) + "."})
@@ -644,6 +680,10 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
         P._auditar(viewer, f"gestión · {accion}", None, pase, ruta[:120])
     if accion == "cupones" and metodo == "GET" and ruta == "cupones" and cod == 200:
         d = _cupones_para(d, quien, admin)
+    if ruta == "catalogo" and cod == 200 and isinstance(d, dict):     # ★ 27-nov: cuáles son collab (para Cupones)
+        for f in d.get("filas") or []:
+            if isinstance(f, dict):
+                f["colab"] = es_colab(f)
     if not admin:
         d = _limpiar(d)
     elif not puede_ver_ips(P, viewer):
