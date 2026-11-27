@@ -21,6 +21,7 @@ Cada regla con su control al revés (⟲):
 import contextlib
 import io
 import json
+import urllib.parse
 import os
 import sys
 import tempfile
@@ -52,6 +53,14 @@ PRIVADOS = {"ip": "192.0.2.5", "ips": [{"ip": "192.0.2.5", "pais": "PE"}], "logi
             "comparte_ip": 2, "misma_ip_total": 2, "comparten_ip": 2}
 
 
+# ★ 27-nov · el catálogo del juego falso: una PRENDA (7 / 30 días o permanente), una CAMPANA (se gasta) y un ítem sin plazos
+CATALOGO = [{"id": 30220852, "nombre": "Pelo Amor Milenario (M)", "familia": "wardrobe_hair", "cargas": False,
+             "duraciones": ["P7", "P30", "PI"]},
+            {"id": 1000200, "nombre": "Campana", "familia": "etc", "cargas": True, "duraciones": []},
+            {"id": 777, "nombre": "Un pack", "familia": "etc", "cargas": False, "duraciones": []},
+            {"id": 1000961, "nombre": "Pose de Pareja", "familia": "dance_emote", "cargas": False, "duraciones": ["P7", "P30"]}]
+
+
 def respuesta():
     return {"filas": [{"uid": 5, "nick": "Jugador5", "pais": "PE", **PRIVADOS,
                        "datos": dict(PRIVADOS), "sesiones": [dict(PRIVADOS, inicio=1)]}], "total": 1,
@@ -81,6 +90,9 @@ class Juego(BaseHTTPRequestHandler):
         if self.headers.get("X-Ficha-Interna") != FICHA:
             return self._mandar(404, {"error": "no existe"})
         self._anotar()
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q", [""])[0]
+        if self.path.split("?")[0].endswith("/catalogo") and q.isdigit():   # ★ 27-nov: lo que mira `_cupon_de_ropa`
+            return self._mandar(200, {"filas": [f for f in CATALOGO if str(f["id"]) == q]})
         return self._mandar(200, respuesta())
 
     def do_POST(self):
@@ -203,6 +215,43 @@ ok(cod == 200 and VISTO[-1]["ruta"].endswith("seguridad/ajustes") and VISTO[-1][
 n = len(VISTO)
 cod, _ = pedir(JEFA, "POST", "seguridad/evento/NO-ES-UN-ID", {})
 ok(cod == 404 and len(VISTO) == n, "⟲ un id de evento con otra forma: 404 y no viaja")
+
+# ★ 27-nov · los CUPONES DE ROPA: «cupones» se asigna; el pedido lo REARMA el Coordinador (una prenda, sin Rcoin)
+print("1c · cupones de ropa")
+posts = lambda: [v for v in VISTO if v["cuerpo"] is not None]                      # noqa: E731
+n = len(VISTO)
+cod, _ = pedir(MR2, "GET", "cupones")
+ok(cod == 403 and len(VISTO) == n, "⟲ cupones sin el permiso: 403 y no viaja")
+cod, _ = pedir(MR2, "POST", "cupones", {"item": 30220852, "dias": 0, "cantidad": 1, "usos": 1})
+ok(cod == 403 and len(VISTO) == n, "⟲ generar sin el permiso: 403 y no viaja")
+cod, d = callado(GE.poner_permisos, CO, P, JEFA, {"uid": MR2, "juego": "r2beat2013", "acciones": ["licencia", "seguridad", "cupones"]})
+ok(cod == 200 and "cupones" in d["asignables_de"]["r2beat2013"] and "cupones" not in GE.ASIGNABLES_DE["contrato1"],
+   "«cupones» se asigna en R2Beat (no en GunBound)")
+cod, _ = pedir(MR2, "GET", "cupones")
+ok(cod == 200 and VISTO[-1]["ruta"].split("?")[0].endswith("/cupones"), "con el permiso: la lista pasa")
+np_ = len(posts())
+cod, _ = pedir(MR2, "POST", "cupones", {"item": 30220852, "dias": 0, "cantidad": 3, "usos": 2, "nota": "sorteo",
+                                        "rcoin": 50000, "modo": "uno", "codigo": "GRATIS",
+                                        "premios": [{"item": 1000200, "dias": 0, "cant": 999}]})
+ok(cod == 200 and len(posts()) == np_ + 1 and posts()[-1]["ruta"].endswith("/cupones")
+   and posts()[-1]["cuerpo"] == {"modo": "generar", "cantidad": 3, "usos": 2, "rcoin": 0, "nota": "sorteo",
+                                 "premios": [{"item": 30220852, "dias": 0, "cant": 1}]},
+   "el pedido viaja REARMADO: sin Rcoin, una prenda, modo generar (lo que mande el navegador no pasa)")
+for nombre, cuerpo in (("una campana (no es ropa)", {"item": 1000200, "dias": 0, "cantidad": 1, "usos": 1}),
+                       ("un ítem sin plazos", {"item": 777, "dias": 0, "cantidad": 1, "usos": 1}),
+                       ("algo con plazo que NO es ropa (una pose)", {"item": 1000961, "dias": 7, "cantidad": 1, "usos": 1}),
+                       ("un plazo que la tienda no tiene (365)", {"item": 30220852, "dias": 365, "cantidad": 1, "usos": 1}),
+                       ("un ítem que no existe", {"item": 123456, "dias": 0, "cantidad": 1, "usos": 1}),
+                       ("0 cupones", {"item": 30220852, "dias": 0, "cantidad": 0, "usos": 1}),
+                       (f"{GE.CUPONES_MAX + 1} cupones", {"item": 30220852, "dias": 0, "cantidad": GE.CUPONES_MAX + 1, "usos": 1}),
+                       ("0 usos", {"item": 30220852, "dias": 0, "cantidad": 1, "usos": 0}),
+                       ("letras en vez de números", {"item": "abc", "dias": 0, "cantidad": 1, "usos": 1})):
+    np_ = len(posts())
+    cod, d = pedir(MR2, "POST", "cupones", cuerpo)
+    ok(cod == 400 and len(posts()) == np_ and d.get("error"), f"⟲ {nombre}: 400 y no se genera ({cod})")
+cod, _ = pedir(JEFA, "POST", "cupones", {"item": 30220852, "dias": 7, "cantidad": 1, "usos": 1, "rcoin": 9})
+ok(cod == 200 and posts()[-1]["cuerpo"]["rcoin"] == 0 and posts()[-1]["cuerpo"]["premios"][0]["dias"] == 7,
+   "un ADMIN también pasa por el rearmado (sin Rcoin; el plazo elegido, 7 días)")
 
 print("2 · lo de BASE del moderador")
 for ruta in ("aviso", "usuario/5/echar", "usuario/5/mute"):
@@ -364,7 +413,9 @@ for lista in (None, "", "inválido", str(MR2), f" {JEFA + 1}, 00{JEFA}, {MR2} ")
     for jid, rutas in (("r2beat2013", GE.RUTAS), ("gunbound", GE.RUTAS_CONTRATO1)):
         for metodo, patron, _ in rutas:
             ruta = patron.replace(GE._N, "5").replace(GE._ID, "abc-12").replace(GE._EV, "ab" * 16)
-            cod, d = pedir(JEFA, metodo, ruta, {} if metodo == "POST" else None, juego=jid)
+            # (★ 27-nov: a «cupones» un `{}` se le rechaza antes de viajar —eso lo controla la sección 1c—: acá uno válido)
+            vale = {"item": 30220852, "dias": 0, "cantidad": 1, "usos": 1} if (jid, metodo, ruta) == ("r2beat2013", "POST", "cupones") else {}
+            cod, d = pedir(JEFA, metodo, ruta, vale if metodo == "POST" else None, juego=jid)
             ok(cod == 200 and (d["filas"][0].get("ip") == PRIVADOS["ip"] and len(d["campos"]) == 4 if autorizado
                               else sin_ips(d) and d["campos"] == [{"nombre": "Login", "valor": "cuenta5"},
                                                                     {"nombre": "País", "valor": "PE"}]

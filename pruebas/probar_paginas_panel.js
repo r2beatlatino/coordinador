@@ -242,5 +242,26 @@ function ok(cond, texto) {
     'Ficha: sus PC con link a la otra cuenta, escapado (⟲ sin baneo no ofrece perdonar)');
   run(`Fpc.pc.alguna_baneada = true; Fpc.pc.pcs[0].baneada = true;`);
   ok(run(`pcHtml(JS1, Fpc).includes('g-pc-perdonar') && pcHtml(JS0, Fpc) === ''`), 'Ficha: con una PC baneada ofrece perdonar (⟲ sin permiso, nada)');
+  // ★ 27-nov · los CUPONES DE ROPA: pestaña con permiso, sólo ropa, sólo los plazos de la tienda, todo escapado
+  run(`var JC1 = mkS(['ver','cupones']), JC0 = mkS(['ver']);
+    JC1.g.cup = {q:'pelo', filas:[{id:30220852, nombre:'<img src=x onerror=alert(1)>Pelo', familia:'wardrobe_hair', cargas:false, duraciones:['P7','P30','PI']},
+      {id:1000961, nombre:'Pose', familia:'dance_emote', cargas:false, duraciones:['P7','P30']},
+      {id:1000200, nombre:'Campana', cargas:true, duraciones:[]}, {id:777, nombre:'Pack', cargas:false, duraciones:[]}],
+      elegido:null, dias:0, cantidad:1, usos:1, nota:'', hecho:null, lista:[], lt:1};`);
+  ok(run(`tabsJc(JC1).includes('cupones') && !tabsJc(JC0).includes('cupones')`), 'Cupones: la pestaña sólo con el permiso «cupones» (⟲ sin él no aparece)');
+  ok(run(`const hc1 = cuerpoCupones(JC1); (hc1.match(/data-cup-it=/g) || []).length === 1 && hc1.includes('data-cup-it="30220852"') && !hc1.includes('data-cup-it="1000200"')`),
+    'Cupones: en la búsqueda sólo la ropa (⟲ la campana, el pack y la pose no aparecen)');
+  ok(run(`const hc2 = cuerpoCupones(JC1); !hc2.includes('<img') && hc2.includes('&lt;img')`), 'Cupones: el nombre del ítem va escapado');
+  ok(run(`cuerpoCupones(JC1).includes('data-accion="g-cup-generar" disabled')`), '⟲ sin prenda elegida, «Generar» está apagado');
+  run(`JC1.g.cup.elegido = JC1.g.cup.filas[0]; JC1.g.cup.cantidad = 3; JC1.g.cup.usos = 2;`);
+  ok(run(`const hc3 = cuerpoCupones(JC1); (hc3.match(/data-accion="g-cup-dias"/g) || []).length === 3 && hc3.includes('data-k="0"') && hc3.includes('data-k="30"')
+      && hc3.includes('data-k="7"') && !hc3.includes('data-k="365"') && !hc3.includes('data-accion="g-cup-generar" disabled')`),
+    'Cupones: con la prenda, sólo SUS plazos (permanente, 30, 7; ⟲ no 365) y «Generar» prendido');
+  ok(run(`cuerpoCupones(JC1).includes('<b>3</b> códigos') && cuerpoCupones(JC1).includes('hasta <b>6</b> personas')`), 'Cupones: el resumen dice cuántos y cuántas personas en total');
+  run(`JC1.g.cup.cantidad = 0;`);
+  ok(run(`cuerpoCupones(JC1).includes('data-accion="g-cup-generar" disabled') && cuerpoCupones(JC1).includes('van de 1 a')`), '⟲ con 0 cupones, «Generar» se apaga y lo dice');
+  run(`JC1.g.cup.cantidad = 1; JC1.g.cup.hecho = {codigos:['AB<script>CD'], txt:'x'}; JC1.g.cup.lista = [{codigo:'Z<q>1', premios:[{item:1, dias:0, nombre:'<i>P</i>'}], usos:2, usados:1, activo:true, creado:1, creador:'<u>yo</u>'}];`);
+  ok(run(`const hc4 = cuerpoCupones(JC1); !hc4.includes('<script>') && !hc4.includes('<q>1') && hc4.includes('Z&lt;q&gt;1') && !hc4.includes('<i>P') && !hc4.includes('<u>yo') && hc4.includes('1/2 usos')`),
+    'Cupones: códigos, lista y creador van escapados; la lista dice usados/usos');
   process.stdout.write(`\n✔ probar_paginas_panel: ${controles} controles, 0 fallas\n`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
