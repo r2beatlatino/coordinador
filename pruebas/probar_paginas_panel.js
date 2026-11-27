@@ -263,6 +263,17 @@ function ok(cond, texto) {
   run(`JC1.g.cup.cantidad = 1; JC1.g.cup.hecho = {codigos:['AB<script>CD'], txt:'x'}; JC1.g.cup.lista = [{codigo:'Z<q>1', premios:[{item:1, dias:0, nombre:'<i>P</i>'}], usos:2, usados:1, activo:true, creado:1, creador:'<u>yo</u>'}];`);
   ok(run(`const hc4 = cuerpoCupones(JC1); !hc4.includes('<script>') && !hc4.includes('<q>1') && hc4.includes('Z&lt;q&gt;1') && !hc4.includes('<i>P') && !hc4.includes('<u>yo') && hc4.includes('1/2 usos')`),
     'Cupones: códigos, lista y creador van escapados; la lista dice usados/usos');
+  // ★ 27-nov · los ítems COLLAB en la búsqueda: marcados, con sus plazos; los de uso único, permanente; ⟲ «P1» y no-collab, no
+  run(`JC1.g.cup.elegido = null; JC1.g.cup.q = 'x'; JC1.g.cup.filas = [
+    {id:1000995, nombre:'Sakura <b>Galaxia', familia:'namecard', cargas:false, duraciones:['P7','P30'], colab:true},
+    {id:30868, nombre:'Anillo', familia:'ring_couple', cargas:false, duraciones:['PN'], colab:true},
+    {id:1000265, nombre:'Ceremonia', familia:'dance_emote', cargas:false, duraciones:['P1'], colab:true},
+    {id:1000123, nombre:'Tarjeta de fábrica', familia:'namecard', cargas:false, duraciones:['P30'], colab:false}];`);
+  ok(run(`const hk = resCupones(JC1.g.cup); hk.includes('data-cup-it="1000995"') && hk.includes('data-cup-it="30868"') && !hk.includes('data-cup-it="1000265"')
+      && !hk.includes('data-cup-it="1000123"') && (hk.match(/g-cup-colab/g) || []).length === 2 && !hk.includes('<b>Galaxia')`),
+    'Cupones: los collab aparecen marcados (⟲ la pose de «1 día» y la tarjeta que no es collab, no)');
+  ok(run(`plazosDe(JC1.g.cup.filas[1]).join() === '0' && plazosDe(JC1.g.cup.filas[0]).join() === '30,7' && plazosDe(JC1.g.cup.filas[2]).length === 0`),
+    'Cupones: el anillo de uso único va permanente; la tarjeta, por sus plazos');
   // ★ 27-nov · la LISTA de cupones: categorías, creador destacado, código tapado si no es suyo, acciones sólo en los suyos
   run(`JC1.g.cup.cat = 'por_canjear'; JC1.g.cup.canjes = {}; JC1.g.cup.lista = [
     {ref:'a1', codigo:'MIO-123', mio:true, ve_codigo:true, creador:'coordinador:mod<i>r2', estado:'por_canjear', usos:1, usados:0, activo:true, premios:[]},

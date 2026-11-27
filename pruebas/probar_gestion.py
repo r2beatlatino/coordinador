@@ -59,7 +59,13 @@ CATALOGO = [{"id": 30220852, "nombre": "Pelo Amor Milenario (M)", "familia": "wa
              "duraciones": ["P7", "P30", "PI"]},
             {"id": 1000200, "nombre": "Campana", "familia": "etc", "cargas": True, "duraciones": []},
             {"id": 777, "nombre": "Un pack", "familia": "etc", "cargas": False, "duraciones": []},
-            {"id": 1000961, "nombre": "Pose de Pareja", "familia": "dance_emote", "cargas": False, "duraciones": ["P7", "P30"]}]
+            {"id": 1000961, "nombre": "Pose de Pareja", "familia": "dance_emote", "cargas": False, "duraciones": ["P7", "P30"]},
+            # ★ 27-nov · collab: una tarjeta (7/30 días), un anillo de uso único (PN), y una tarjeta que NO es collab
+            {"id": 1000995, "nombre": "Slot para Game id Sakura Galaxia", "familia": "namecard", "cargas": False,
+             "duraciones": ["P7", "P30"]},
+            {"id": 30868, "nombre": "Anillo Crucero del Cielo", "familia": "ring_couple", "cargas": False, "duraciones": ["PN"]},
+            {"id": 1000123, "nombre": "Tarjeta de fábrica", "familia": "namecard", "cargas": False, "duraciones": ["P30"]},
+            {"id": 1000265, "nombre": "Ceremonia Justa", "familia": "dance_emote", "cargas": False, "duraciones": ["P1"]}]
 
 
 # ★ 27-nov · los cupones del juego falso: de modr2 (por canjear, usado, apagado, vencido) y uno de la jefa
@@ -234,6 +240,7 @@ ok(cod == 404 and len(VISTO) == n, "⟲ un id de evento con otra forma: 404 y no
 
 # ★ 27-nov · los CUPONES DE ROPA: «cupones» se asigna; el pedido lo REARMA el Coordinador (una prenda, sin Rcoin)
 print("1c · cupones de ropa")
+GE._COLAB.update(ruta=os.path.join(tmp, "sin_colab.json"), fecha=None)   # ★ 27-nov: acá, SÓLO ropa (lo collab es la 1f)
 posts = lambda: [v for v in VISTO if v["cuerpo"] is not None]                      # noqa: E731
 n = len(VISTO)
 cod, _ = pedir(MR2, "GET", "cupones")
@@ -353,6 +360,40 @@ cod, _ = pedir(JEFA, "POST", "cupones/cancelar", {"refs": [R["AJENO9876543"], R[
 ok(cod == 200 and sorted(posts()[-1]["cuerpo"]["codigos"]) == ["AJENO9876543", "MIOABCDEF12"], "un ADMIN cancela cualquiera")
 cod, _ = pedir(MGB, "POST", "cupones/cancelar", {"refs": [R["MIOABCDEF12"]], "accion": "cancelar"})
 ok(cod in (403, 404), f"⟲ sin el permiso «cupones» en R2Beat, no cancela ({cod})")
+
+# ★ 27-nov · los ítems COLLAB del Excel: además de la ropa, por SUS plazos; los de uso único, una unidad
+print("1f · cupones de ítems collab")
+_colab_tmp = os.path.join(tmp, "cupones_colab.json")
+json.dump({"ids": [1000995, 30868, 1000200, 1000265]}, open(_colab_tmp, "w", encoding="utf-8"))   # (la campana, para el ⟲ de las cargas)
+GE._COLAB.update(ruta=_colab_tmp, fecha=None)
+ok(GE.colab_ids() == {1000995, 30868, 1000200, 1000265}, "la lista collab se lee del archivo")
+cod, d = pedir(MR2, "GET", "catalogo", query={"q": "1000995"})
+ok(cod == 200 and d["filas"] and d["filas"][0]["id"] == 1000995 and d["filas"][0]["colab"] is True, "el catálogo marca el collab")
+cod, d = pedir(MR2, "GET", "catalogo", query={"q": "1000123"})
+ok(cod == 200 and d["filas"][0]["colab"] is False, "⟲ una tarjeta que no es del Excel no sale marcada")
+np_ = len(posts())
+cod, _ = pedir(MR2, "POST", "cupones", {"item": 1000995, "dias": 30, "cantidad": 2, "usos": 1})
+ok(cod == 200 and posts()[-1]["cuerpo"]["premios"] == [{"item": 1000995, "dias": 30, "cant": 1}],
+   "una tarjeta collab, por 30 días (uno de SUS plazos)")
+cod, _ = pedir(MR2, "POST", "cupones", {"item": 30868, "dias": 0, "cantidad": 1, "usos": 1})
+ok(cod == 200 and posts()[-1]["cuerpo"]["premios"] == [{"item": 30868, "dias": 0, "cant": 1}],
+   "un anillo collab de uso único: una unidad, no vence")
+for nombre, cuerpo in (("la tarjeta collab por un plazo que no tiene (365)", {"item": 1000995, "dias": 365, "cantidad": 1, "usos": 1}),
+                       ("el anillo por 30 días (sólo es de uso único)", {"item": 30868, "dias": 30, "cantidad": 1, "usos": 1}),
+                       ("una tarjeta que NO es collab", {"item": 1000123, "dias": 30, "cantidad": 1, "usos": 1}),
+                       ("la campana aunque esté en la lista (se gasta por cargas)", {"item": 1000200, "dias": 0, "cantidad": 1, "usos": 1}),
+                       ("una pose collab de «1 día» (P1: se daría permanente)", {"item": 1000265, "dias": 0, "cantidad": 1, "usos": 1})):
+    np_ = len(posts())
+    cod, d = pedir(MR2, "POST", "cupones", cuerpo)
+    ok(cod == 400 and len(posts()) == np_ and d.get("error"), f"⟲ {nombre}: 400 y no se genera ({cod})")
+os.remove(_colab_tmp)
+ok(GE.colab_ids() == frozenset(), "⟲ sin el archivo: ningún collab (sólo ropa, como antes)")
+cod, d = pedir(MR2, "POST", "cupones", {"item": 1000995, "dias": 30, "cantidad": 1, "usos": 1})
+ok(cod == 400, "⟲ sin la lista, la tarjeta vuelve a no poder darse")
+GE._COLAB.update(ruta=os.path.join(os.path.dirname(GE.__file__), "cupones_colab.json"), fecha=None)
+ok(len(GE.colab_ids()) > 100 and "servidor/cupones_colab.json" in open(
+    os.path.join(os.path.dirname(os.path.dirname(GE.__file__)), "herramientas", "contenedores", "cuentas.Dockerfile"),
+    encoding="utf-8").read(), "la lista de verdad está, y la imagen la copia (si no, en el aire no habría collab)")
 
 print("2 · lo de BASE del moderador")
 for ruta in ("aviso", "usuario/5/echar", "usuario/5/mute"):
