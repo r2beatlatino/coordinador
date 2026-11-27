@@ -1820,16 +1820,60 @@ function resCupones(C) {
   if (!ropa.length) return `<p class="tenue g-nada">No hay ropa con «${esc(C.q)}»${C.filas.length ? ` (hay ${miles(C.filas.length)} ítems que no son prendas)` : ''}.</p>`;
   return ropa.slice(0, 40).map(x => `<button type="button" data-cup-it="${Number(x.id)}"><span class="ip svg chico" style="--c:243,38,134">${ic('shirt')}</span><span>${esc(x.nombre)}</span><small>#${Number(x.id)}</small></button>`).join('');
 }
+/* ★ 27-nov (Eñeños: «que salga quién los ha creado, más remarcado; los demás no ven el código entero, pero sí su estado y
+   nota; cancelar los no reclamados; los usados no desaparecen: van a su categoría, con quién los usó»). El servidor del
+   Coordinador manda cada cupón con su `ref`, su `estado` y si se ve el código (`ve_codigo` = lo creó usted, o es ADMIN):
+   acá sólo se dibuja. Las acciones viajan por `ref`, nunca por código. */
+const CUP_CATS = [['por_canjear', 'Por canjear'], ['usado', 'Usados'], ['cancelado', 'Cancelados']];
+const creadorTxt = c => String(c.creador || '—').replace(/^coordinador:/, '');
 function listaCupones(J) {
-  const C = J.g.cup, L = C.lista;
-  const cab = `<div class="caja-cab"><h3>${ic('history', 's16')}Últimos cupones</h3><button type="button" class="btn icono fantasma" data-accion="g-cup-recargar" aria-label="Actualizar" title="Actualizar">${ic('refresh', 's16')}</button></div>`;
+  const C = J.g.cup, L = C.lista, cat = C.cat || 'por_canjear';
+  const cab = `<div class="caja-cab"><h3>${ic('history', 's16')}Cupones</h3><button type="button" class="btn icono fantasma" data-accion="g-cup-recargar" aria-label="Actualizar" title="Actualizar">${ic('refresh', 's16')}</button></div>`;
   if (!L) return `<section class="caja">${cab}${C.lerr ? vacio('No se pudo leer la lista', esc(C.lerr)) : '<span class="esq" style="height:120px"></span>'}</section>`;
-  if (!L.length) return `<section class="caja">${cab}${vacio('Todavía no hay cupones', 'Los que genere aparecen acá.')}</section>`;
-  return `<section class="caja">${cab}<ul class="g-cup-lista">${L.slice(0, 30).map(c => {
+  const n = k => L.filter(c => (c.estado || 'por_canjear') === k).length;
+  const chips = `<div class="chips g-cup-cats" role="group" aria-label="Categoría">${CUP_CATS.map(([k, t]) =>
+    `<button type="button" class="chipb" data-accion="g-cup-cat" data-k="${k}" aria-pressed="${k === cat}">${t} <b>${miles(n(k))}</b></button>`).join('')}</div>`;
+  const ver = L.filter(c => (c.estado || 'por_canjear') === cat);
+  const ayuda = cat === 'usado' ? '<p class="tenue g-cup-ayuda">Los que se usaron del todo salen solos de «Por canjear» y quedan acá, con quién los canjeó.</p>'
+    : cat === 'cancelado' ? '<p class="tenue g-cup-ayuda">Apagados o vencidos: no se borran, y los suyos se pueden reactivar si no vencieron.</p>' : '';
+  if (!ver.length) return `<section class="caja">${cab}${chips}${ayuda}${vacio('No hay cupones acá', cat === 'por_canjear' ? 'Los que genere aparecen acá.' : '')}</section>`;
+  return `<section class="caja">${cab}${chips}${ayuda}<ul class="g-cup-lista">${ver.slice(0, 60).map(c => {
     const p = (c.premios || [])[0], que = p ? `${esc(p.nombre || '#' + p.item)} · ${plazoTxt(p.dias).toLowerCase()}` : (c.rcoin ? `${miles(c.rcoin)} Rcoin` : '—');
     const usos = Number(c.usos) ? `${miles(c.usados)}/${miles(c.usos)} usos` : `${miles(c.usados)} usos (sin tope)`;
-    return `<li><code>${esc(c.codigo)}</code><span>${que}</span><span class="tenue">${usos}${c.activo ? '' : ' · apagado'}</span><small class="tenue">${c.creado ? fechaEpoch(c.creado) : ''}${c.creador ? ' · ' + esc(c.creador) : ''}${c.nota ? ' · «' + esc(c.nota) + '»' : ''}</small></li>`;
-  }).join('')}</ul></section>`;
+    const vencido = c.vence && Number(c.vence) * 1000 <= Date.now();
+    const codigo = c.ve_codigo ? `<code>${esc(c.codigo)}</code>` : `<code class="g-cup-tapado" title="Sólo lo ve quien lo creó">${esc(c.codigo)}</code>`;
+    const creador = `<span class="chip ${c.mio ? 'oro' : 'violeta'} g-cup-creador" title="Lo creó">${ic(c.mio ? 'crown' : 'user', 's14')}${esc(creadorTxt(c))}${c.mio ? ' · usted' : ''}</span>`;
+    const accs = [];
+    if (c.ve_codigo && c.estado === 'por_canjear') accs.push(`<button type="button" class="btn chico fantasma" data-accion="g-cup-cancelar" data-k="${esc(c.ref)}">Cancelar</button>`);
+    if (c.ve_codigo && c.estado === 'cancelado' && !vencido) accs.push(`<button type="button" class="btn chico fantasma" data-accion="g-cup-reactivar" data-k="${esc(c.ref)}">Reactivar</button>`);
+    if (Number(c.usados) > 0) accs.push(`<button type="button" class="btn chico fantasma" data-accion="g-cup-quien" data-k="${esc(c.ref)}" aria-expanded="${!!(C.canjes && C.canjes[c.ref])}">¿Quién lo canjeó?</button>`);
+    const cj = C.canjes && C.canjes[c.ref];
+    const quien = !cj ? '' : cj.err ? `<small class="g-cup-err">${esc(cj.err)}</small>`
+      : !cj.filas ? '<small class="tenue">Buscando…</small>'
+      : `<ul class="g-cup-canjes">${cj.filas.map(x => `<li><b>${esc(x.apodo || '#' + x.uid)}</b> <span class="tenue">${x.cuando ? fechaEpoch(x.cuando) : ''}</span></li>`).join('') || '<li class="tenue">Nadie todavía.</li>'}</ul>`;
+    return `<li>${codigo}${creador}<span>${que}</span><span class="tenue">${usos}${vencido ? ' · vencido' : ''}</span><small class="tenue">${c.creado ? fechaEpoch(c.creado) : ''}${c.nota ? ' · «' + esc(c.nota) + '»' : ''}</small>${accs.length ? `<div class="accs">${accs.join('')}</div>` : ''}${quien}</li>`;
+  }).join('')}</ul>${ver.length > 60 ? `<p class="tenue">Se muestran los 60 más nuevos de ${miles(ver.length)}.</p>` : ''}</section>`;
+}
+async function canjesCupon(J, ref) {
+  const C = cupEstado(J); C.canjes = C.canjes || {};
+  if (C.canjes[ref]) { delete C.canjes[ref]; pintarCupones(J); return; }
+  C.canjes[ref] = {}; pintarCupones(J);
+  const r = await api(gRuta(J, 'cupones/canjes?ref=' + encodeURIComponent(ref)));
+  if (S.jc !== J) return;
+  C.canjes[ref] = r.ok ? { filas: r.d.canjes || [] } : { err: errTxt(r) };
+  pintarCupones(J);
+}
+function cambiarCupon(J, ref, accion) {
+  const C = cupEstado(J), c = (C.lista || []).find(x => x.ref === ref); if (!c) return;
+  const cancelar = accion === 'cancelar';
+  confirmar({ titulo: cancelar ? '¿Cancelar este cupón?' : '¿Reactivar este cupón?', icono: 'ticket', peligro: cancelar, ok: cancelar ? 'Cancelar cupón' : 'Reactivar',
+    txt: cancelar ? `<b>${esc(c.codigo)}</b> deja de poder canjearse. No se borra: queda en «Cancelados» y se puede reactivar.` : `<b>${esc(c.codigo)}</b> se vuelve a poder canjear.`,
+    alAceptar: async () => {
+      const r = await gPost(J, 'cupones/cancelar', { refs: [ref], accion });
+      if (!r.ok) { toast({ t: 'No se pudo', sub: esc((r.d && r.d.error) || `Error ${r.status}`), tipo: 'error' }); return; }
+      toast({ t: cancelar ? 'Cupón cancelado' : 'Cupón reactivado', sub: esc(c.codigo) });
+      C.lt = 0; cargarCupones(J);
+    } });
 }
 function pintarCupones(J, foco) {
   const c = $('#gCup'); if (!c || J.tab !== 'cupones') return;
@@ -3100,6 +3144,10 @@ function accionG(a) {
     case 'g-cup-generar': generarCupones(J); break;
     case 'g-cup-copiar': { const t = (J.g.cup.hecho && J.g.cup.hecho.codigos || []).join('\n'); const ok = () => toast({ t: 'Copiados', sub: `${miles(J.g.cup.hecho.codigos.length)} códigos`, tipo: 'info' }); try { navigator.clipboard.writeText(t).then(ok, ok); } catch (err) { ok(); } break; }
     case 'g-cup-recargar': cargarCupones(J); break;
+    case 'g-cup-cat': cupEstado(J).cat = a.dataset.k; pintarCupones(J); break;      // ★ 27-nov: categorías, canjes, cancelar
+    case 'g-cup-quien': canjesCupon(J, a.dataset.k); break;
+    case 'g-cup-cancelar': cambiarCupon(J, a.dataset.k, 'cancelar'); break;
+    case 'g-cup-reactivar': cambiarCupon(J, a.dataset.k, 'reactivar'); break;
     case 'g-gmn-npc': gmnEstado(J).npc = a.dataset.k; gmnEstado(J).err = null; pintarGmNpc(J); break;      // ★ 27-nov: GM NPC
     case 'g-gmn-crear': crearGmNpc(J); break;
     case 'g-gmn-cerrar': cerrarGmNpc(J, a.dataset.k); break;

@@ -263,6 +263,26 @@ function ok(cond, texto) {
   run(`JC1.g.cup.cantidad = 1; JC1.g.cup.hecho = {codigos:['AB<script>CD'], txt:'x'}; JC1.g.cup.lista = [{codigo:'Z<q>1', premios:[{item:1, dias:0, nombre:'<i>P</i>'}], usos:2, usados:1, activo:true, creado:1, creador:'<u>yo</u>'}];`);
   ok(run(`const hc4 = cuerpoCupones(JC1); !hc4.includes('<script>') && !hc4.includes('<q>1') && hc4.includes('Z&lt;q&gt;1') && !hc4.includes('<i>P') && !hc4.includes('<u>yo') && hc4.includes('1/2 usos')`),
     'Cupones: códigos, lista y creador van escapados; la lista dice usados/usos');
+  // ★ 27-nov · la LISTA de cupones: categorías, creador destacado, código tapado si no es suyo, acciones sólo en los suyos
+  run(`JC1.g.cup.cat = 'por_canjear'; JC1.g.cup.canjes = {}; JC1.g.cup.lista = [
+    {ref:'a1', codigo:'MIO-123', mio:true, ve_codigo:true, creador:'coordinador:mod<i>r2', estado:'por_canjear', usos:1, usados:0, activo:true, premios:[]},
+    {ref:'b2', codigo:'AJE•••••', mio:false, ve_codigo:false, creador:'coordinador:jefa', estado:'por_canjear', usos:3, usados:1, activo:true, premios:[], nota:'para <b>el sorteo'},
+    {ref:'c3', codigo:'USA-1', mio:true, ve_codigo:true, creador:'Claude', estado:'usado', usos:1, usados:1, activo:true, premios:[]},
+    {ref:'d4', codigo:'APA-1', mio:true, ve_codigo:true, creador:'coordinador:modr2', estado:'cancelado', usos:1, usados:0, activo:false, premios:[]}];`);
+  ok(run(`const hl1 = listaCupones(JC1); hl1.includes('data-k="por_canjear" aria-pressed="true">Por canjear <b>2</b>') && hl1.includes('Usados <b>1</b>')
+      && hl1.includes('MIO-123') && hl1.includes('AJE') && !hl1.includes('USA-1') && !hl1.includes('APA-1')`),
+    'Cupones: tres categorías con su cuenta, y sólo se muestran los de la elegida');
+  ok(run(`const hl2 = listaCupones(JC1); hl2.includes('g-cup-tapado') && (hl2.match(/data-accion="g-cup-cancelar"/g) || []).length === 1
+      && hl2.includes('data-accion="g-cup-cancelar" data-k="a1"')`), 'Cupones: el ajeno va tapado y ⟲ sin «Cancelar» (sólo el suyo lo tiene)');
+  ok(run(`const hl3 = listaCupones(JC1); hl3.includes('g-cup-creador') && hl3.includes('· usted') && !hl3.includes('mod<i>') && hl3.includes('mod&lt;i&gt;r2')
+      && !hl3.includes('<b>el sorteo') && hl3.includes('&lt;b&gt;el sorteo')`), 'Cupones: el creador destacado (sin «coordinador:») y todo escapado');
+  ok(run(`listaCupones(JC1).includes('data-accion="g-cup-quien" data-k="b2"') && !listaCupones(JC1).includes('data-accion="g-cup-quien" data-k="a1"')`),
+    'Cupones: «¿Quién lo canjeó?» sólo en los que tienen canjes');
+  run(`JC1.g.cup.cat = 'usado'; JC1.g.cup.canjes = {c3: {filas: [{uid: 9, apodo: '<s>Pepe', cuando: 1}]}};`);
+  ok(run(`const hl4 = listaCupones(JC1); hl4.includes('USA-1') && hl4.includes('&lt;s&gt;Pepe') && !hl4.includes('<s>Pepe') && !hl4.includes('g-cup-cancelar')`),
+    'Cupones: en «Usados», quién lo canjeó (escapado) y ⟲ sin «Cancelar»');
+  run(`JC1.g.cup.cat = 'cancelado';`);
+  ok(run(`listaCupones(JC1).includes('data-accion="g-cup-reactivar" data-k="d4"')`), 'Cupones: en «Cancelados», el suyo se puede reactivar');
   // ★ 27-nov · las cuentas GM NPC: pestaña con permiso, los 6 NPC, la clave sólo en «Lista», todo escapado
   run(`var JG1 = mkS(['ver','gm_npc']), JG0 = mkS(['ver','cupones']);`);
   ok(run(`tabsJc(JG1).includes('gmnpc') && !tabsJc(JG0).includes('gmnpc')`), 'GM NPC: la pestaña sólo con el permiso «gm_npc» (⟲ sin él no aparece)');

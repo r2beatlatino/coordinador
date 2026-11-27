@@ -20,6 +20,7 @@ Cada regla con su control al revés (⟲):
 """
 import contextlib
 import io
+import copy
 import json
 import urllib.parse
 import os
@@ -61,6 +62,15 @@ CATALOGO = [{"id": 30220852, "nombre": "Pelo Amor Milenario (M)", "familia": "wa
             {"id": 1000961, "nombre": "Pose de Pareja", "familia": "dance_emote", "cargas": False, "duraciones": ["P7", "P30"]}]
 
 
+# ★ 27-nov · los cupones del juego falso: de modr2 (por canjear, usado, apagado, vencido) y uno de la jefa
+CUPONES_JUEGO = [
+    {"codigo": "MIOABCDEF12", "creador": "coordinador:modr2", "usos": 1, "usados": 0, "activo": True, "vence": None, "nota": "mío"},
+    {"codigo": "AJENO9876543", "creador": "coordinador:jefa", "usos": 1, "usados": 0, "activo": True, "vence": None, "nota": "de ella"},
+    {"codigo": "USADOXYZ0001", "creador": "coordinador:modr2", "usos": 1, "usados": 1, "activo": True, "vence": None, "nota": ""},
+    {"codigo": "APAGADO00001", "creador": "coordinador:modr2", "usos": 2, "usados": 0, "activo": False, "vence": None, "nota": ""},
+    {"codigo": "VIEJO0000001", "creador": "coordinador:modr2", "usos": 1, "usados": 0, "activo": False, "vence": 1.0, "nota": ""}]
+
+
 def respuesta():
     return {"filas": [{"uid": 5, "nick": "Jugador5", "pais": "PE", **PRIVADOS,
                        "datos": dict(PRIVADOS), "sesiones": [dict(PRIVADOS, inicio=1)]}], "total": 1,
@@ -93,6 +103,10 @@ class Juego(BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q", [""])[0]
         if self.path.split("?")[0].endswith("/catalogo") and q.isdigit():   # ★ 27-nov: lo que mira `_cupon_de_ropa`
             return self._mandar(200, {"filas": [f for f in CATALOGO if str(f["id"]) == q]})
+        if self.path.split("?")[0].endswith("/cupones"):                    # ★ 27-nov: la lista de cupones
+            return self._mandar(200, dict(respuesta(), cupones=copy.deepcopy(CUPONES_JUEGO)))
+        if self.path.split("?")[0].endswith("/cupones/canjes"):
+            return self._mandar(200, dict(respuesta(), canjes=[{"uid": 5, "apodo": "Jugador5", "cuando": 1}]))
         return self._mandar(200, respuesta())
 
     def do_POST(self):
@@ -149,9 +163,9 @@ def callado(f, *a, **k):
         return f(*a, **k)
 
 
-def pedir(viewer, metodo, ruta, cuerpo=None, entorno="live", juego="r2beat2013"):
-    return callado(GE.pedir, CO, P, viewer, juego, entorno, metodo, ruta, query={"q": "x"} if metodo == "GET" else None,
-                   cuerpo=cuerpo)
+def pedir(viewer, metodo, ruta, cuerpo=None, entorno="live", juego="r2beat2013", query=None):
+    return callado(GE.pedir, CO, P, viewer, juego, entorno, metodo, ruta,
+                   query=query if query is not None else ({"q": "x"} if metodo == "GET" else None), cuerpo=cuerpo)
 
 
 def dado(uid, k="rcoin"):
@@ -290,6 +304,55 @@ for ruta, nombre, cuerpo in (("gmnpc", "un NPC que no está en la lista", {"npc"
 n = len(VISTO)
 cod, _ = pedir(MR2, "POST", "gmnpc/otra", {"npc": "king"})
 ok(cod == 404 and len(VISTO) == n, "⟲ una sub-ruta que no está en la lista cerrada: 404 y no viaja")
+
+# ★ 27-nov · los cupones: quién los creó, el código TAPADO para los demás, quién los canjeó y CANCELAR (sólo los suyos)
+print("1e · cupones: dueño, código tapado, canjes y cancelar")
+R = {c["codigo"]: GE._cupon_ref(c["codigo"]) for c in CUPONES_JUEGO}
+cod, d = pedir(MR2, "GET", "cupones")
+L = {c["ref"]: c for c in d.get("cupones", [])}
+mio, ajeno = L.get(R["MIOABCDEF12"], {}), L.get(R["AJENO9876543"], {})
+ok(cod == 200 and mio.get("codigo") == "MIOABCDEF12" and mio.get("mio") and mio.get("ve_codigo"),
+   "el moderador ve ENTERO el código de SU cupón")
+ok(ajeno.get("codigo", "").startswith("AJE") and "•" in ajeno.get("codigo", "") and not ajeno.get("ve_codigo")
+   and not ajeno.get("mio") and ajeno.get("nota") == "de ella" and ajeno.get("creador") == "coordinador:jefa",
+   "el de OTRO lo ve tapado, con su creador y su nota")
+ok("AJENO9876543" not in json.dumps(d), "⟲ el código ajeno no viaja en ninguna parte de la respuesta")
+ok([L[R[k]]["estado"] for k in ("MIOABCDEF12", "USADOXYZ0001", "APAGADO00001", "VIEJO0000001")]
+   == ["por_canjear", "usado", "cancelado", "cancelado"], "cada uno con su estado (por canjear · usado · cancelado/vencido)")
+ok("q=" not in VISTO[-1]["ruta"], "⟲ el moderador no busca por pedazos del código (el `q` no viaja)")
+cod, d = pedir(JEFA, "GET", "cupones")
+ok(cod == 200 and {c["codigo"] for c in d["cupones"]} == set(R) and "q=" in VISTO[-1]["ruta"],
+   "un ADMIN ve todos los códigos enteros (y puede buscar)")
+n = len(VISTO)
+cod, d = pedir(MR2, "GET", "cupones/canjes", query={"ref": R["AJENO9876543"]})
+ok(cod == 200 and d.get("canjes") and "codigo=AJENO9876543" in VISTO[-1]["ruta"] and "AJENO9876543" not in json.dumps(d),
+   "quién canjeó uno AJENO: por su ref (el Coordinador pide con el código; al moderador no le llega)")
+for nombre, qq in (("una ref que no existe", {"ref": "0" * 16}), ("sin ref", {})):
+    n = len(VISTO)
+    cod, d = pedir(MR2, "GET", "cupones/canjes", query=qq)
+    ok(cod == 404 and not any(v["ruta"].split("?")[0].endswith("/canjes") for v in VISTO[n:]), f"⟲ canjes con {nombre}: 404")
+np_ = len(posts())
+cod, _ = pedir(MR2, "POST", "cupones/cancelar", {"refs": [R["MIOABCDEF12"]], "accion": "cancelar"})
+ok(cod == 200 and len(posts()) == np_ + 1 and posts()[-1]["ruta"].endswith("/cupones/cambiar")
+   and posts()[-1]["cuerpo"] == {"codigos": ["MIOABCDEF12"], "accion": "apagar"},
+   "cancelar el suyo: viaja como `apagar` (no se borra)")
+cod, _ = pedir(MR2, "POST", "cupones/cancelar", {"refs": [R["APAGADO00001"]], "accion": "reactivar"})
+ok(cod == 200 and posts()[-1]["cuerpo"] == {"codigos": ["APAGADO00001"], "accion": "prender"}, "reactivar uno suyo cancelado")
+for nombre, cuerpo, esperado in (
+        ("cancelar uno AJENO", {"refs": [R["AJENO9876543"]], "accion": "cancelar"}, 403),
+        ("cancelar uno ya USADO", {"refs": [R["USADOXYZ0001"]], "accion": "cancelar"}, 400),
+        ("cancelar uno ya cancelado", {"refs": [R["APAGADO00001"]], "accion": "cancelar"}, 400),
+        ("reactivar uno VENCIDO", {"refs": [R["VIEJO0000001"]], "accion": "reactivar"}, 400),
+        ("borrar (no existe la acción)", {"refs": [R["MIOABCDEF12"]], "accion": "borrar"}, 400),
+        ("una ref mal formada", {"refs": ["MIOABCDEF12"], "accion": "cancelar"}, 400),
+        ("una ref que no está", {"refs": ["f" * 16], "accion": "cancelar"}, 404)):
+    np_ = len(posts())
+    cod, d = pedir(MR2, "POST", "cupones/cancelar", cuerpo)
+    ok(cod == esperado and len(posts()) == np_ and d.get("error"), f"⟲ {nombre}: {esperado} y no viaja ({cod})")
+cod, _ = pedir(JEFA, "POST", "cupones/cancelar", {"refs": [R["AJENO9876543"], R["MIOABCDEF12"]], "accion": "cancelar"})
+ok(cod == 200 and sorted(posts()[-1]["cuerpo"]["codigos"]) == ["AJENO9876543", "MIOABCDEF12"], "un ADMIN cancela cualquiera")
+cod, _ = pedir(MGB, "POST", "cupones/cancelar", {"refs": [R["MIOABCDEF12"]], "accion": "cancelar"})
+ok(cod in (403, 404), f"⟲ sin el permiso «cupones» en R2Beat, no cancela ({cod})")
 
 print("2 · lo de BASE del moderador")
 for ruta in ("aviso", "usuario/5/echar", "usuario/5/mute"):
@@ -452,10 +515,12 @@ for lista in (None, "", "inválido", str(MR2), f" {JEFA + 1}, 00{JEFA}, {MR2} ")
         for metodo, patron, _ in rutas:
             ruta = patron.replace(GE._N, "5").replace(GE._ID, "abc-12").replace(GE._EV, "ab" * 16)
             # (★ 27-nov: a «cupones» un `{}` se le rechaza antes de viajar —eso lo controla la sección 1c—: acá uno válido)
-            vale = {("r2beat2013", "POST", "cupones"): {"item": 30220852, "dias": 0, "cantidad": 1, "usos": 1},
+            vale = {("r2beat2013", "POST", "cupones/cancelar"): {"refs": [GE._cupon_ref("MIOABCDEF12")], "accion": "cancelar"},
+                    ("r2beat2013", "POST", "cupones"): {"item": 30220852, "dias": 0, "cantidad": 1, "usos": 1},
                     ("r2beat2013", "POST", "gmnpc"): {"npc": "king"},                      # ★ 27-nov: ídem GM NPC
                     ("r2beat2013", "POST", "gmnpc/cerrar"): {"usn": 5}}.get((jid, metodo, ruta), {})
-            cod, d = pedir(JEFA, metodo, ruta, vale if metodo == "POST" else None, juego=jid)
+            qq = {"ref": GE._cupon_ref("MIOABCDEF12")} if (jid, ruta) == ("r2beat2013", "cupones/canjes") else None
+            cod, d = pedir(JEFA, metodo, ruta, vale if metodo == "POST" else None, juego=jid, query=qq)
             ok(cod == 200 and (d["filas"][0].get("ip") == PRIVADOS["ip"] and len(d["campos"]) == 4 if autorizado
                               else sin_ips(d) and d["campos"] == [{"nombre": "Login", "valor": "cuenta5"},
                                                                     {"nombre": "País", "valor": "PE"}]

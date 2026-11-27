@@ -29,6 +29,7 @@ CÓMO
   Eñeños, no un juego) van en la fila `juego = "_red"` de la misma tabla. Hoy: «clave» (portero.admin_restablecer_clave,
   nunca a una cuenta del equipo). `puede_red()` lo consulta.
 """
+import hashlib
 import json
 import os
 import re
@@ -113,6 +114,9 @@ RUTAS = [
     # ★ 27-nov: los CUPONES DE ROPA (cupon.py del juego, por su panel: `cupones`). El POST lo rearma `_cupon_de_ropa`.
     ("GET", r"cupones", "cupones"),
     ("POST", r"cupones", "cupones"),
+    # ★ 27-nov: quién lo canjeó y CANCELAR (apagar) / reactivar — por la `ref` del cupón, no por su código (`_cupon_ref`)
+    ("GET", r"cupones/canjes", "cupones"),
+    ("POST", r"cupones/cancelar", "cupones"),
     # ★ 27-nov: las cuentas GM NPC (gm_npc.py del juego). El POST lo rearma `_gm_npc`.
     ("GET", r"gmnpc", "gm_npc"),
     ("POST", r"gmnpc", "gm_npc"),
@@ -477,6 +481,73 @@ def _gm_npc(ruta, cuerpo):
     return {"usn": usn}, None
 
 
+# ★ 27-nov (Eñeños: «que en los cupones salga quién los ha creado, más remarcado; que los demás no puedan ver por completo
+#   el código del cupón pero sí su estado y nota; poder cancelar cupones no reclamados; los ya usados no desaparecen: van
+#   a su categoría, con quién los usó»). El código ENTERO lo ven sólo quien lo creó y un ADMIN; los demás, tapado. Para
+#   ver quién lo canjeó o cancelarlo no hace falta el código: viaja su `ref` (un resumen que no se puede dar vuelta), y
+#   ACÁ se busca a qué cupón corresponde. ⛔ Todo se decide en el servidor: el navegador sólo recibe lo que puede ver.
+def _cupon_ref(codigo):
+    return hashlib.sha256(("cupon:" + str(codigo)).encode("utf-8")).hexdigest()[:16]
+
+
+def _tapar(codigo):
+    c = str(codigo)
+    return c[:3] + "•" * max(4, len(c) - 3)
+
+
+def _cupon_estado(c, ahora=None):
+    """«por_canjear» · «usado» (se le acabaron los usos) · «cancelado» (apagado o vencido, sin acabarse)."""
+    usos, usados = int(c.get("usos") or 0), int(c.get("usados") or 0)
+    if usos and usados >= usos:
+        return "usado"
+    vence = c.get("vence")
+    if not c.get("activo") or (vence and float(vence) <= (time.time() if ahora is None else ahora)):
+        return "cancelado"
+    return "por_canjear"
+
+
+def _cupones_para(d, quien, admin):
+    """La lista del juego, como la puede ver ESTE moderador: su `ref`, su estado, si es suyo, y el código tapado si no."""
+    for c in (d.get("cupones") or []) if isinstance(d, dict) else []:
+        mio = str(c.get("creador") or "") == quien
+        c.update(ref=_cupon_ref(c.get("codigo", "")), estado=_cupon_estado(c), mio=mio, ve_codigo=bool(admin or mio))
+        if not (admin or mio):
+            c["codigo"] = _tapar(c.get("codigo", ""))
+    return d
+
+
+def _cupones_por_ref(url, refs, quien, admin):
+    """{ref: cupón del juego (con su código de verdad)} de los que están en la lista. -> (dict, None) o (None, error)."""
+    cod, d = _http(url, "cupones", None, None, quien, admin)
+    if cod != 200:
+        return None, (cod, d)
+    todos = {_cupon_ref(c.get("codigo", "")): c for c in (d.get("cupones") or [])}
+    return {r: todos[r] for r in refs if r in todos}, None
+
+
+def _cupon_cancelar(url, cuerpo, quien, admin):
+    """POST cupones/cancelar {refs, accion: cancelar|reactivar} -> el `cupones/cambiar` del juego {codigos, accion}.
+    Sólo los SUYOS (un ADMIN, cualquiera). Cancelar = apagar uno que todavía se puede canjear (no se borra: queda en
+    «Cancelados» con su historial); reactivar = prender uno apagado que no se acabó ni venció."""
+    accion = str(cuerpo.get("accion") or "")
+    refs = [str(r) for r in (cuerpo.get("refs") or []) if isinstance(r, str) and re.fullmatch(r"[0-9a-f]{16}", r)][:200]
+    if accion not in ("cancelar", "reactivar") or not refs:
+        return None, (400, {"error": "Elija qué cupones y si cancelarlos o reactivarlos."})
+    cups, mal = _cupones_por_ref(url, refs, quien, admin)
+    if mal:
+        return None, mal
+    if len(cups) != len(set(refs)):
+        return None, (404, {"error": "Algún cupón ya no está en la lista."})
+    if not admin and any(str(c.get("creador") or "") != quien for c in cups.values()):
+        return None, (403, {"error": "Sólo puede cancelar o reactivar los cupones que creó usted."})
+    quiere = "por_canjear" if accion == "cancelar" else "cancelado"
+    if any(_cupon_estado(c) != quiere or (accion == "reactivar" and c.get("vence") and float(c["vence"]) <= time.time())
+           for c in cups.values()):
+        return None, (400, {"error": "Sólo se cancela lo que todavía se puede canjear, y sólo se reactiva lo cancelado "
+                                     "que no venció ni se acabó."})
+    return {"codigos": [c["codigo"] for c in cups.values()], "accion": "apagar" if accion == "cancelar" else "prender"}, None
+
+
 def _cupon_de_ropa(url, cuerpo, quien, admin):
     """★ 27-nov · el pedido de cupones, REARMADO acá: lo que mande el navegador no pasa tal cual.
     -> (cuerpo limpio, None) o (None, (código, error)). Una sola PRENDA (la tienda la vende por plazo: 7/30/365 días o
@@ -543,10 +614,25 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
             return 403, {"error": f"Eso pasa su cupo de {nombre}: le quedan {q:,}.".replace(",", ".")}
     q = {k2: str(v)[:120] for k2, v in (query or {}).items() if k2 not in ("juego", "entorno")} if metodo == "GET" else None
     quien = "coordinador:" + (P._login_de(viewer) or f"uid {viewer}")
-    if accion == "cupones" and metodo == "POST":                # ★ 27-nov: sólo ropa, rearmado (ver `_cupon_de_ropa`)
+    if accion == "cupones" and metodo == "POST" and ruta == "cupones":   # ★ 27-nov: sólo ropa, rearmado (`_cupon_de_ropa`)
         cuerpo, mal = _cupon_de_ropa(url, cuerpo, quien, admin)
         if mal:
             return mal
+    if accion == "cupones" and ruta == "cupones/cancelar":     # ★ 27-nov: por `ref`, sólo los suyos (`_cupon_cancelar`)
+        cuerpo, mal = _cupon_cancelar(url, cuerpo, quien, admin)
+        if mal:
+            return mal
+        ruta = "cupones/cambiar"
+    if accion == "cupones" and metodo == "GET":
+        if ruta == "cupones/canjes":                              # ★ 27-nov: quién lo canjeó, por `ref` (no por código)
+            cups, mal = _cupones_por_ref(url, [str((query or {}).get("ref") or "")], quien, admin)
+            if mal:
+                return mal
+            if not cups:
+                return 404, {"error": "Ese cupón ya no está en la lista."}
+            q = {"codigo": next(iter(cups.values()))["codigo"]}
+        elif not admin:
+            q.pop("q", None)        # ⛔ buscar por pedazos del código lo destaparía de a una letra: sólo un ADMIN busca
     if accion == "gm_npc" and metodo == "POST":                 # ★ 27-nov: sólo el NPC / el usn (ver `_gm_npc`)
         cuerpo, mal = _gm_npc(ruta, cuerpo)
         if mal:
@@ -556,6 +642,8 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
         _devolver(P, viewer, jid, k, n)
     if metodo == "POST" and cod == 200:
         P._auditar(viewer, f"gestión · {accion}", None, pase, ruta[:120])
+    if accion == "cupones" and metodo == "GET" and ruta == "cupones" and cod == 200:
+        d = _cupones_para(d, quien, admin)
     if not admin:
         d = _limpiar(d)
     elif not puede_ver_ips(P, viewer):
