@@ -57,6 +57,10 @@ ASIGNABLES = {
     # ★ 26-nov: lo de Hysteria en R2Beat 2013 — los eventos del antitrampa central (revisar / descartar), qué cuentas
     #   comparten PC (la máquina / HWID) y perdonar una PC. Los INTERRUPTORES de los topes son de SOLO_ADMIN.
     "seguridad": ("Seguridad: antitrampa y PC compartidas", None),
+    # ★ 27-nov (Eñeños: «la sección de cupones del panel viejo era muy confusa: escribir nombre o código del ítem, el
+    #   ítem elegido, cuántos cupones y cuántos usos cada uno, sólo para ropa»). Sin Rcoin: `_cupon_de_ropa` rearma el
+    #   pedido (un ítem, que sea ropa) — el juego ve al Coordinador como ADMIN y no le cobraría cupo a nadie.
+    "cupones": ("Cupones de ropa: generar (una prenda, sin Rcoin)", None),
 }
 # ★ 26-nov: acciones que NO se asignan: sólo un ADMIN (el permiso no existe para un moderador).
 SOLO_ADMIN = {"seguridad/ajustes": "Cambiar los interruptores de seguridad (topes por PC / IP, baneo por PC)"}
@@ -64,7 +68,7 @@ RED = "_red"                       # la «fila» de los permisos de toda la red 
 ASIGNABLES_RED = ("clave",)
 # lo que se puede asignar en cada tipo de servidor
 ASIGNABLES_DE = {"r2beat": ("rcoin", "exp", "item/dar", "item/quitar", "apodo", "licencia", "gorila", "chat", "torneos",
-                            "seguridad"),
+                            "seguridad", "cupones"),
                  "contrato1": ("moneda",)}
 _MONEDA_ID = re.compile(r"^[a-z0-9_]{1,20}$")
 CUPOS = ("rcoin", "exp")
@@ -103,6 +107,9 @@ RUTAS = [
     ("POST", rf"seguridad/evento/{_EV}", "seguridad"),
     ("POST", rf"usuario/{_N}/maquina/perdonar", "seguridad"),
     ("POST", r"seguridad/ajustes", "seguridad/ajustes"),
+    # ★ 27-nov: los CUPONES DE ROPA (cupon.py del juego, por su panel: `cupones`). El POST lo rearma `_cupon_de_ropa`.
+    ("GET", r"cupones", "cupones"),
+    ("POST", r"cupones", "cupones"),
 ]
 _RUTAS = [(m, re.compile(r"^" + p + r"$"), a) for m, p, a in RUTAS]
 _ID = r"[A-Za-z0-9_.-]{1,40}"
@@ -432,6 +439,54 @@ def _devolver(P, uid, jid, k, n):
 
 
 # ── el pedido ─────────────────────────────────────────────────────────────────────────────────────
+CUPONES_MAX = 1000                   # por tanda (el tope de `cupon.GENERAR_MAX` del juego)
+CUPON_USOS_MAX = 1000
+DURACION = {"P7": 7, "P30": 30, "P365": 365, "PI": 0}       # los plazos de la tienda → días del cupón (0 = permanente)
+# ★ 27-nov · qué es ROPA (la «familia» del catálogo del juego, shop_catalog): las prendas (wardrobe_*: pelo, arriba,
+#   abajo, zapatos, mano, cara, look de pareja), los trajes de cuerpo entero y los accesorios de cabeza. Mascotas, auras,
+#   anillos, tarjetas, slots, monturas, poses y lo que se gasta, NO.
+ROPA_FAMILIAS = ("fullset", "head_accessory")
+
+
+def es_ropa(fila):
+    f = str((fila or {}).get("familia") or "")
+    return f.startswith("wardrobe_") or f in ROPA_FAMILIAS
+
+
+def _cupon_de_ropa(url, cuerpo, quien, admin):
+    """★ 27-nov · el pedido de cupones, REARMADO acá: lo que mande el navegador no pasa tal cual.
+    -> (cuerpo limpio, None) o (None, (código, error)). Una sola PRENDA (la tienda la vende por plazo: 7/30/365 días o
+    permanente, y no por unidades), por uno de SUS plazos; sin Rcoin; cantidad 1..CUPONES_MAX y usos 1..CUPON_USOS_MAX."""
+    try:
+        item = int(str(cuerpo.get("item") or "").strip())
+        cantidad = int(cuerpo.get("cantidad") or 0)
+        usos = int(cuerpo.get("usos") or 0)
+        dias = int(cuerpo.get("dias") if cuerpo.get("dias") is not None else -1)
+    except (TypeError, ValueError):
+        return None, (400, {"error": "Revise los números: ítem, cupones, usos y duración."})
+    if not 0 < item < 10 ** 12:
+        return None, (400, {"error": "Elija una prenda."})
+    if not 1 <= cantidad <= CUPONES_MAX:
+        return None, (400, {"error": f"Se generan de 1 a {CUPONES_MAX} cupones por vez."})
+    if not 1 <= usos <= CUPON_USOS_MAX:
+        return None, (400, {"error": f"Cada cupón tiene de 1 a {CUPON_USOS_MAX} usos."})
+    cod, cat = _http(url, "catalogo", {"q": str(item)}, None, quien, admin)
+    if cod != 200:
+        return None, (cod, cat if isinstance(cat, dict) and cat.get("error") else {"error": "No pude ver el catálogo."})
+    fila = next((f for f in (cat.get("filas") or []) if int(f.get("id") or 0) == item), None)
+    if not fila:
+        return None, (400, {"error": f"El ítem {item} no está en la tienda del juego."})
+    plazos = sorted({DURACION[k] for k in (fila.get("duraciones") or []) if k in DURACION})
+    if fila.get("cargas") or not plazos or not es_ropa(fila):
+        return None, (400, {"error": f"«{fila.get('nombre') or item}» no es ropa: esta sección es sólo para prendas."})
+    if dias not in plazos:
+        return None, (400, {"error": f"«{fila.get('nombre') or item}» se da por "
+                                     + " / ".join("permanente" if x == 0 else f"{x} días" for x in plazos) + "."})
+    nota = str(cuerpo.get("nota") or "").strip()[:200]
+    return {"modo": "generar", "cantidad": cantidad, "usos": usos, "rcoin": 0,
+            "premios": [{"item": item, "dias": dias, "cant": 1}], "nota": nota}, None
+
+
 def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
     """-> (código, datos). `ruta` = la del panel del juego (`usuario/123/rcoin`)."""
     if not _juego_ok(CO, P, viewer, jid):
@@ -464,6 +519,10 @@ def pedir(CO, P, viewer, jid, entorno, metodo, ruta, query=None, cuerpo=None):
             return 403, {"error": f"Eso pasa su cupo de {nombre}: le quedan {q:,}.".replace(",", ".")}
     q = {k2: str(v)[:120] for k2, v in (query or {}).items() if k2 not in ("juego", "entorno")} if metodo == "GET" else None
     quien = "coordinador:" + (P._login_de(viewer) or f"uid {viewer}")
+    if accion == "cupones" and metodo == "POST":                # ★ 27-nov: sólo ropa, rearmado (ver `_cupon_de_ropa`)
+        cuerpo, mal = _cupon_de_ropa(url, cuerpo, quien, admin)
+        if mal:
+            return mal
     cod, d = _http(url, ruta, q, cuerpo if metodo == "POST" else None, quien, admin)
     if k and n and cod != 200:
         _devolver(P, viewer, jid, k, n)

@@ -1816,3 +1816,26 @@ body.test .t-cruce { background: linear-gradient(180deg, rgba(42,35,24,.97), rgb
 .g-seg-ev-quien { font-weight: 600; }
 .g-seg-ev p, .g-seg-pc p { margin: 6px 0 0; overflow-wrap: anywhere; }
 .g-seg-ev .accs, .g-seg-pc + .accs { margin-top: 8px; }
+
+/* ★ 27-nov · los CUPONES DE ROPA de R2Beat 2013 (tres pasos: la prenda, el plazo, cuántos y cuántos usos) */
+.g-cup-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.g-cup-grid > div { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.g-cup[aria-disabled="true"] { opacity: .55; }
+.g-cup-n { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: 8px;
+           border-radius: 50%; background: rgba(var(--accent-rgb), .14); color: var(--accent); font-size: 12px; font-weight: 800; }
+.g-cup-num { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)) minmax(0, 1fr); gap: 10px 12px; align-items: end; }
+.g-cup-num .campo { height: auto; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 10px; }
+.g-cup-num .campo > span { font-size: 12px; color: var(--tx-2); }
+.g-cup-num .campo input { width: 100%; }
+.g-cup-resumen { margin: 12px 0 0; line-height: 1.5; }
+.g-cup-err { color: var(--red); font-size: 12.5px; }
+.g-cup .accs, .g-cup-hecho .accs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.g-cup-codigos { width: 100%; resize: vertical; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line);
+                 border-radius: 10px; color: var(--tx); font: 600 14px/1.6 ui-monospace, Consolas, monospace; letter-spacing: .5px; }
+.g-cup-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.g-cup-lista li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.03); }
+.g-cup-lista code { font: 700 13px ui-monospace, Consolas, monospace; color: var(--tx); }
+.g-cup-lista li > span:nth-of-type(1) { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+.g-cup-lista small { flex-basis: 100%; font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 960px) { .g-cup-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .g-cup-num { grid-template-columns: 1fr 1fr; } .g-cup-nota { grid-column: 1 / -1; } }

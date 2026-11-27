@@ -790,8 +790,8 @@ function nombresDe(J, mes) {
   mes.dias.forEach(x => [...(x.premios || []), ...(x.si_no || [])].forEach(p => { if (p.item != null && p.nombre) J.nombres[p.item] = p.nombre; }));
 }
 const tabsC = J => [...(J.d.pagina_local ? ['pagina'] : []), ...(J.d.servidor ? ['asistencia', 'ruleta', 'tira'] : []), ...(J.d.lanzamiento ? ['lanzamiento'] : [])];
-const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas', ...(tieneSeg(J) ? ['seguridad'] : [])] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
-const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' || k === 'seguridad' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
+const tabsJc = J => [...(J.g && J.g.ok ? ['resumen', 'personas', ...(tieneSeg(J) ? ['seguridad'] : []), ...(tieneCup(J) ? ['cupones'] : [])] : []), ...(J.t ? ['torneos'] : []), ...tabsC(J)];      // ★ fase C: la gestión, primero (★ y los torneos)
+const puedeJc = (J, k) => (k === 'resumen' || k === 'personas' || k === 'seguridad' || k === 'cupones' ? false : k === 'lanzamiento' ? !!J.d.es_admin : !!J.d.puede_editar);
 const suciasJc = J => Object.keys(J.borr).filter(k => puedeJc(J, k) && ser(J.borr[k]) !== J.orig[k]);
 const juegoCat = jid => S.catalogo.find(x => x.id === jid) || S.juegos.find(x => x.id === jid) || { id: jid, nombre: jid, color: '' };
 const envTxt = env => ENV_TXT[env] || 'PROD';
@@ -904,7 +904,8 @@ function pintarCuerpoJ(foco) {
     return;
   }
   if (esG(J.tab)) {                                        // ★ fase C
-    c.innerHTML = J.tab === 'resumen' ? edTablero(J) : J.tab === 'seguridad' ? edSeguridad(J) : edPersonas(J);
+    c.innerHTML = J.tab === 'resumen' ? edTablero(J) : J.tab === 'seguridad' ? edSeguridad(J) : J.tab === 'cupones' ? edCupones(J) : edPersonas(J);
+    if (J.tab === 'cupones') { montarCupones(J); if (!J.g.cup || !J.g.cup.lt || Date.now() - J.g.cup.lt > 30000) cargarCupones(J); }      // ★ 27-nov
     if (J.tab === 'resumen') { pintarTableroCab(J); if (Date.now() - J.g.t > 10000) cargarTablero(J); }
     if (J.tab === 'seguridad' && (!J.g.seg || Date.now() - (J.g.seg.t || 0) > 15000)) cargarSeguridad(J);      // ★ 26-nov
     if (J.tab === 'personas' && J.sel) { const F = J.g.fichas[String(J.sel)]; if (!F || !F.f || F.dias !== J.g.dias) cargarFicha(J, J.sel); }
@@ -1650,7 +1651,7 @@ function elegirItem(id) {
    hacer lo dice `gestion/mios` (acciones y cupos): un botón que no puede usar se ve apagado, con «Lo asigna un ADMIN».
    ⛔ A un moderador el Coordinador le saca IP, login y «misma IP»: nada de esto se rompe si faltan.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
-const G_TABS = ['resumen', 'personas', 'seguridad'];
+const G_TABS = ['resumen', 'personas', 'seguridad', 'cupones'];
 JC_TABS.resumen = ['Tablero', 'dash'];
 JC_TABS.personas = ['Personas', 'users'];
 const esG = k => G_TABS.includes(k);
@@ -1761,6 +1762,140 @@ function cuerpoSeguridad(J) {
     <section class="caja" aria-labelledby="gSegEv"><div class="caja-cab"><h3 id="gSegEv">${ic('eye', 's16')}Eventos del antitrampa</h3><span class="sub">el más nuevo primero · revisar no sanciona a nadie</span></div>
       ${filtros}${filasEv}</section>`;
 }
+/* ══════════════ ★ 27-nov · CUPONES DE ROPA (R2Beat 2013) — Eñeños: «la sección de cupones del panel viejo era muy
+   confusa: escribir nombre o código del ítem, el ítem seleccionado, cuántos cupones y cuántos usos tendrá cada uno;
+   sólo para ropa». Rutas del juego: `cupones` (cupon.py). El Coordinador REARMA el pedido (`gestion._cupon_de_ropa`):
+   una prenda, por uno de sus plazos de la tienda, sin Rcoin. La acción «cupones» se asigna a moderadores. ══ */
+JC_TABS.cupones = ['Cupones', 'ticket'];
+const CUP_MAX = 1000, CUP_USOS_MAX = 1000;
+const PLAZO_DIAS = { P7: 7, P30: 30, P365: 365, PI: 0 };
+const plazoTxt = d => (Number(d) === 0 ? 'Permanente' : `${Number(d)} días`);
+const ROPA_FAM = ['fullset', 'head_accessory'];             // ★ igual que gestion.es_ropa: wardrobe_*, trajes enteros, accesorios de cabeza
+const esRopa = x => !!(x && !x.cargas && (/^wardrobe_/.test(String(x.familia || '')) || ROPA_FAM.includes(x.familia)) && (x.duraciones || []).some(k => k in PLAZO_DIAS));
+const plazosDe = x => [...new Set((x.duraciones || []).filter(k => k in PLAZO_DIAS).map(k => PLAZO_DIAS[k]))].sort((a, b) => (a === 0) - (b === 0) || b - a);
+const tieneCup = J => !!(J && J.g && J.g.ok && !esC(J) && puedeG(J, 'cupones'));
+const cupEstado = J => (J.g.cup = J.g.cup || { q: '', filas: null, elegido: null, dias: 0, cantidad: 1, usos: 1, nota: '', hecho: null, lista: null, lt: 0 });
+function edCupones(J) { return `<div id="gCup" role="tabpanel" aria-labelledby="jcTab-cupones">${cuerpoCupones(J)}</div>`; }
+function cuerpoCupones(J) {
+  const C = cupEstado(J), it = C.elegido;
+  const paso = (n, t, sub = '') => `<div class="caja-cab"><h3><span class="g-cup-n" aria-hidden="true">${n}</span>${t}</h3>${sub ? `<span class="sub">${sub}</span>` : ''}</div>`;
+  const prenda = it
+    ? `<div class="g-item-elegido"><span class="ip svg" style="--c:243,38,134">${ic('shirt')}</span><div><b>${esc(it.nombre)}</b><small>#${Number(it.id)}</small></div><button type="button" class="btn chico fantasma" data-accion="g-cup-otra">Elegir otra</button></div>`
+    : `<label class="campo">${ic('search', 's16')}<span class="sr">Nombre o código de la prenda</span><input id="gCupQ" value="${esc(C.q)}" placeholder="Nombre o código de la prenda…" autocomplete="off" spellcheck="false"></label>
+      <div class="jc-bus-res g-items" id="gCupRes" role="listbox" aria-label="Prendas">${resCupones(C)}</div>`;
+  const ps = it ? plazosDe(it) : [];
+  const total = (Number(C.cantidad) || 0) * (Number(C.usos) || 0);
+  const listo = it && ps.includes(C.dias) && C.cantidad >= 1 && C.cantidad <= CUP_MAX && C.usos >= 1 && C.usos <= CUP_USOS_MAX;
+  const form = `<section class="caja g-cup">${paso(1, 'La prenda', 'sólo ropa')}${prenda}</section>
+    <section class="caja g-cup"${it ? '' : ' aria-disabled="true"'}>${paso(2, 'Por cuánto tiempo', 'los plazos con que la vende la tienda')}
+      ${it ? `<div class="chips" role="group" aria-label="Duración">${ps.map(d => `<button type="button" class="chipb" data-accion="g-cup-dias" data-k="${d}" aria-pressed="${d === C.dias}">${plazoTxt(d)}</button>`).join('')}</div>`
+        : '<p class="tenue">Primero elija la prenda.</p>'}</section>
+    <section class="caja g-cup"${it ? '' : ' aria-disabled="true"'}>${paso(3, 'Cuántos cupones')}
+      <div class="g-cup-num">
+        <label class="campo"><span>Cupones</span><input id="gCupN" type="number" min="1" max="${CUP_MAX}" inputmode="numeric" value="${Number(C.cantidad) || 1}"${it ? '' : ' disabled'}></label>
+        <label class="campo"><span>Usos de cada cupón</span><input id="gCupU" type="number" min="1" max="${CUP_USOS_MAX}" inputmode="numeric" value="${Number(C.usos) || 1}"${it ? '' : ' disabled'}></label>
+        <label class="campo g-cup-nota"><span>Nota <small class="tenue">(opcional: para qué es)</small></span><input id="gCupNota" maxlength="200" value="${esc(C.nota)}" placeholder="Ej.: sorteo del Discord"${it ? '' : ' disabled'}></label>
+      </div>
+      <p class="g-cup-resumen" id="gCupRes2" role="status">${it ? resumenCup(C, total) : ''}</p>
+      <div class="accs"><button type="button" class="btn prim" data-accion="g-cup-generar"${listo && !C.generando ? '' : ' disabled'}>${C.generando ? '<span class="giro-btn" aria-hidden="true"></span>Generando…' : `${ic('ticket', 's16')}Generar ${it ? miles(C.cantidad) + ' ' + (Number(C.cantidad) === 1 ? 'cupón' : 'cupones') : 'cupones'}`}</button>
+        <span id="gCupErr" class="g-cup-err" role="alert">${C.err ? esc(C.err) : ''}</span></div></section>`;
+  const h = C.hecho;
+  const hecho = h ? `<section class="caja g-cup-hecho" aria-labelledby="gCupHecho"><div class="caja-cab"><h3 id="gCupHecho">${ic('check', 's16')}Listo: ${miles(h.codigos.length)} ${h.codigos.length === 1 ? 'cupón' : 'cupones'}</h3><span class="sub">${esc(h.txt)}</span></div>
+      <textarea class="g-cup-codigos" readonly rows="${Math.min(10, Math.max(2, h.codigos.length))}" aria-label="Los códigos">${esc(h.codigos.join('\n'))}</textarea>
+      <div class="accs"><button type="button" class="btn" data-accion="g-cup-copiar">${ic('copy', 's14')}Copiar todos</button><span class="tenue">Se canjean en el lobby del juego, en «Ingresar cupón».</span></div></section>` : '';
+  return `<div class="g-cup-grid"><div>${form}</div><div>${hecho}${listaCupones(J)}</div></div>`;
+}
+function resumenCup(C, total) {
+  const n = Number(C.cantidad) || 0, u = Number(C.usos) || 0;
+  if (n < 1 || n > CUP_MAX) return `<span class="g-cup-err">Los cupones van de 1 a ${miles(CUP_MAX)}.</span>`;
+  if (u < 1 || u > CUP_USOS_MAX) return `<span class="g-cup-err">Los usos van de 1 a ${miles(CUP_USOS_MAX)}.</span>`;
+  return `Se generan <b>${miles(n)}</b> ${n === 1 ? 'código' : 'códigos'}; cada uno se puede usar <b>${miles(u)}</b> ${u === 1 ? 'vez' : 'veces'} (en total, hasta <b>${miles(total)}</b> ${total === 1 ? 'persona' : 'personas'}). Cada canje da «<b>${esc(C.elegido.nombre)}</b>» · ${plazoTxt(C.dias).toLowerCase()}.`;
+}
+function resCupones(C) {
+  if (!C.q) return '<p class="tenue g-nada">Escriba para buscar en el catálogo.</p>';
+  if (C.err_q) return `<p class="tenue g-nada">${esc(C.err_q)}</p>`;
+  if (!C.filas) return '<p class="tenue g-nada">Buscando…</p>';
+  const ropa = C.filas.filter(esRopa);
+  if (!ropa.length) return `<p class="tenue g-nada">No hay ropa con «${esc(C.q)}»${C.filas.length ? ` (hay ${miles(C.filas.length)} ítems que no son prendas)` : ''}.</p>`;
+  return ropa.slice(0, 40).map(x => `<button type="button" data-cup-it="${Number(x.id)}"><span class="ip svg chico" style="--c:243,38,134">${ic('shirt')}</span><span>${esc(x.nombre)}</span><small>#${Number(x.id)}</small></button>`).join('');
+}
+function listaCupones(J) {
+  const C = J.g.cup, L = C.lista;
+  const cab = `<div class="caja-cab"><h3>${ic('history', 's16')}Últimos cupones</h3><button type="button" class="btn icono fantasma" data-accion="g-cup-recargar" aria-label="Actualizar" title="Actualizar">${ic('refresh', 's16')}</button></div>`;
+  if (!L) return `<section class="caja">${cab}${C.lerr ? vacio('No se pudo leer la lista', esc(C.lerr)) : '<span class="esq" style="height:120px"></span>'}</section>`;
+  if (!L.length) return `<section class="caja">${cab}${vacio('Todavía no hay cupones', 'Los que genere aparecen acá.')}</section>`;
+  return `<section class="caja">${cab}<ul class="g-cup-lista">${L.slice(0, 30).map(c => {
+    const p = (c.premios || [])[0], que = p ? `${esc(p.nombre || '#' + p.item)} · ${plazoTxt(p.dias).toLowerCase()}` : (c.rcoin ? `${miles(c.rcoin)} Rcoin` : '—');
+    const usos = Number(c.usos) ? `${miles(c.usados)}/${miles(c.usos)} usos` : `${miles(c.usados)} usos (sin tope)`;
+    return `<li><code>${esc(c.codigo)}</code><span>${que}</span><span class="tenue">${usos}${c.activo ? '' : ' · apagado'}</span><small class="tenue">${c.creado ? fechaEpoch(c.creado) : ''}${c.creador ? ' · ' + esc(c.creador) : ''}${c.nota ? ' · «' + esc(c.nota) + '»' : ''}</small></li>`;
+  }).join('')}</ul></section>`;
+}
+function pintarCupones(J, foco) {
+  const c = $('#gCup'); if (!c || J.tab !== 'cupones') return;
+  c.innerHTML = cuerpoCupones(J); montarCupones(J);
+  if (foco) { const f = $(foco); if (f) { f.focus(); if (f.setSelectionRange && f.type !== 'number') f.setSelectionRange(f.value.length, f.value.length); } }
+}
+let cupReloj = null, cupN = 0;
+function montarCupones(J) {
+  const C = cupEstado(J), q = $('#gCupQ'), res = $('#gCupRes');
+  if (q) q.addEventListener('input', () => {
+    C.q = q.value.trim().slice(0, 40); C.filas = null; C.err_q = null; clearTimeout(cupReloj);
+    if (!C.q) { res.innerHTML = resCupones(C); return; }
+    cupReloj = setTimeout(async () => {
+      const n = ++cupN, r = await api(gRuta(J, 'catalogo?q=' + encodeURIComponent(C.q)));
+      if (n !== cupN || S.jc !== J) return;
+      C.filas = r.ok ? r.d.filas || [] : []; C.err_q = r.ok ? null : errTxt(r);
+      const rr = $('#gCupRes'); if (rr) rr.innerHTML = resCupones(C);
+    }, 250);
+  });
+  if (res) res.addEventListener('click', e => {
+    const b = e.target.closest('[data-cup-it]'); if (!b) return;
+    const x = (C.filas || []).find(f => Number(f.id) === Number(b.dataset.cupIt)); if (!esRopa(x)) return;
+    const ps = plazosDe(x);
+    C.elegido = x; C.dias = ps.includes(0) ? 0 : ps[0]; C.hecho = null; C.err = null;
+    pintarCupones(J, '#gCupN');
+  });
+  const num = (id, k) => {
+    const i = $(id); if (!i) return;
+    i.addEventListener('input', () => {
+      C[k] = Math.floor(Number(i.value) || 0); C.err = null;
+      const r2 = $('#gCupRes2'); if (r2 && C.elegido) r2.innerHTML = resumenCup(C, C.cantidad * C.usos);
+      const b = $('[data-accion="g-cup-generar"]');
+      if (b) {
+        const ok = C.cantidad >= 1 && C.cantidad <= CUP_MAX && C.usos >= 1 && C.usos <= CUP_USOS_MAX;
+        b.disabled = !ok || !!C.generando;
+        b.innerHTML = `${ic('ticket', 's16')}Generar ${miles(C.cantidad)} ${C.cantidad === 1 ? 'cupón' : 'cupones'}`;
+      }
+    });
+  };
+  num('#gCupN', 'cantidad'); num('#gCupU', 'usos');
+  const nota = $('#gCupNota'); if (nota) nota.addEventListener('input', () => { C.nota = nota.value.slice(0, 200); });
+}
+async function cargarCupones(J) {
+  const C = cupEstado(J); if (C.lcargando) return;
+  C.lcargando = true;
+  const r = await api(gRuta(J, 'cupones'));
+  C.lcargando = false; if (S.jc !== J) return;
+  C.lista = r.ok ? r.d.cupones || [] : null; C.lerr = r.ok ? null : errTxt(r); C.lt = Date.now();
+  pintarCupones(J);
+}
+function generarCupones(J) {
+  const C = cupEstado(J), it = C.elegido; if (!it || !puedeG(J, 'cupones') || C.generando) return;
+  const n = C.cantidad, u = C.usos;
+  if (!(n >= 1 && n <= CUP_MAX && u >= 1 && u <= CUP_USOS_MAX) || !plazosDe(it).includes(C.dias)) return;
+  confirmar({ titulo: `¿Generar ${miles(n)} ${n === 1 ? 'cupón' : 'cupones'}?`, icono: 'ticket', peligro: false, ok: 'Generar',
+    txt: `«<b>${esc(it.nombre)}</b>» · ${plazoTxt(C.dias).toLowerCase()} · ${miles(u)} ${u === 1 ? 'uso' : 'usos'} cada uno.`,
+    alAceptar: async () => {
+      C.generando = true; C.err = null; pintarCupones(J);
+      const r = await gPost(J, 'cupones', { item: it.id, dias: C.dias, cantidad: n, usos: u, nota: C.nota });
+      C.generando = false;
+      if (!r.ok) { C.err = (r.d && r.d.error) || `Error ${r.status}`; pintarCupones(J); return; }
+      C.hecho = { codigos: r.d.codigos || [], txt: `«${it.nombre}» · ${plazoTxt(C.dias).toLowerCase()} · ${u} ${u === 1 ? 'uso' : 'usos'} cada uno` };
+      toast({ t: `${miles(C.hecho.codigos.length)} ${C.hecho.codigos.length === 1 ? 'cupón generado' : 'cupones generados'}`, sub: esc(it.nombre) });
+      C.lt = 0; cargarCupones(J);
+    } });
+}
+
 function accionEvento(J, ev, k) {
   if (!puedeG(J, 'seguridad') || !EV_ID.test(String(ev || ''))) return;
   const T = { revisar: ['¿Marcar como revisado?', 'Queda anotado que lo miró una persona. No sanciona a nadie.', 'Marcar revisado', 'eye'],
@@ -2875,6 +3010,11 @@ function accionG(a) {
     case 'g-seg-buscar': { const i = $('#gSegQ'); J.g.seg.jugador = i ? i.value.trim().slice(0, 60) : ''; cargarSeguridad(J); break; }
     case 'g-seg-ev': accionEvento(J, a.dataset.ev, a.dataset.k); break;
     case 'g-seg-ajustes': formAjustesSeg(J); break;
+    case 'g-cup-otra': J.g.cup.elegido = null; J.g.cup.hecho = null; pintarCupones(J, '#gCupQ'); break;      // ★ 27-nov: cupones
+    case 'g-cup-dias': J.g.cup.dias = Number(a.dataset.k); pintarCupones(J); break;
+    case 'g-cup-generar': generarCupones(J); break;
+    case 'g-cup-copiar': { const t = (J.g.cup.hecho && J.g.cup.hecho.codigos || []).join('\n'); const ok = () => toast({ t: 'Copiados', sub: `${miles(J.g.cup.hecho.codigos.length)} códigos`, tipo: 'info' }); try { navigator.clipboard.writeText(t).then(ok, ok); } catch (err) { ok(); } break; }
+    case 'g-cup-recargar': cargarCupones(J); break;
     case 'g-pc-perdonar': perdonarPc(J); break;
     case 'g-estado': J.g.estado = a.dataset.k; $$('[data-accion="g-estado"]').forEach(b => b.setAttribute('aria-pressed', b === a)); { const l = $('#gCon'); if (l) l.innerHTML = filasConectados(J); } break;
     case 'g-aviso': formAviso(J, a.dataset.a, a.dataset.id, a.dataset.nom || ''); break;
